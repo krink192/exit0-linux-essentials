@@ -76,6 +76,17 @@ t("streak counts consecutive goal days", () => {
   delete days[C.dayKey(now)];
   const s = C.streak(days, 20, now); assert.strictEqual(s.count, 3); assert(!s.metToday);
 });
+t("answers-shown tests are labeled and excluded from readiness", () => {
+  const st = C.freshState();
+  const s = C.buildTest(bank, {}, { seed: 11, study: true });
+  assert(s.study && s.label.includes("answers shown"));
+  s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  C.recordResult(st, bank, s, C.grade(bank, s));
+  assert.strictEqual(C.readiness(st.tests), null);
+  const e = C.buildTest(bank, {}, { seed: 12 }); assert(!e.study);
+  C.recordResult(st, bank, e, C.grade(bank, e));
+  assert.strictEqual(C.readiness(st.tests), 0);
+});
 t("v2 history migrates", () => {
   const st = C.migrate(null, { history: [{ mode: "random", label: "Random exam", date: 1, score: 30, total: 40, pct: 75, secs: 100 }], qstats: { "1.1-01": { seen: 1, right: 1, last: true } } });
   assert.strictEqual(st.tests[0].label, "Practice test"); assert.strictEqual(st.qstats["1.1-01"].seen, 1);

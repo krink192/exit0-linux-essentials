@@ -85,7 +85,8 @@
     opts = opts || {}; const rand = rng(opts.seed);
     let ids = [];
     for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand));
-    return newSession(bank, "test", "Practice test", shuffle(ids, rand), { timed: opts.timed !== false, seed: opts.seed, now: opts.now });
+    const label = opts.study ? "Practice test · answers shown" : "Practice test";
+    return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now });
   }
 
   function buildDrill(bank, qstats, objs, count, opts) {
@@ -160,7 +161,7 @@
       state.qstats[id] = st;
     }
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct,
-                  secs: res.secs, timed: s.timed, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
+                  secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
                   flags: Object.keys(s.flags).filter(k => s.flags[k]) };
     state.tests.push(rec);
     // keep full detail for the 30 most recent records
@@ -181,8 +182,9 @@
     const m = { 1: 0, 2: 0, 3: 0 }; for (const id of ids || bank.questions.map(q => q.id)) m[bank.byId[id].level || 1]++; return m;
   }
 
+  /** Average of the last 3 full tests taken under exam conditions (answers hidden until submit). */
   function readiness(tests) {
-    const full = tests.filter(t => t.mode === "test" && t.total === 40).slice(-3);
+    const full = tests.filter(t => t.mode === "test" && t.total === 40 && !t.study).slice(-3);
     return full.length ? Math.round(full.reduce((n, t) => n + t.pct, 0) / full.length) : null;
   }
 
@@ -233,7 +235,7 @@
 
   // ------------------------------------------------------------- state
   function freshState() {
-    return { v: 3, settings: { theme: "system", timed: true, goal: 20 }, tests: [], qstats: {}, cards: {}, days: {}, current: null };
+    return { v: 3, settings: { theme: "system", timed: true, reveal: false, goal: 20 }, tests: [], qstats: {}, cards: {}, days: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {

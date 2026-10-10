@@ -143,7 +143,7 @@
 
   // ------------------------------------------------------------------ start sessions
   function begin(s) { st.current = s; confirming = false; showGrid = false; save(); go("exam"); }
-  function startTest() { begin(C.buildTest(BANK, st.qstats, { timed: st.settings.timed })); }
+  function startTest() { begin(C.buildTest(BANK, st.qstats, { timed: st.settings.timed, study: st.settings.reveal })); }
   function startWeak(n) { const s = C.buildWeak(BANK, st.qstats, n || weakSize); if (s) begin(s); }
   function startDrill(objs, n, study) { begin(C.buildDrill(BANK, st.qstats, objs, n, { study })); }
   function wireStarts(root) {
@@ -187,10 +187,13 @@
         <div class="page-head"><span class="eyebrow">exit 0 · LPI Linux Essentials 010-160</span><h1>Practice test</h1>
           <p class="lead">40 questions in 60 minutes, drawn fresh from ${BANK.questions.length} questions with exactly as many questions per objective as the real exam.</p></div>
         <div class="cta"><button class="primary big" data-start="test">${icon("test")}Run test</button>
-          <label class="switch"><input type="checkbox" id="timed" ${st.settings.timed ? "checked" : ""}> Timed (60 min)</label></div>
+          <label class="switch"><input type="checkbox" id="timed" ${st.settings.timed ? "checked" : ""}> Timed (60 min)</label>
+          <label class="switch" title="Off matches the real exam: answers stay hidden until you submit."><input type="checkbox" id="reveal" ${st.settings.reveal ? "checked" : ""}> Show answers as I go</label></div>
+        ${st.settings.reveal ? `<p class="small muted">Check each answer as you go, with the explanation shown right away. These tests don't count toward your readiness score. Turn this off to practice under exam conditions.</p>` : ""}
       </section>
       ${stats}${next}${tips}`);
     $("#timed").onchange = e => { st.settings.timed = e.target.checked; save(); };
+    $("#reveal").onchange = e => { st.settings.reveal = e.target.checked; save(); renderTest(); };
     if (cur) { $("#resume").onclick = () => go("exam"); $("#discard").onclick = () => { st.current = null; save(); render(); }; }
     wireStarts($("#page"));
   }
@@ -444,6 +447,8 @@
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       <div class="card stack"><h2>Practice</h2>
         <div class="row spread"><span>Time practice tests (60 minutes)</span><label class="switch"><input type="checkbox" id="stimed" ${s.timed ? "checked" : ""}> <span class="sr">Timed</span></label></div>
+        <div class="row spread"><div><div>Show answers as I go</div><div class="small muted">See the correct answer and explanation after each question. Off matches the real exam, with answers hidden until you submit. Tests with answers shown don't count toward readiness.</div></div>
+          <label class="switch"><input type="checkbox" id="sreveal" ${s.reveal ? "checked" : ""}> <span class="sr">Show answers</span></label></div>
         <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
           <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       ${window.pywebview || /exit0-desktop/.test(navigator.userAgent) ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
@@ -463,6 +468,7 @@
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     $$("#goal button").forEach(b => b.onclick = () => { s.goal = +b.dataset.v; save(); renderSettings(); });
     $("#stimed").onchange = e => { s.timed = e.target.checked; save(); };
+    $("#sreveal").onchange = e => { s.reveal = e.target.checked; save(); };
     $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
     if ($("#copy")) $("#copy").onclick = () => {
       const ta = $("#expData");

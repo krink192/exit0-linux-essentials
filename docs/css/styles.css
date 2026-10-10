@@ -319,3 +319,5 @@ textarea { width: 100%; min-height: 140px; font: 400 .8rem/1.5 var(--mono); padd
 .brand .wordmark { font-size: 1.05rem; }
 .brand small { font-family: var(--ui); }
 code.exitcode { background: transparent !important; border: 0 !important; font-weight: 600; font-size: .82rem; }
+
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

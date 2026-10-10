@@ -1,9 +1,10 @@
 # Builds the desktop apps and attaches them to a GitHub Release:
 #   Windows  Exit0.exe   (pywebview + PyInstaller)
 #   Linux    exit0.deb   (Debian, Ubuntu, Mint, Pop!_OS ...)
-#            exit0.rpm   (Fedora, RHEL-family, openSUSE needs its own deps)
+#            exit0.rpm   (Fedora, RHEL-family; signed when PACKAGE_SIGNING_KEY is set)
 # Publish a release on GitHub (or `gh release create vX.Y.Z`) and this runs automatically.
 # Run it by hand from the Actions tab to get test builds as downloads.
+# When it finishes, pages.yml republishes the website and the signed dnf/apt repository.
 name: Build desktop apps
 
 on:
@@ -87,8 +88,41 @@ jobs:
           name: linux
           path: dist/exit0.*
 
-  test-deb:
+  sign-rpm:
     needs: linux-package
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+      - name: Sign exit0.rpm with rpmsign
+        env:
+          PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+        run: |
+          if [ -z "$PACKAGE_SIGNING_KEY" ]; then
+            echo "::warning::PACKAGE_SIGNING_KEY is not set, so exit0.rpm stays unsigned."
+            exit 0
+          fi
+          dnf install -y -q rpm-sign gnupg2
+          printf '%s\n' "$PACKAGE_SIGNING_KEY" | gpg --batch --import
+          fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+          rpmsign --define "_gpg_name $fpr" \
+                  --define "_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback" \
+                  --addsign exit0.rpm
+          gpg --batch --armor --export "$fpr" > exit0.asc
+          rpm --import exit0.asc
+          rpm -K exit0.rpm
+          rpm -K exit0.rpm | grep -q "signatures OK"
+          echo "Signed with key $fpr"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: exit0.*
+          overwrite: true
+
+  test-deb:
+    needs: sign-rpm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -103,7 +137,7 @@ jobs:
           test -f /usr/share/applications/exit0.desktop
 
   test-rpm:
-    needs: linux-package
+    needs: sign-rpm
     runs-on: ubuntu-latest
     container: fedora:latest
     steps:
@@ -112,6 +146,10 @@ jobs:
           name: linux
       - name: Install on Fedora and check
         run: |
+          if [ -f exit0.asc ]; then
+            rpm --import exit0.asc
+            rpm -K exit0.rpm | grep "signatures OK"
+          fi
           dnf install -y ./exit0.rpm
           exit0 --version
           exit0 --check

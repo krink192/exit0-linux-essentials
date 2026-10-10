@@ -13,8 +13,9 @@ homepage: https://github.com/krink192/exit0-linux-essentials
 license: GPL-3.0-or-later
 description: |
   exit 0: free practice for LPI Linux Essentials 010-160.
-  Practice tests weighted exactly like the real exam, weak-area and objective
-  drills, 250 flashcards, progress tracking and an exam guide.
+  360 questions. Exam mode follows the real exam's blueprint and timing; Study mode
+  adds hints, instant answers and links to what to read. 250 flashcards, progress
+  tracking and an exam guide.
 
 contents:
   - src: ./build/exit0

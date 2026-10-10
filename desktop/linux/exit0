@@ -8,6 +8,8 @@ GTK window using WebKitGTK. Progress is kept in ~/.local/share/exit0.
   exit0            start the app
   exit0 --check    verify the install (prints "ok" and exits 0)
   exit0 --version  print the version
+
+If the window fails to open on Wayland, try:  GDK_BACKEND=x11 exit0
 """
 import functools
 import os
@@ -49,7 +51,16 @@ def start_server():
     return server.server_address[1]
 
 
+def safe_rendering():
+    """Avoid WebKitGTK's DMA-BUF renderer, which crashes on many Wayland setups
+    (NVIDIA especially) with "Error 71 (Protocol error) dispatching to Wayland display".
+    A study app doesn't need it. Set EXIT0_GPU=1 to keep WebKit's default."""
+    if os.environ.get("EXIT0_GPU") != "1":
+        os.environ.setdefault("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+
+
 def load_gtk():
+    safe_rendering()
     import gi
     gi.require_version("Gtk", "3.0")
     for api in ("4.1", "4.0"):

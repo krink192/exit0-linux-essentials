@@ -1,0 +1,6 @@
+# Only the Dockerfile, docker/ and docs/ (minus screenshots) are needed in the build context.
+*
+!Dockerfile
+!docker/
+!docs/
+docs/screenshots/

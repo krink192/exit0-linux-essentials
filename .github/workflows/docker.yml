@@ -1,0 +1,80 @@
+# Builds the exit 0 container image, runs it and checks it serves the app,
+# then on a release publishes it to ghcr.io/krink192/exit0 for linux/amd64 and linux/arm64.
+name: Container image
+
+on:
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths: ["Dockerfile", "docker/**", ".dockerignore", ".github/workflows/docker.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/exit0
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for testing
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: exit0:test
+
+      - name: Run the container and check it
+        run: |
+          docker run -d --name exit0 -p 8080:8080 exit0:test
+          for i in $(seq 1 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' exit0)" = healthy ] && break
+            sleep 1
+          done
+          docker inspect -f 'health: {{.State.Health.Status}}' exit0
+          curl -fsS http://localhost:8080/ | grep -q "exit 0"
+          curl -fsS http://localhost:8080/data/bank.js | head -c 120; echo
+          curl -fsS -o /dev/null http://localhost:8080/js/app.js
+          curl -fsSI http://localhost:8080/ | grep -i "x-content-type-options: nosniff"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/nope)" = 404
+          test "$(docker exec exit0 id -u)" != 0
+          docker logs exit0 | tail -5
+          docker rm -f exit0
+
+      - name: Image tags
+        if: github.event_name != 'push'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish (amd64 + arm64)
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

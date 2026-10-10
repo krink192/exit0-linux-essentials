@@ -80,7 +80,9 @@ t("every question has a hint that doesn't contain the answer", () => {
 t("old settings migrate: exam is always timed with answers hidden", () => {
   const st = C.migrate({ settings: { theme: "dark", timed: false, reveal: true } });
   assert.strictEqual(st.settings.theme, "dark"); assert(!("timed" in st.settings)); assert(!("reveal" in st.settings));
-  assert.deepStrictEqual(st.settings.study.levels, [1, 2, 3]);
+  assert.deepStrictEqual(st.settings.study.levels, []); assert.strictEqual(st.settings.study.objMode, "all");
+  const st2 = C.migrate({ settings: { study: { objs: ["2.1"], levels: [1, 2], source: "mix", count: 10 } } });
+  assert.strictEqual(st2.settings.study.objMode, "pick"); assert.deepStrictEqual(st2.settings.study.levels, []);
   const s = C.buildTest(bank, {}, { seed: 1 }); assert(s.deadline && !s.study); assert.strictEqual(s.label, "Exam");
 });
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {

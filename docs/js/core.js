@@ -258,14 +258,17 @@
 
   // ------------------------------------------------------------- state
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 20, study: { objs: [], levels: [1, 2, 3], source: "mix", count: 20 } },
+    return { v: 3, settings: { theme: "system", goal: 20, study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
              tests: [], qstats: {}, cards: {}, days: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
     const st = Object.assign(freshState(), raw || {});
     st.settings = Object.assign(freshState().settings, (raw && raw.settings) || {});
-    st.settings.study = Object.assign(freshState().settings.study, st.settings.study || {});
+    const had = st.settings.study || {};
+    st.settings.study = Object.assign(freshState().settings.study, had);
+    if (!had.objMode) st.settings.study.objMode = had.objs && had.objs.length ? "pick" : "all";
+    if (st.settings.study.levels.length !== 1) st.settings.study.levels = [];   // one level, or all
     delete st.settings.timed; delete st.settings.reveal;    // Exam mode is always timed with answers hidden
     if (!raw && legacy) {
       if (legacy.qstats) st.qstats = legacy.qstats;

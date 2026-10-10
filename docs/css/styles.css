@@ -357,3 +357,6 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
   .opt .tag { order: 3; width: 100%; margin-left: 40px; padding: 0; }
   .exam-bar .title { max-width: 60%; }
 }
+.fnote { margin-top: 6px; }
+.picklist { margin: -6px 0 0 124px; padding: 4px 0; border-top: 1px solid var(--line); }
+@media (max-width: 560px) { .picklist { margin-left: 0; } }

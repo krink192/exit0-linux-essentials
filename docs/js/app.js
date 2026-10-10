@@ -218,15 +218,23 @@
   }
 
   // ================================================================== STUDY MODE
+  const LEVEL_TEXT = { 0: "Every kind of question.", 1: "Recall: remember a fact, term or definition.",
+    2: "Apply: pick or type the right command, option or setting.", 3: "Analyze: read output, trace a script, work out permissions or globs." };
+  function studyObjs(sp, weak) { return sp.objMode === "weak" ? weak : sp.objMode === "pick" ? sp.objs : []; }
   function renderStudy() {
     const sp = SP(), sel = new Set(sp.objs);
     const os = C.objectiveStats(BANK, st.qstats);
     const missed = C.missedIds(BANK, st.qstats).length;
     const unseen = BANK.questions.filter(q => !(st.qstats[q.id] && st.qstats[q.id].seen)).length;
     const weak = C.weakObjectives(BANK, st.qstats, 19);
-    const pool = C.studyPool(BANK, st.qstats, sp);
+    if (sp.objMode === "weak" && !weak.length) sp.objMode = "all";
+    const objs = studyObjs(sp, weak);
+    const pool = sp.objMode === "pick" && !objs.length ? [] : C.studyPool(BANK, st.qstats, Object.assign({}, sp, { objs }));
     const n = sp.count ? Math.min(sp.count, pool.length) : pool.length;
-    const mix = C.levelMix(BANK, pool);
+    const lv = sp.levels.length === 1 ? sp.levels[0] : 0;
+    const objNote = sp.objMode === "all" ? "Questions from every objective."
+      : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.`
+      : sel.size ? `${plural(sel.size, "objective")} selected.` : "Tick the objectives you want below.";
     shell("study", `${resumeBanner()}
       <div class="page-head"><span class="eyebrow">Study mode · learn as you go</span><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
@@ -236,28 +244,26 @@
         <button class="qs" data-start="unseen" ${unseen ? "" : "disabled"}>${icon("bulb")}<b>New questions</b><span>${unseen ? plural(unseen, "question") + " you haven't seen" : "You've seen every question"}</span></button>
       </div>
       <div class="card stack builder"><h2>Build a session</h2>
-        <div class="frow"><span class="flabel">Difficulty</span><div class="filters" id="flv">${[1, 2, 3].map(lv => `<button data-lv="${lv}" class="${sp.levels.includes(lv) ? "on" : ""}" aria-pressed="${sp.levels.includes(lv)}" title="${C.LEVELS[lv][1]}">${"●".repeat(lv)}${"○".repeat(3 - lv)} ${C.LEVELS[lv][0]}</button>`).join("")}</div></div>
+        <div class="frow"><span class="flabel">Objectives</span><div><div class="seg" id="fobj">${[["all", "All"], ["weak", "Weak"], ["pick", "Choose…"]].map(([k, l]) =>
+            `<button data-v="${k}" class="${sp.objMode === k ? "on" : ""}" ${k === "weak" && !weak.length ? 'disabled title="No weak objectives yet"' : ""}>${l}</button>`).join("")}</div>
+          <div class="small muted fnote">${objNote}</div></div></div>
+        ${sp.objMode === "pick" ? `<div class="picklist">${objList(os, { select: true, sel })}</div>` : ""}
+        <div class="frow"><span class="flabel">Difficulty</span><div><div class="seg" id="flv">${[[0, "Any"], [1, "Recall"], [2, "Apply"], [3, "Analyze"]].map(([k, l]) =>
+            `<button data-v="${k}" class="${lv === k ? "on" : ""}">${l}</button>`).join("")}</div>
+          <div class="small muted fnote">${LEVEL_TEXT[lv]}</div></div></div>
         <div class="frow"><span class="flabel">Questions</span><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "Not seen yet"], ["missed", "Missed last time"]].map(([k, l]) => `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
         <div class="frow"><span class="flabel">How many</span><div class="seg" id="fcount">${[10, 20, 40, 0].map(v => `<button data-v="${v}" class="${sp.count === v ? "on" : ""}">${v || "All"}</button>`).join("")}</div></div>
-        <div class="frow top"><span class="flabel">Objectives</span><div class="stack grow" style="gap:8px;min-width:0">
-          <div class="row spread"><span class="small muted">${sel.size ? plural(sel.size, "objective") + " selected" : "All 19 objectives. Tick some to narrow it down."}</span>
-            <div class="row"><button class="ghost small" id="selWeak">Select weak</button><button class="ghost small" id="selNone" ${sel.size ? "" : "disabled"}>Use all</button></div></div>
-          ${objList(os, { select: true, sel })}</div></div>
       </div>
-      <div class="card row spread startbar"><span><b>${n}</b> <span class="muted">${n === 1 ? "question" : "questions"} · ${pool.length} match</span>
-          <span class="small muted hide-sm"> · ${[1, 2, 3].filter(lv => mix[lv]).map(lv => mix[lv] + " " + C.LEVELS[lv][0]).join(", ")}</span></span>
+      <div class="card row spread startbar"><span><b>${n}</b> <span class="muted">${n === 1 ? "question" : "questions"}${pool.length > n ? ` (of ${pool.length} that match)` : ""}</span></span>
         <button class="primary" id="sstart" ${n ? "" : "disabled"}>Start studying</button></div>`);
     const keep = fn => { const y = scrollY; fn(); save(); renderStudy(); scrollTo(0, y); };
-    $$("#flv button").forEach(b => b.onclick = () => keep(() => { const lv = +b.dataset.lv;
-      sp.levels = sp.levels.includes(lv) ? sp.levels.filter(x => x !== lv) : sp.levels.concat(lv).sort();
-      if (!sp.levels.length) { sp.levels = [lv]; toast("Keep at least one difficulty"); } }));
+    $$("#fobj button").forEach(b => b.onclick = () => keep(() => { sp.objMode = b.dataset.v; }));
+    $$("#flv button").forEach(b => b.onclick = () => keep(() => { const v = +b.dataset.v; sp.levels = v ? [v] : []; }));
     $$("#fsrc button").forEach(b => b.onclick = () => keep(() => { sp.source = b.dataset.v; }));
     $$("#fcount button").forEach(b => b.onclick = () => keep(() => { sp.count = +b.dataset.v; }));
     $$("[data-obj]").forEach(i => i.onchange = () => keep(() => { const o = i.dataset.obj;
       sp.objs = i.checked ? [...new Set(sp.objs.concat(o))].sort() : sp.objs.filter(x => x !== o); }));
-    $("#selWeak").onclick = () => keep(() => { if (weak.length) sp.objs = weak.slice().sort(); else toast("No weak objectives yet"); });
-    $("#selNone").onclick = () => keep(() => { sp.objs = []; });
-    $("#sstart").onclick = () => startStudy({ objs: sp.objs, levels: sp.levels, source: sp.source, count: sp.count });
+    $("#sstart").onclick = () => startStudy({ objs, levels: sp.levels, source: sp.source, count: sp.count });
     wireResume();
     wireStarts($("#page"));
   }

@@ -24,7 +24,7 @@
   <a href="#ubuntu--debian"><b>Ubuntu / Debian</b></a>
 </p>
 
-![exit 0 practice test](docs/screenshots/home.png)
+![exit 0 exam mode](docs/screenshots/home.png)
 
 ## Get it
 
@@ -32,25 +32,38 @@
 |---|---|---|
 | **Any browser** | [krink192.github.io/exit0-linux-essentials](https://krink192.github.io/exit0-linux-essentials/) | Nothing to install. Works on phones too. |
 | **Windows 10 / 11** | [Download Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe) | A single file with no installer. |
-| **Fedora** | `sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm` | Native GTK app. |
-| **Ubuntu / Debian / Mint / Pop!_OS** | [Download exit0.deb](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb), then `sudo apt install ./exit0.deb` | Native GTK app. |
+| **Fedora** | [Add the repository](#fedora), then `sudo dnf install exit0` | Signed packages. Updates arrive with `dnf upgrade`. |
+| **Ubuntu / Debian / Mint / Pop!_OS** | [Add the repository](#ubuntu--debian), then `sudo apt install exit0` | Signed repository. Updates arrive with `apt upgrade`. |
 
 All versions are the same app, work offline once installed, and are free.
 
 ### Fedora
 ```bash
-sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm
+sudo curl -fsSLo /etc/yum.repos.d/exit0.repo https://krink192.github.io/exit0-linux-essentials/repo/exit0.repo
+sudo dnf install exit0
 exit0            # or open "exit 0" from your app menu
 ```
-To update, run the same `dnf install` command after a new release. To remove it, run `sudo dnf remove exit0`.
+The first install asks you to accept the exit 0 signing key; answer `y`. After that, `sudo dnf upgrade` keeps it
+up to date along with the rest of your system. To remove it, run `sudo dnf remove exit0` and delete
+`/etc/yum.repos.d/exit0.repo`.
+
+If you don't want a repository, install a single release with
+`sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm`.
 
 ### Ubuntu / Debian
 ```bash
-wget https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb
-sudo apt install ./exit0.deb
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo wget -qO /etc/apt/keyrings/exit0.asc https://krink192.github.io/exit0-linux-essentials/repo/exit0.asc
+sudo wget -qO /etc/apt/sources.list.d/exit0.sources https://krink192.github.io/exit0-linux-essentials/repo/exit0.sources
+sudo apt update && sudo apt install exit0
 exit0            # or open "exit 0" from your app menu
 ```
-To update, download the new `.deb` and install it the same way. To remove it, run `sudo apt remove exit0`.
+After that, `sudo apt upgrade` keeps it up to date. To remove it, run `sudo apt remove exit0` and delete the two
+files you downloaded above.
+
+If you don't want a repository, download
+[exit0.deb](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb) and run
+`sudo apt install ./exit0.deb`.
 
 ### Windows
 Download **[Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe)** and run it.
@@ -60,39 +73,59 @@ It uses the Microsoft Edge WebView2 runtime that comes with Windows 10 and 11.
 **Where progress is saved:** in your browser for the web version, `~/.local/share/exit0` on Linux, and `%APPDATA%\Exit0`
 on Windows. To move it between devices, use **Settings → Your data**.
 
+**Linux window opens and closes right away?** Update to the latest version. If it still happens, run
+`GDK_BACKEND=x11 exit0` and [open an issue](https://github.com/krink192/exit0-linux-essentials/issues/new?template=bug.yml)
+with the terminal output.
+
+## Two ways to practice
+
+| | **Exam** | **Study** |
+|---|---|---|
+| Goal | Test yourself the way the real exam will | Learn the material and fix weak spots |
+| Questions | 40, with exactly as many per objective as the real exam | You choose: objectives, difficulty, how many, and all, unseen or missed |
+| Time | 60-minute countdown | No limit |
+| Answers | Hidden until you submit | Checked as you go, with the explanation |
+| Help | None, as on test day | A hint for every question, plus links to the LPI lesson and matching flashcards |
+| Readiness score | Counts | Doesn't count |
+
+| Build a study session | Hint when you're stuck | What to read next |
+|---|---|---|
+| ![](docs/screenshots/study.png) | ![](docs/screenshots/study-hint.png) | ![](docs/screenshots/study-feedback.png) |
+
 ## What's inside
 
-- **Practice tests.** Each test has 40 questions and a 60-minute timer, drawn fresh from 240 questions, with
-  **exactly** as many questions per objective as the real exam (LPI: weight = number of questions).
-  - **Timed** is on by default. Turn it off to practice at your own pace.
-  - **Show answers as I go** is off by default, which matches the real exam. Turn it on to see the correct answer and
-    explanation after each question. These tests are labeled and don't count toward your readiness score.
-- **Progress.** A readiness score (average of your last three exam-condition tests), score trend, troubled sections,
+- **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
+  *Apply* or *Analyze* (129, 152 and 79 of them) and each with a written explanation and a hint.
+- **Exam mode.** A fresh 40-question exam every time, matching LPI's blueprint exactly (weight = number of
+  questions). Flag questions, review them, then submit and see every answer explained.
+- **Study mode.** Pick objectives, difficulty and question count, or start with one click from *Review my misses*,
+  *Weak objectives* or *New questions*.
+- **Progress.** A readiness score (the average of your last three exams), score trend, troubled sections,
   mastery of each objective, accuracy by difficulty, and a full history you can review.
-- **Weak areas.** Replays the questions you missed, then your weakest objectives, with instant explanations.
-- **Objective drill.** Pick any of the 19 objectives and practice only those.
 - **Flashcards.** 250 cards in two decks, *Concepts* and *Commands & files*, with spaced repetition, so cards
   you miss come back first. There's also a searchable glossary.
 - **Exam guide.** Format, scoring, the blueprint with links to LPI's free lessons, a study plan and test-day tips.
 - **Daily goal and streak.** Keeps you studying a little every day.
-- **Difficulty tags.** Every question is tagged *Recall*, *Apply* or *Analyze*, so you can see whether you
-  know the facts but struggle with exact syntax or reading output.
+- **Report a problem.** Every question has a link that opens a GitHub issue with its ID filled in.
 - **Light and dark themes,** following your system setting or chosen in Settings.
 
-| Progress | Flashcards (dark) | Drill feedback |
-|---|---|---|
-| ![](docs/screenshots/progress.png) | ![](docs/screenshots/flashcards-dark.png) | ![](docs/screenshots/drill.png) |
+| Progress | Flashcards (dark) |
+|---|---|
+| ![](docs/screenshots/progress.png) | ![](docs/screenshots/flashcards-dark.png) |
 
 ## How the content was made and checked
 
 - Questions and flashcards were written from LPI's published 010-160 objectives (v1.6) and the free
   lessons at learning.lpi.org. Every item on each objective's "terms and utilities" list is covered.
-- **120 command-based questions were run on a real Linux system** (`tools/verify.py`), including every
+- **166 command-based questions were run on a real Linux system** (`tools/verify.py`), including every
   accepted fill-in answer. The output must match the answer key.
-- The build checks blueprint counts, duplicates, and whether the correct answer tends to be the longest option.
-- `node tools/test_core.js` tests the exam logic, including 200 randomly generated tests that are each
-  checked against the blueprint.
-- Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing them.
+- The build checks blueprint counts, duplicates, that every question has a hint, and whether the correct
+  answer tends to be the longest option (it is the longest in 14% of single-answer questions, below the 25%
+  you'd expect by chance).
+- `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams that are
+  each checked against the blueprint, and checks that no hint gives away a typed answer.
+- Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing them, checks the
+  `.rpm` signature, and then installs both again from the live signed repositories.
 
 These are **original practice questions, not real exam questions**. LPI scores the real exam from
 200 to 800, and 500 passes, with no published percentage. Treat 80% here as a readiness signal.
@@ -101,24 +134,35 @@ These are **original practice questions, not real exam questions**. LPI scores t
 
 ### Project layout
 ```
-docs/                 The web app (served by GitHub Pages)
+docs/                 The web app (published by GitHub Pages)
   index.html, css/, js/core.js (logic), js/app.js (interface)
   data/bank.js, data/cards.js   generated, do not edit by hand
 desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
-.github/workflows/    Tests on every push; Windows .exe, .deb and .rpm builds on each release
+.github/workflows/    tests.yml (every push), release.yml (desktop builds), pages.yml (website + package repo)
 bank.json             The question bank
-tools/                Question sources t1.py–t5.py, cards.py, build.py, verify.py, test_core.js
+tools/                Questions t1.py–t6.py, hints.py, cards.py, build.py, verify.py, test_core.js
 ```
 
 ### Releasing
 ```bash
 gh release create v1.2.0 --title "exit 0 v1.2.0" --notes "What changed"
 ```
-GitHub Actions (`.github/workflows/release.yml`) runs the tests, builds `Exit0.exe`, `exit0.deb` and `exit0.rpm`,
-checks the Linux packages by installing them on Ubuntu and Fedora, and then attaches all three to the release.
+`release.yml` runs the tests, builds `Exit0.exe`, `exit0.deb` and `exit0.rpm`, signs the `.rpm`, installs both
+Linux packages on Ubuntu and Fedora, and attaches all three to the release. When it finishes, `pages.yml`
+republishes the website and the signed dnf/apt repository, then installs from that repository to make sure it works.
 
-### GitHub Pages
-In the repository settings, open **Pages**, set Source to *Deploy from a branch*, then choose `main` and `/docs`.
+### One-time setup: website and package signing
+1. **Pages:** Settings → Pages → Source: **GitHub Actions**, or run
+   `gh api -X PUT repos/krink192/exit0-linux-essentials/pages -f build_type=workflow`.
+2. **Signing key:** create a key that is used only for packages, and store it as a repository secret:
+   ```bash
+   gpg --batch --pinentry-mode loopback --passphrase '' \
+       --quick-gen-key "exit 0 packages <krink192@users.noreply.github.com>" rsa4096 sign never
+   gpg --armor --export-secret-keys "exit 0 packages" | gh secret set PACKAGE_SIGNING_KEY
+   ```
+   Keep a backup of the key (`gpg --armor --export-secret-keys "exit 0 packages" > exit0-signing-key.asc`,
+   stored somewhere safe and offline). Without the secret, releases still build, but the `.rpm` stays unsigned
+   and only the website is published.
 
 ## Contributing
 Corrections and new questions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).

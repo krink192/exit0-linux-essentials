@@ -1,17 +1,73 @@
-# exit 0
+<p align="center">
+  <img src="desktop/icon.png" width="96" alt="exit 0 logo">
+</p>
 
-**Free practice for LPI Linux Essentials 010-160.** In Linux, `exit 0` means success, which is the goal here.
+<h1 align="center">exit 0</h1>
 
-exit 0 is a free, open source study app for the **LPI Linux Essentials (010-160)** exam. It runs in the browser with
-nothing to install and works on desktop and mobile, in light or dark mode.
+<p align="center">
+  <b>Free practice for LPI Linux Essentials 010-160.</b><br>
+  In Linux, <code>exit 0</code> means success, which is the goal here.
+</p>
 
-![Practice test](docs/screenshots/home.png)
+<p align="center">
+  <a href="https://github.com/krink192/exit0-linux-essentials/releases/latest"><img src="https://img.shields.io/github/v/release/krink192/exit0-linux-essentials?label=release&color=0F7B67" alt="Latest release"></a>
+  <a href="https://github.com/krink192/exit0-linux-essentials/actions/workflows/release.yml"><img src="https://github.com/krink192/exit0-linux-essentials/actions/workflows/release.yml/badge.svg" alt="Build"></a>
+  <a href="https://github.com/krink192/exit0-linux-essentials/actions/workflows/tests.yml"><img src="https://github.com/krink192/exit0-linux-essentials/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0"></a>
+  <a href="https://github.com/krink192/exit0-linux-essentials/releases"><img src="https://img.shields.io/github/downloads/krink192/exit0-linux-essentials/total?color=555" alt="Downloads"></a>
+</p>
+
+<p align="center">
+  <a href="https://krink192.github.io/exit0-linux-essentials/"><b>Open in your browser</b></a> ·
+  <a href="https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe"><b>Windows</b></a> ·
+  <a href="#fedora"><b>Fedora</b></a> ·
+  <a href="#ubuntu--debian"><b>Ubuntu / Debian</b></a>
+</p>
+
+![exit 0 practice test](docs/screenshots/home.png)
+
+## Get it
+
+| Platform | How | Notes |
+|---|---|---|
+| **Any browser** | [krink192.github.io/exit0-linux-essentials](https://krink192.github.io/exit0-linux-essentials/) | Nothing to install. Works on phones too. |
+| **Windows 10 / 11** | [Download Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe) | A single file with no installer. |
+| **Fedora** | `sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm` | Native GTK app. |
+| **Ubuntu / Debian / Mint / Pop!_OS** | [Download exit0.deb](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb), then `sudo apt install ./exit0.deb` | Native GTK app. |
+
+All versions are the same app, work offline once installed, and are free.
+
+### Fedora
+```bash
+sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm
+exit0            # or open "exit 0" from your app menu
+```
+To update, run the same `dnf install` command after a new release. To remove it, run `sudo dnf remove exit0`.
+
+### Ubuntu / Debian
+```bash
+wget https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb
+sudo apt install ./exit0.deb
+exit0            # or open "exit 0" from your app menu
+```
+To update, download the new `.deb` and install it the same way. To remove it, run `sudo apt remove exit0`.
+
+### Windows
+Download **[Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe)** and run it.
+Windows may show *"Windows protected your PC"* because the app isn't code-signed. Click **More info → Run anyway**.
+It uses the Microsoft Edge WebView2 runtime that comes with Windows 10 and 11.
+
+**Where progress is saved:** in your browser for the web version, `~/.local/share/exit0` on Linux, and `%APPDATA%\Exit0`
+on Windows. To move it between devices, use **Settings → Your data**.
 
 ## What's inside
 
-- **Practice tests.** Each test has 40 questions and a 60-minute timer, drawn fresh from 240 questions with
+- **Practice tests.** Each test has 40 questions and a 60-minute timer, drawn fresh from 240 questions, with
   **exactly** as many questions per objective as the real exam (LPI: weight = number of questions).
-- **Progress.** A readiness score (average of your last three tests), score trend, troubled sections,
+  - **Timed** is on by default. Turn it off to practice at your own pace.
+  - **Show answers as I go** is off by default, which matches the real exam. Turn it on to see the correct answer and
+    explanation after each question. These tests are labeled and don't count toward your readiness score.
+- **Progress.** A readiness score (average of your last three exam-condition tests), score trend, troubled sections,
   mastery of each objective, accuracy by difficulty, and a full history you can review.
 - **Weak areas.** Replays the questions you missed, then your weakest objectives, with instant explanations.
 - **Objective drill.** Pick any of the 19 objectives and practice only those.
@@ -21,31 +77,11 @@ nothing to install and works on desktop and mobile, in light or dark mode.
 - **Daily goal and streak.** Keeps you studying a little every day.
 - **Difficulty tags.** Every question is tagged *Recall*, *Apply* or *Analyze*, so you can see whether you
   know the facts but struggle with exact syntax or reading output.
+- **Light and dark themes,** following your system setting or chosen in Settings.
 
 | Progress | Flashcards (dark) | Drill feedback |
 |---|---|---|
 | ![](docs/screenshots/progress.png) | ![](docs/screenshots/flashcards-dark.png) | ![](docs/screenshots/drill.png) |
-
-## Use it
-
-- **Online:** https://krink192.github.io/exit0-linux-essentials/
-- **Windows app:** [download Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe)
-  from the latest release. It's a single file with no installer, and it works offline. Windows may show
-  *"Windows protected your PC"* because the app isn't code-signed. Click **More info → Run anyway**.
-  It needs Windows 10 or 11, which include the Microsoft Edge WebView2 runtime it uses.
-- **Linux app:** a native window built on GTK and WebKitGTK. It works offline and saves progress in `~/.local/share/exit0`.
-  ```bash
-  # Fedora
-  sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm
-
-  # Ubuntu / Debian / Mint / Pop!_OS
-  wget https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb
-  sudo apt install ./exit0.deb
-  ```
-  Launch **exit 0** from your app menu or run `exit0`. To update, run the same command again after a new release.
-- **Offline in a browser:** download the repo and open `docs/index.html`.
-
-Progress is stored in your browser. To move it to another device, use *Settings → Your data*.
 
 ## How the content was made and checked
 
@@ -56,12 +92,14 @@ Progress is stored in your browser. To move it to another device, use *Settings 
 - The build checks blueprint counts, duplicates, and whether the correct answer tends to be the longest option.
 - `node tools/test_core.js` tests the exam logic, including 200 randomly generated tests that are each
   checked against the blueprint.
+- Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing them.
 
 These are **original practice questions, not real exam questions**. LPI scores the real exam from
 200 to 800, and 500 passes, with no published percentage. Treat 80% here as a readiness signal.
 
-## Project layout
+## For developers
 
+### Project layout
 ```
 docs/                 The web app (served by GitHub Pages)
   index.html, css/, js/core.js (logic), js/app.js (interface)
@@ -72,16 +110,14 @@ bank.json             The question bank
 tools/                Question sources t1.py–t5.py, cards.py, build.py, verify.py, test_core.js
 ```
 
-## Releasing new desktop builds
-1. On GitHub, go to **Releases → Draft a new release**.
-2. Create a tag such as `v1.0.0`, add a title and notes, and click **Publish release**.
-3. GitHub Actions (`.github/workflows/release.yml`) tests the code and builds `Exit0.exe`, `exit0.deb` and
-   `exit0.rpm`. It installs the `.deb` on Ubuntu and the `.rpm` on Fedora to check them, then attaches all three to
-   the release. You can follow the progress in the **Actions** tab.
+### Releasing
+```bash
+gh release create v1.2.0 --title "exit 0 v1.2.0" --notes "What changed"
+```
+GitHub Actions (`.github/workflows/release.yml`) runs the tests, builds `Exit0.exe`, `exit0.deb` and `exit0.rpm`,
+checks the Linux packages by installing them on Ubuntu and Fedora, and then attaches all three to the release.
 
-To build by hand on Windows: `pip install -r desktop/requirements.txt`, then run the `pyinstaller` command from the workflow.
-
-## Publish on GitHub Pages
+### GitHub Pages
 In the repository settings, open **Pages**, set Source to *Deploy from a branch*, then choose `main` and `/docs`.
 
 ## Contributing

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+tools/bank_full.json
+tools/verified.json
+.DS_Store
+Thumbs.db

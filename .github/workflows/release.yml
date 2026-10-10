@@ -1,0 +1,64 @@
+# Builds the Windows desktop app and attaches it to a GitHub Release.
+#  - Publish a release on GitHub (Releases -> Draft a new release) and this runs automatically.
+#  - Or run it by hand from the Actions tab ("Run workflow") to get a test build as a download.
+name: Build Windows app (Exit0.exe)
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Test exam logic and question bank
+        run: node tools/test_core.js
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install -r desktop/requirements.txt
+
+      - name: Build Exit0.exe
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name Exit0
+          --icon desktop/icon.ico
+          --add-data "docs;docs"
+          --add-data "desktop/icon.ico;."
+          desktop/main.py
+
+      - name: Check the build
+        shell: pwsh
+        run: |
+          $exe = "dist/Exit0.exe"
+          if (-not (Test-Path $exe)) { throw "exe was not built" }
+          "{0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
+
+      - name: Upload build (Actions tab download)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Exit0-windows
+          path: dist/Exit0.exe
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Exit0.exe

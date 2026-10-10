@@ -42,5 +42,6 @@ overrides:
     depends:
       - python3
       - python3-gobject
+      - gobject-introspection
       - gtk3
       - webkit2gtk4.1

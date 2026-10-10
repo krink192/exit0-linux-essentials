@@ -88,7 +88,7 @@ def main(argv):
     try:
         Gtk, WebKit2 = load_gtk()
     except (ImportError, ValueError) as exc:
-        print("exit0: %s\nInstall WebKitGTK: Fedora 'sudo dnf install webkit2gtk4.1 python3-gobject', "
+        print("exit0: %s\nInstall WebKitGTK: Fedora 'sudo dnf install webkit2gtk4.1 python3-gobject gobject-introspection', "
               "Ubuntu/Debian 'sudo apt install gir1.2-webkit2-4.1 python3-gi'." % exc, file=sys.stderr)
         return 1
 

@@ -1,10 +1,13 @@
 # Contributing
 
-Corrections and new questions are welcome. Please open an issue or a pull request.
+Corrections and new questions are welcome. Please open an issue or a pull request. In the app, every question
+has a **Report a problem** link that opens an issue with the question ID filled in.
 
 ## Fixing or adding a question
 
-Questions live in `tools/t1.py` … `tools/t5.py`, one file per exam topic, grouped by objective.
+Questions live in `tools/t1.py` … `tools/t5.py`, one file per exam topic, grouped by objective. `tools/t6.py` is the
+harder pack (mostly Apply and Analyze) covering all five topics. New questions go at the end of an objective so
+existing question IDs, and people's saved progress, stay the same.
 
 ```python
 S("2.4", "Which command copies the directory projects into backup/?",
@@ -22,9 +25,11 @@ F("2.3", "Type the command that prints the current working directory.",
 - `F(...)` is a fill-in question. List every answer that should be accepted, and remember that case matters.
 - `run`/`expect` (optional but encouraged) is a shell check. `expect="OPT"` means the output must equal the
   correct option. In `F` questions, `{A}` is replaced by each accepted answer in turn.
-- Each objective must have **6 × its LPI weight** questions, so add questions in groups that keep that true,
-  or replace existing ones.
+- Each objective must have **9 × its LPI weight** questions (nine 40-question sets), so add questions in groups
+  that keep that true, or replace existing ones.
 - Write the wrong options so they are plausible, and keep them about as long as the correct one.
+- Every question needs a hint in `tools/hints.py`, keyed by its ID (for example `"3.2-07"`). A hint points to the
+  right idea without giving the answer away. The build fails without one.
 
 ## Flashcards
 
@@ -34,7 +39,7 @@ Keep definitions short, accurate to LPI's lessons, and tied to the right objecti
 ## Difficulty tags
 
 `build.py` tags each question as 1 (Recall), 2 (Apply) or 3 (Analyze) automatically. Override a tag by adding
-`level=3` (for example) to the question in `t1.py`–`t5.py`.
+`level=3` (for example) to the question in `t1.py`–`t6.py`.
 
 ## Build and check
 

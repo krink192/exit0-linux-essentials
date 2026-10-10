@@ -3,7 +3,8 @@
 import json, sys, os, collections
 sys.path.insert(0, os.path.dirname(__file__))
 from common import BANK, MARK
-import t1, t2, t3, t4, t5  # noqa: F401  (populate BANK)
+import t1, t2, t3, t4, t5, t6  # noqa: F401  (populate BANK; t6 = harder pack)
+from hints import HINTS
 
 TOPICS = {
     "1": "The Linux Community and a Career in Open Source",
@@ -33,7 +34,7 @@ OBJ = {
     "5.3": ["Managing File Permissions and Ownership", 2],
     "5.4": ["Special Directories and Files", 1],
 }
-FORMS = "ABCDEF"
+FORMS = "ABCDEFGHI"   # nine 40-question sets, each matching the blueprint exactly
 WORDS = {2: "TWO", 3: "THREE"}
 
 
@@ -71,7 +72,7 @@ def build():
         q = {
             "id": f"{o}-{n:02d}",
             "obj": o,
-            "form": FORMS[(n - 1) % 6],
+            "form": FORMS[(n - 1) % len(FORMS)],
             "q": raw["q"].strip(),
             "code": raw.get("code"),
             "explanation": raw["ex"].strip(),
@@ -101,17 +102,22 @@ def build():
             else:
                 q["type"] = "single"
         q["level"] = raw.get("level") or difficulty(q)
+        q["hint"] = HINTS.get(q["id"])
+        if not q["hint"]:
+            errors.append(f"{q['id']}: no hint in tools/hints.py")
         q["_run"], q["_expect"], q["_user"] = raw.get("run"), raw.get("expect"), raw.get("user")
         out.append(q)
 
+    for hid in sorted(set(HINTS) - {q["id"] for q in out}):
+        errors.append(f"hints.py: {hid} is not a question ID")
     _, viol = assign_forms(out)
     for grp in viol:
         print("WARN conflict set shares a form:", grp)
 
     # blueprint checks
     for o, (_, w) in OBJ.items():
-        if seen[o] != 6 * w:
-            errors.append(f"objective {o}: {seen[o]} questions, need {6*w}")
+        if seen[o] != len(FORMS) * w:
+            errors.append(f"objective {o}: {seen[o]} questions, need {len(FORMS)*w}")
     for f in FORMS:
         fq = [q for q in out if q["form"] == f]
         if len(fq) != 40:
@@ -151,7 +157,7 @@ CONFLICTS = [
 
 
 def assign_forms(out):
-    """Split each objective's 6*w questions into six forms of w each,
+    """Split each objective's 9*w questions into nine forms of w each,
     balancing question types across forms and keeping conflict sets apart."""
     import random
     rnd = random.Random(10160)
@@ -163,20 +169,24 @@ def assign_forms(out):
         for qid in grp:
             cset.setdefault(qid, []).append(i)
 
+    byid = {q["id"]: q for q in out}
+    groups = [[byid[i] for i in grp if i in byid] for grp in CONFLICTS]
+    totals = collections.Counter(q["type"] for q in out)
+
     def score():
         s = 0.0
+        c = collections.Counter((q["form"], q["type"]) for q in out)
         for t in ("single", "multi", "fill"):
-            counts = [sum(1 for q in out if q["form"] == f and q["type"] == t) for f in FORMS]
-            m = sum(counts) / 6
-            s += sum((c - m) ** 2 for c in counts)
-        for i, grp in enumerate(CONFLICTS):
-            fs = collections.Counter(q["form"] for q in out if q["id"] in grp)
+            m = totals[t] / len(FORMS)
+            s += sum((c[(f, t)] - m) ** 2 for f in FORMS)
+        for grp in groups:
+            fs = collections.Counter(q["form"] for q in grp)
             s += 100 * sum(v - 1 for v in fs.values() if v > 1)
         return s
 
     best = score()
     objs = list(byobj)
-    for _ in range(30000):
+    for _ in range(40000):
         o = rnd.choice(objs)
         a, b = rnd.sample(byobj[o], 2)
         if a["form"] == b["form"]:

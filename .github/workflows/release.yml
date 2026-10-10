@@ -1,7 +1,10 @@
-# Builds the Windows desktop app and attaches it to a GitHub Release.
-#  - Publish a release on GitHub (Releases -> Draft a new release) and this runs automatically.
-#  - Or run it by hand from the Actions tab ("Run workflow") to get a test build as a download.
-name: Build Windows app (Exit0.exe)
+# Builds the desktop apps and attaches them to a GitHub Release:
+#   Windows  Exit0.exe   (pywebview + PyInstaller)
+#   Linux    exit0.deb   (Debian, Ubuntu, Mint, Pop!_OS ...)
+#            exit0.rpm   (Fedora, RHEL-family, openSUSE needs its own deps)
+# Publish a release on GitHub (or `gh release create vX.Y.Z`) and this runs automatically.
+# Run it by hand from the Actions tab to get test builds as downloads.
+name: Build desktop apps
 
 on:
   release:
@@ -27,14 +30,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install build tools
         run: pip install -r desktop/requirements.txt
-
       - name: Build Exit0.exe
         run: >
           pyinstaller --noconfirm --clean --onefile --windowed
@@ -43,22 +43,88 @@ jobs:
           --add-data "docs;docs"
           --add-data "desktop/icon.ico;."
           desktop/main.py
-
       - name: Check the build
         shell: pwsh
         run: |
           $exe = "dist/Exit0.exe"
           if (-not (Test-Path $exe)) { throw "exe was not built" }
           "{0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
-
-      - name: Upload build (Actions tab download)
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: Exit0-windows
+          name: windows
           path: dist/Exit0.exe
 
+  linux-package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+      - name: Prepare files
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "release" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0"; fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          mkdir -p build dist
+          cp -r docs build/web && rm -rf build/web/screenshots
+          sed "s/@VERSION@/$VERSION/" desktop/linux/exit0 > build/exit0
+          echo "Packaging version $VERSION"
+      - name: Build .deb and .rpm
+        run: |
+          "$(go env GOPATH)/bin/nfpm" package --config desktop/linux/nfpm.yaml --packager deb --target dist/exit0.deb
+          "$(go env GOPATH)/bin/nfpm" package --config desktop/linux/nfpm.yaml --packager rpm --target dist/exit0.rpm
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/exit0.*
+
+  test-deb:
+    needs: linux-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+      - name: Install on Ubuntu and check
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./exit0.deb
+          exit0 --version
+          exit0 --check
+          test -f /usr/share/applications/exit0.desktop
+
+  test-rpm:
+    needs: linux-package
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux
+      - name: Install on Fedora and check
+        run: |
+          dnf install -y ./exit0.rpm
+          exit0 --version
+          exit0 --check
+          test -f /usr/share/applications/exit0.desktop
+
+  publish:
+    if: github.event_name == 'release'
+    needs: [windows, test-deb, test-rpm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
       - name: Attach to the release
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Exit0.exe
+          files: |
+            out/Exit0.exe
+            out/exit0.deb
+            out/exit0.rpm

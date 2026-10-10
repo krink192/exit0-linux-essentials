@@ -1,0 +1,134 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+"""exit 0 - free practice for LPI Linux Essentials 010-160 (Linux desktop launcher).
+
+Serves the web app from /usr/share/exit0/web on 127.0.0.1 and shows it in a
+GTK window using WebKitGTK. Progress is kept in ~/.local/share/exit0.
+
+  exit0            start the app
+  exit0 --check    verify the install (prints "ok" and exits 0)
+  exit0 --version  print the version
+"""
+import functools
+import os
+import sys
+import threading
+import webbrowser
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+VERSION = "@VERSION@"
+APP_TITLE = "exit 0 · Linux Essentials practice"
+WEB_ROOT = os.environ.get("EXIT0_WEB", "/usr/share/exit0/web")
+PORTS = range(47010, 47020)   # a fixed port keeps the same storage origin between runs
+
+
+def data_dir():
+    base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    path = os.path.join(base, "exit0")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+
+def start_server():
+    handler = functools.partial(QuietHandler, directory=WEB_ROOT)
+    server = None
+    for port in PORTS:
+        try:
+            server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+            break
+        except OSError:
+            continue
+    if server is None:
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server.server_address[1]
+
+
+def load_gtk():
+    import gi
+    gi.require_version("Gtk", "3.0")
+    for api in ("4.1", "4.0"):
+        try:
+            gi.require_version("WebKit2", api)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ImportError("WebKitGTK (WebKit2 4.1 or 4.0) is not installed")
+    from gi.repository import Gtk, WebKit2
+    return Gtk, WebKit2
+
+
+def check():
+    problems = []
+    if not os.path.isfile(os.path.join(WEB_ROOT, "index.html")):
+        problems.append("missing %s/index.html" % WEB_ROOT)
+    try:
+        load_gtk()
+    except (ImportError, ValueError) as exc:
+        problems.append("GTK/WebKitGTK: %s" % exc)
+    if problems:
+        print("exit0: " + "; ".join(problems), file=sys.stderr)
+        return 1
+    print("ok")
+    return 0
+
+
+def main(argv):
+    if "--version" in argv:
+        print(VERSION)
+        return 0
+    if "--check" in argv:
+        return check()
+    try:
+        Gtk, WebKit2 = load_gtk()
+    except (ImportError, ValueError) as exc:
+        print("exit0: %s\nInstall WebKitGTK: Fedora 'sudo dnf install webkit2gtk4.1 python3-gobject', "
+              "Ubuntu/Debian 'sudo apt install gir1.2-webkit2-4.1 python3-gi'." % exc, file=sys.stderr)
+        return 1
+
+    from gi.repository import GLib
+    GLib.set_prgname("exit0")          # matches StartupWMClass / Wayland app id
+    GLib.set_application_name("exit 0")
+    port = start_server()
+    origin = "http://127.0.0.1:%d" % port
+    base = data_dir()
+    manager = WebKit2.WebsiteDataManager(base_data_directory=os.path.join(base, "data"),
+                                         base_cache_directory=os.path.join(base, "cache"))
+    context = WebKit2.WebContext.new_with_website_data_manager(manager)
+    view = WebKit2.WebView.new_with_context(context)
+    settings = view.get_settings()
+    settings.set_user_agent_with_application_details("exit0-desktop", VERSION)
+    settings.set_enable_developer_extras("--debug" in argv)
+
+    def on_decide_policy(_view, decision, kind):
+        types = WebKit2.PolicyDecisionType
+        if kind in (types.NAVIGATION_ACTION, types.NEW_WINDOW_ACTION):
+            uri = decision.get_navigation_action().get_request().get_uri()
+            if uri and not uri.startswith(origin) and not uri.startswith("about:"):
+                webbrowser.open(uri)          # LPI lessons, GitHub etc. open in the browser
+                decision.ignore()
+                return True
+        return False
+
+    view.connect("decide-policy", on_decide_policy)
+
+    win = Gtk.Window(title=APP_TITLE)
+    win.set_default_size(1240, 840)
+    win.set_size_request(720, 560)
+    win.set_icon_name("exit0")
+    win.add(view)
+    win.connect("destroy", Gtk.main_quit)
+    view.load_uri(origin + "/index.html")
+    win.show_all()
+    Gtk.main()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

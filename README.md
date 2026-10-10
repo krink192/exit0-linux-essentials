@@ -33,6 +33,16 @@ nothing to install and works on desktop and mobile, in light or dark mode.
   from the latest release. It's a single file with no installer, and it works offline. Windows may show
   *"Windows protected your PC"* because the app isn't code-signed. Click **More info → Run anyway**.
   It needs Windows 10 or 11, which include the Microsoft Edge WebView2 runtime it uses.
+- **Linux app:** a native window built on GTK and WebKitGTK. It works offline and saves progress in `~/.local/share/exit0`.
+  ```bash
+  # Fedora
+  sudo dnf install https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.rpm
+
+  # Ubuntu / Debian / Mint / Pop!_OS
+  wget https://github.com/krink192/exit0-linux-essentials/releases/latest/download/exit0.deb
+  sudo apt install ./exit0.deb
+  ```
+  Launch **exit 0** from your app menu or run `exit0`. To update, run the same command again after a new release.
 - **Offline in a browser:** download the repo and open `docs/index.html`.
 
 Progress is stored in your browser. To move it to another device, use *Settings → Your data*.
@@ -56,17 +66,18 @@ These are **original practice questions, not real exam questions**. LPI scores t
 docs/                 The web app (served by GitHub Pages)
   index.html, css/, js/core.js (logic), js/app.js (interface)
   data/bank.js, data/cards.js   generated, do not edit by hand
-desktop/              Windows desktop wrapper (pywebview) and app icon
-.github/workflows/    Tests on every push; Windows .exe build on each release
+desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
+.github/workflows/    Tests on every push; Windows .exe, .deb and .rpm builds on each release
 bank.json             The question bank
 tools/                Question sources t1.py–t5.py, cards.py, build.py, verify.py, test_core.js
 ```
 
-## Releasing a new Windows build
+## Releasing new desktop builds
 1. On GitHub, go to **Releases → Draft a new release**.
 2. Create a tag such as `v1.0.0`, add a title and notes, and click **Publish release**.
-3. GitHub Actions (`.github/workflows/release.yml`) tests the code, builds `Exit0.exe` on Windows, and attaches
-   it to the release in a few minutes. You can follow the progress in the **Actions** tab.
+3. GitHub Actions (`.github/workflows/release.yml`) tests the code and builds `Exit0.exe`, `exit0.deb` and
+   `exit0.rpm`. It installs the `.deb` on Ubuntu and the `.rpm` on Fedora to check them, then attaches all three to
+   the release. You can follow the progress in the **Actions** tab.
 
 To build by hand on Windows: `pip install -r desktop/requirements.txt`, then run the `pyinstaller` command from the workflow.
 

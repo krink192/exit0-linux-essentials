@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=exit 0
+GenericName=Linux Essentials Practice
+Comment=Free practice for LPI Linux Essentials 010-160
+Exec=exit0
+Icon=exit0
+Terminal=false
+Categories=Education;Development;
+Keywords=linux;lpi;exam;practice;flashcards;study;
+StartupWMClass=exit0

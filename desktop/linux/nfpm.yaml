@@ -1,0 +1,46 @@
+# Package definition for the Linux .deb and .rpm (built with nfpm in .github/workflows/release.yml).
+# VERSION comes from the release tag; build/web is a copy of docs/ made by the workflow.
+name: exit0
+arch: all
+platform: linux
+version: ${VERSION}
+release: 1
+section: education
+priority: optional
+maintainer: krink192 <krink192@users.noreply.github.com>
+vendor: krink192
+homepage: https://github.com/krink192/exit0-linux-essentials
+license: GPL-3.0-or-later
+description: |
+  exit 0: free practice for LPI Linux Essentials 010-160.
+  Practice tests weighted exactly like the real exam, weak-area and objective
+  drills, 250 flashcards, progress tracking and an exam guide.
+
+contents:
+  - src: ./build/exit0
+    dst: /usr/bin/exit0
+    file_info:
+      mode: 0755
+  - src: ./build/web
+    dst: /usr/share/exit0/web
+    type: tree
+  - src: ./desktop/linux/exit0.desktop
+    dst: /usr/share/applications/exit0.desktop
+  - src: ./desktop/icon.png
+    dst: /usr/share/icons/hicolor/256x256/apps/exit0.png
+  - src: ./LICENSE
+    dst: /usr/share/doc/exit0/LICENSE
+
+overrides:
+  deb:
+    depends:
+      - python3
+      - python3-gi
+      - gir1.2-gtk-3.0
+      - gir1.2-webkit2-4.1 | gir1.2-webkit2-4.0
+  rpm:
+    depends:
+      - python3
+      - python3-gobject
+      - gtk3
+      - webkit2gtk4.1

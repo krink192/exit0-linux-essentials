@@ -446,8 +446,10 @@
         <div class="row spread"><span>Time practice tests (60 minutes)</span><label class="switch"><input type="checkbox" id="stimed" ${s.timed ? "checked" : ""}> <span class="sr">Timed</span></label></div>
         <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
           <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
-      ${window.pywebview ? "" : `<div class="card row spread"><div><h2>Desktop app for Windows</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your PC.</p></div>
-        <a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Download .exe</a></div>`}
+      ${window.pywebview || /exit0-desktop/.test(navigator.userAgent) ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
+        <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
+          <a class="btn" href="${REPO}/releases/latest/download/exit0.rpm" target="_blank" rel="noopener">Fedora (.rpm)</a>
+          <a class="btn" href="${REPO}/releases/latest/download/exit0.deb" target="_blank" rel="noopener">Ubuntu / Debian (.deb)</a></div></div>`}
       <div class="card stack"><h2>Your data</h2><p class="small muted">Progress is saved in this browser only. To move it to another device, copy the export code there and paste it under Import.</p>
         <div class="row"><button id="exp">${exportOpen ? "Hide export code" : "Show export code"}</button></div>
         ${exportOpen ? `<textarea id="expData" readonly aria-label="Export code">${esc(data)}</textarea><div class="row"><button class="primary" id="copy">Copy</button></div>` : ""}

@@ -8,6 +8,8 @@
   const OBJ = BANK.objectives, TOP = BANK.topics;
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";
+  // Opens a GitHub issue form with the question ID filled in.
+  const reportLink = q => `<a class="muted" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub.">Report a problem (${q.id})</a>`;
   const app = document.getElementById("app");
   const L = "ABCDEF";
 
@@ -83,12 +85,12 @@
   let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
   let cs = null;            // active flashcard session
-  let weakSize = 20, drillCount = 10, drillStudy = true, drillSel = new Set();
+  const SP = () => st.settings.study;   // Study builder choices, remembered between visits
   let exportOpen = false, resetOpen = false;
 
   // ------------------------------------------------------------------ shell
   const NAV = [
-    ["Study", [["test", "Practice test", "test"], ["weak", "Weak areas", "weak"], ["drill", "Objective drill", "drill"], ["cards", "Flashcards", "cards"]]],
+    ["Practice", [["test", "Exam", "test"], ["study", "Study", "drill"], ["cards", "Flashcards", "cards"]]],
     ["You", [["progress", "Progress", "progress"], ["guide", "Exam guide", "guide"], ["settings", "Settings", "settings"]]],
   ];
   function sidebarHTML(active) {
@@ -100,7 +102,7 @@
     return `<aside class="side" id="side">
       <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span><small>Linux Essentials 010-160</small></div></div>
       ${NAV.map(([label, items]) => `<div class="nav-label">${label}</div><nav class="nav">${items.map(([id, name, ic]) => {
-        const badge = id === "weak" && missed ? `<span class="count">${missed}</span>` : id === "cards" && due ? `<span class="count">${due}</span>` : "";
+        const badge = id === "study" && missed ? `<span class="count">${missed}</span>` : id === "cards" && due ? `<span class="count">${due}</span>` : "";
         return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${name}</span>${badge}</a>`;
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
@@ -135,7 +137,8 @@
     if (h === "exam" && st.current) return renderExam();
     if (h === "exam") return go("test");
     if (h === "results" && lastRec) return renderResults(lastRec);
-    const pages = { test: renderTest, progress: renderProgress, weak: renderWeak, drill: renderDrill, cards: renderCards,
+    if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
+    const pages = { test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings };
     (pages[h] || renderTest)();
   }
@@ -143,58 +146,119 @@
 
   // ------------------------------------------------------------------ start sessions
   function begin(s) { st.current = s; confirming = false; showGrid = false; save(); go("exam"); }
-  function startTest() { begin(C.buildTest(BANK, st.qstats, { timed: st.settings.timed, study: st.settings.reveal })); }
-  function startWeak(n) { const s = C.buildWeak(BANK, st.qstats, n || weakSize); if (s) begin(s); }
-  function startDrill(objs, n, study) { begin(C.buildDrill(BANK, st.qstats, objs, n, { study })); }
+  function startTest() { begin(C.buildTest(BANK, st.qstats, {})); }
+  function startStudy(f) { const s = C.buildStudy(BANK, st.qstats, f); if (s) begin(s); else toast("No questions match those choices"); }
+  function startWeakStudy() {
+    const weak = C.weakObjectives(BANK, st.qstats, 19);
+    startStudy(weak.length ? { objs: weak, count: 20 } : { source: "missed", count: 20 });
+  }
+  function startObjCards(o) {        // flashcards for one objective: due and new cards first, then the rest
+    const pool = CARDS.filter(c => c.obj === o);
+    const first = C.cardQueue(CARDS, st.cards, c => c.obj === o, C.dayNum(), 20);
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 };
+    go("cards");
+  }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
-    $$("[data-start=weak]", root).forEach(b => b.onclick = () => startWeak());
-    $$("[data-drill]", root).forEach(b => b.onclick = () => startDrill([b.dataset.drill], 10, true));
+    $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
+    $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
+    $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
+    $$("[data-study]", root).forEach(b => b.onclick = () => startStudy({ objs: [b.dataset.study], count: 10 }));
+    $$("[data-cards-obj]", root).forEach(b => b.onclick = e => { e.preventDefault(); startObjCards(b.dataset.cardsObj); });
     $$("[data-go]", root).forEach(b => b.onclick = () => go(b.dataset.go));
   }
+  function resumeBanner() {
+    const cur = st.current; if (!cur) return "";
+    return `<div class="card accent banner"><div><b>You have ${cur.mode === "test" ? "an exam" : "a study session"} in progress</b>
+        <div class="small muted">${esc(cur.label)} · ${cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length} of ${cur.qids.length} answered${cur.deadline ? " · " + fmt((cur.deadline - Date.now()) / 1000) + " left" : ""}</div></div>
+        <div class="row"><button class="ghost" id="discard">Discard</button><button class="primary" id="resume">Resume</button></div></div>`;
+  }
+  function wireResume() {
+    if (!$("#resume")) return;
+    $("#resume").onclick = () => go("exam");
+    $("#discard").onclick = () => { st.current = null; save(); render(); };
+  }
 
-  // ================================================================== PRACTICE TEST (home)
+  // ================================================================== EXAM MODE (home)
   function renderTest() {
     const tests = st.tests.filter(t => t.mode === "test");
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
     const os = C.objectiveStats(BANK, st.qstats);
-    const cur = st.current;
-    const resume = cur ? `<div class="card accent banner"><div><b>You have ${cur.mode === "test" ? "a practice test" : "a drill"} in progress</b>
-        <div class="small muted">${cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length} of ${cur.qids.length} answered${cur.deadline ? " · " + fmt((cur.deadline - Date.now()) / 1000) + " left" : ""}</div></div>
-        <div class="row"><button class="ghost" id="discard">Discard</button><button class="primary" id="resume">Resume</button></div></div>` : "";
     let next = "";
     if (last) {
       next = weak ? `<div class="card banner"><div class="grow"><div class="eyebrow" style="margin-bottom:6px">Suggested next step</div>
-          <b>Drill ${esc(weak)} ${esc(OBJ[weak].name)}</b><div class="small muted">Your accuracy there is ${os[weak].pct}%. Ten focused questions with instant feedback.</div></div>
-          <button data-drill="${weak}">Start drill</button></div>`
+          <b>Study ${esc(weak)} ${esc(OBJ[weak].name)}</b><div class="small muted">Your accuracy there is ${os[weak].pct}%. Ten questions with hints, answers and the lesson to read.</div></div>
+          <button data-study="${weak}">Study it</button></div>`
         : `<div class="card banner"><div class="grow"><div class="eyebrow" style="margin-bottom:6px">Suggested next step</div>
           <b>Review flashcards</b><div class="small muted">No weak objectives right now. Keep definitions fresh with a quick card session.</div></div>
           <button data-go="cards">Open flashcards</button></div>`;
     }
     const stats = last ? `<div class="grid4">
-        <div class="card stat"><b style="color:${col(last.pct)}">${last.pct}%</b><span>Last test</span></div>
+        <div class="card stat"><b style="color:${col(last.pct)}">${last.pct}%</b><span>Last exam</span></div>
         <div class="card stat"><b>${Math.max(...tests.map(t => t.pct))}%</b><span>Best</span></div>
         <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></div>
-        <div class="card stat"><b>${tests.length}</b><span>${tests.length === 1 ? "Test" : "Tests"} taken</span></div></div>` : "";
+        <div class="card stat"><b>${tests.length}</b><span>${tests.length === 1 ? "Exam" : "Exams"} taken</span></div></div>` : "";
     const tips = last ? "" : `<div class="tips">
-        <div class="tip"><div class="ic">${icon("terminal")}</div><div><b>Same format as the real exam</b><span>Single-answer, choose-two and fill-in questions. Type commands exactly, because case matters.</span></div></div>
-        <div class="tip"><div class="ic">${icon("check")}</div><div><b>Every answer explained</b><span>After you submit, see why each option is right or wrong, with a link to LPI's free lesson.</span></div></div>
-        <div class="tip"><div class="ic">${icon("weak")}</div><div><b>Practice what you miss</b><span>Weak areas, objective drills and flashcards target exactly what you need.</span></div></div></div>`;
-    shell("test", `${resume}
+        <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
+        <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
+        <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
+    shell("test", `${resumeBanner()}
       <section class="hero">
-        <div class="page-head"><span class="eyebrow">exit 0 · LPI Linux Essentials 010-160</span><h1>Practice test</h1>
-          <p class="lead">40 questions in 60 minutes, drawn fresh from ${BANK.questions.length} questions with exactly as many questions per objective as the real exam.</p></div>
-        <div class="cta"><button class="primary big" data-start="test">${icon("test")}Run test</button>
-          <label class="switch"><input type="checkbox" id="timed" ${st.settings.timed ? "checked" : ""}> Timed (60 min)</label>
-          <label class="switch" title="Off matches the real exam: answers stay hidden until you submit."><input type="checkbox" id="reveal" ${st.settings.reveal ? "checked" : ""}> Show answers as I go</label></div>
-        ${st.settings.reveal ? `<p class="small muted">Check each answer as you go, with the explanation shown right away. These tests don't count toward your readiness score. Turn this off to practice under exam conditions.</p>` : ""}
+        <div class="page-head"><span class="eyebrow">Exam mode · as close to test day as possible</span><h1>Exam</h1>
+          <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
+        <div class="cta"><button class="primary big" data-start="test">${icon("test")}Start exam</button>
+          <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
+        <div class="rules"><span>${icon("clock")}60:00 timer</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
       </section>
       ${stats}${next}${tips}`);
-    $("#timed").onchange = e => { st.settings.timed = e.target.checked; save(); };
-    $("#reveal").onchange = e => { st.settings.reveal = e.target.checked; save(); renderTest(); };
-    if (cur) { $("#resume").onclick = () => go("exam"); $("#discard").onclick = () => { st.current = null; save(); render(); }; }
+    wireResume();
+    wireStarts($("#page"));
+  }
+
+  // ================================================================== STUDY MODE
+  function renderStudy() {
+    const sp = SP(), sel = new Set(sp.objs);
+    const os = C.objectiveStats(BANK, st.qstats);
+    const missed = C.missedIds(BANK, st.qstats).length;
+    const unseen = BANK.questions.filter(q => !(st.qstats[q.id] && st.qstats[q.id].seen)).length;
+    const weak = C.weakObjectives(BANK, st.qstats, 19);
+    const pool = C.studyPool(BANK, st.qstats, sp);
+    const n = sp.count ? Math.min(sp.count, pool.length) : pool.length;
+    const mix = C.levelMix(BANK, pool);
+    shell("study", `${resumeBanner()}
+      <div class="page-head"><span class="eyebrow">Study mode · learn as you go</span><h1>Study</h1>
+        <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
+      <div class="quick">
+        <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
+        <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " below 80%" : "None yet. Take an exam to find them."}</span></button>
+        <button class="qs" data-start="unseen" ${unseen ? "" : "disabled"}>${icon("bulb")}<b>New questions</b><span>${unseen ? plural(unseen, "question") + " you haven't seen" : "You've seen every question"}</span></button>
+      </div>
+      <div class="card stack builder"><h2>Build a session</h2>
+        <div class="frow"><span class="flabel">Difficulty</span><div class="filters" id="flv">${[1, 2, 3].map(lv => `<button data-lv="${lv}" class="${sp.levels.includes(lv) ? "on" : ""}" aria-pressed="${sp.levels.includes(lv)}" title="${C.LEVELS[lv][1]}">${"●".repeat(lv)}${"○".repeat(3 - lv)} ${C.LEVELS[lv][0]}</button>`).join("")}</div></div>
+        <div class="frow"><span class="flabel">Questions</span><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "Not seen yet"], ["missed", "Missed last time"]].map(([k, l]) => `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+        <div class="frow"><span class="flabel">How many</span><div class="seg" id="fcount">${[10, 20, 40, 0].map(v => `<button data-v="${v}" class="${sp.count === v ? "on" : ""}">${v || "All"}</button>`).join("")}</div></div>
+        <div class="frow top"><span class="flabel">Objectives</span><div class="stack grow" style="gap:8px;min-width:0">
+          <div class="row spread"><span class="small muted">${sel.size ? plural(sel.size, "objective") + " selected" : "All 19 objectives. Tick some to narrow it down."}</span>
+            <div class="row"><button class="ghost small" id="selWeak">Select weak</button><button class="ghost small" id="selNone" ${sel.size ? "" : "disabled"}>Use all</button></div></div>
+          ${objList(os, { select: true, sel })}</div></div>
+      </div>
+      <div class="card row spread startbar"><span><b>${n}</b> <span class="muted">${n === 1 ? "question" : "questions"} · ${pool.length} match</span>
+          <span class="small muted hide-sm"> · ${[1, 2, 3].filter(lv => mix[lv]).map(lv => mix[lv] + " " + C.LEVELS[lv][0]).join(", ")}</span></span>
+        <button class="primary" id="sstart" ${n ? "" : "disabled"}>Start studying</button></div>`);
+    const keep = fn => { const y = scrollY; fn(); save(); renderStudy(); scrollTo(0, y); };
+    $$("#flv button").forEach(b => b.onclick = () => keep(() => { const lv = +b.dataset.lv;
+      sp.levels = sp.levels.includes(lv) ? sp.levels.filter(x => x !== lv) : sp.levels.concat(lv).sort();
+      if (!sp.levels.length) { sp.levels = [lv]; toast("Keep at least one difficulty"); } }));
+    $$("#fsrc button").forEach(b => b.onclick = () => keep(() => { sp.source = b.dataset.v; }));
+    $$("#fcount button").forEach(b => b.onclick = () => keep(() => { sp.count = +b.dataset.v; }));
+    $$("[data-obj]").forEach(i => i.onchange = () => keep(() => { const o = i.dataset.obj;
+      sp.objs = i.checked ? [...new Set(sp.objs.concat(o))].sort() : sp.objs.filter(x => x !== o); }));
+    $("#selWeak").onclick = () => keep(() => { if (weak.length) sp.objs = weak.slice().sort(); else toast("No weak objectives yet"); });
+    $("#selNone").onclick = () => keep(() => { sp.objs = []; });
+    $("#sstart").onclick = () => startStudy({ objs: sp.objs, levels: sp.levels, source: sp.source, count: sp.count });
+    wireResume();
     wireStarts($("#page"));
   }
 
@@ -224,18 +288,18 @@
       Object.keys(OBJ).filter(o => C.topicOf(o) === t).map(o => {
         const s = os[o];
         const pct = s.pct == null ? "—" : s.pct + "%";
-        if (opts.select) return `<label class="orow" for="sel${o}"><input type="checkbox" id="sel${o}" data-obj="${o}" ${drillSel.has(o) ? "checked" : ""}>
+        if (opts.select) return `<label class="orow" for="sel${o}"><input type="checkbox" id="sel${o}" data-obj="${o}" ${opts.sel.has(o) ? "checked" : ""}>
             <span class="o">${o}</span><span>${esc(OBJ[o].name)} <span class="small muted">· ${s.total} Qs</span></span><span class="chip lv-${s.level}">${LV[s.level]}</span></label>`;
         return `<div class="orow"><span class="o">${o}</span><span>${esc(OBJ[o].name)}</span>
             <span class="row" style="gap:12px"><span class="chip lv-${s.level} hide-sm">${LV[s.level]}</span><span class="pct" style="color:${s.pct == null ? "var(--muted)" : col(s.pct)}">${pct}</span></span>
-            <button class="ghost small" data-drill="${o}" style="padding:.4rem .6rem">Drill</button></div>`;
+            <button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`;
       }).join("")).join("")}</div>`;
   }
   function renderProgress() {
     const tests = st.tests.filter(t => t.mode === "test");
     if (!st.tests.length) {
-      shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">Your scores, readiness and weak sections show up here after your first test.</p></div>
-        <div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take a practice test to see where you stand.</p><button class="primary" data-start="test">Run test</button></div>`);
+      shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">Your scores, readiness and weak sections show up here after your first exam or study session.</p></div>
+        <div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam to see where you stand.</p><button class="primary" data-start="test">Start exam</button></div>`);
       return wireStarts($("#page"));
     }
     const ready = C.readiness(st.tests);
@@ -246,29 +310,29 @@
     const weak = C.weakObjectives(BANK, st.qstats, 5);
     const tAcc = {}; for (const t in TOP) tAcc[t] = [0, 0];
     for (const o in os) { tAcc[C.topicOf(o)][0] += os[o].right; tAcc[C.topicOf(o)][1] += os[o].seen; }
-    const status = ready == null ? "Finish a full practice test to get a readiness score."
-      : ready >= 80 ? "You're in the ready range. Keep it there across three tests, then book the exam."
-      : ready >= 65 ? "Close. Focus on your weak sections and aim for 80% three tests in a row."
-      : "Keep building. Drill your weak sections, review flashcards, then retest.";
+    const status = ready == null ? "Finish an exam to get a readiness score. Study sessions don't count toward it."
+      : ready >= 80 ? "You're in the ready range. Keep it there across three exams, then book the real one."
+      : ready >= 65 ? "Close. Study your weak sections and aim for 80% three exams in a row."
+      : "Keep building. Study your weak sections, review flashcards, then take another exam.";
     shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">How you're doing across every exam objective.</p></div>
       <div class="card row" style="gap:28px;align-items:center">
         ${ring(ready || 0, 132, 12, ready == null ? "—" : ready + "%", "Readiness", ready == null ? "var(--line)" : col(ready))}
         <div class="stack grow" style="gap:14px;min-width:240px"><p>${status}</p>
           <div class="grid4" style="gap:10px">
-            <div class="stat"><b>${tests.length}</b><span>Tests</span></div>
+            <div class="stat"><b>${tests.length}</b><span>Exams</span></div>
             <div class="stat"><b>${tests.length ? Math.max(...tests.map(t => t.pct)) + "%" : "—"}</b><span>Best</span></div>
             <div class="stat"><b>${seen}<span class="muted" style="font-size:.9rem">/${BANK.questions.length}</span></b><span>Questions seen</span></div>
             <div class="stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/19</span></b><span>Objectives mastered</span></div></div></div></div>
-      ${tests.length >= 2 ? `<div class="card stack"><div class="row spread"><h2>Score trend</h2><span class="small muted">Last ${Math.min(15, tests.length)} practice tests</span></div>${trendChart(tests)}</div>` : ""}
+      ${tests.length >= 2 ? `<div class="card stack"><div class="row spread"><h2>Score trend</h2><span class="small muted">Last ${Math.min(15, tests.length)} exams</span></div>${trendChart(tests)}</div>` : ""}
       <div class="grid2">
         <div class="card stack"><h2>Troubled sections</h2>${weak.length ? `<div class="bars">${weak.map(o => `<div class="bar"><div class="lbl"><span><span class="mono muted">${o}</span> ${esc(OBJ[o].name)}</span><b>${os[o].pct}%</b></div>
             <div class="track2"><i style="width:${os[o].pct}%;background:${col(os[o].pct)}"></i><span class="mark"></span></div></div>`).join("")}</div>
-            <button data-start="weak">Practice weak areas</button>` : `<p class="muted small">Nothing below 80% with enough answers yet. Nice.</p>`}</div>
+            <button data-start="weak">Study weak areas</button>` : `<p class="muted small">Nothing below 80% with enough answers yet. Nice.</p>`}</div>
         <div class="card stack"><h2>By topic</h2><div class="bars">${Object.keys(TOP).map(t => { const [r, n] = tAcc[t]; const p = n ? Math.round(100 * r / n) : 0;
             return `<div class="bar"><div class="lbl"><span>${t}. ${esc(TOP[t])}</span><b>${n ? p + "%" : "—"}</b></div><div class="track2"><i style="width:${p}%;background:${col(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div></div>
       </div>
       <div class="card stack"><div class="row spread"><h2>By question difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
-        <p class="small muted">The real exam leans on exact syntax and reading commands. If Apply or Analyze trails Recall, drill commands and use the Commands &amp; files flashcards.</p></div>
+        <p class="small muted">The real exam leans on exact syntax and reading commands. If Apply or Analyze trails Recall, study those levels and use the Commands &amp; files flashcards.</p></div>
       <div class="card stack"><div class="row spread"><h2>Objective mastery</h2><span class="small muted">${ds.mastered}/${ds.total} flashcards mastered</span></div>${objList(os)}</div>
       <div class="stack"><h2>History</h2><div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th style="text-align:right">Score</th><th style="text-align:right">Time</th><th></th></tr></thead><tbody>
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
@@ -277,51 +341,6 @@
       </tbody></table></div></div>`);
     wireStarts($("#page"));
     $$("[data-review]").forEach(b => b.onclick = () => { lastRec = st.tests.find(t => t.id === b.dataset.review); reviewFilter = "all"; go("results"); });
-  }
-
-  // ================================================================== WEAK AREAS
-  function renderWeak() {
-    const missed = C.missedIds(BANK, st.qstats).length;
-    const weak = C.weakObjectives(BANK, st.qstats, 6);
-    const os = C.objectiveStats(BANK, st.qstats);
-    const head = `<div class="page-head"><h1>Weak areas</h1><p class="lead">Replays the questions you got wrong most recently, then fills up with questions from your weakest objectives. You see the answer and explanation after each one.</p></div>`;
-    if (!missed && !weak.length) {
-      shell("weak", head + `<div class="card empty">${icon("weak")}<b>${Object.keys(st.qstats).length ? "No weak areas right now" : "Nothing to review yet"}</b>
-        <p class="muted small">${Object.keys(st.qstats).length ? "You've answered your recent questions correctly. Run a test to find new gaps." : "Take a practice test first, and your misses will appear here."}</p>
-        <button class="primary" data-start="test">Run test</button></div>`);
-      return wireStarts($("#page"));
-    }
-    shell("weak", head + `<div class="grid2">
-        <div class="card stat"><b style="color:var(--bad)">${missed}</b><span>Questions missed last time you saw them</span></div>
-        <div class="card stat"><b>${weak.length}</b><span>Objectives below 80%</span></div></div>
-      ${weak.length ? `<div class="card stack"><h2>Weakest objectives</h2><div class="bars">${weak.map(o => `<div class="bar"><div class="lbl"><span><span class="mono muted">${o}</span> ${esc(OBJ[o].name)}</span><b>${os[o].pct}% · ${os[o].seen} answers</b></div>
-          <div class="track2"><i style="width:${os[o].pct}%;background:${col(os[o].pct)}"></i><span class="mark"></span></div></div>`).join("")}</div></div>` : ""}
-      <div class="card row spread"><div class="row"><span class="muted small">Questions</span><div class="seg" id="wsize">${[10, 20, 30].map(n => `<button data-n="${n}" class="${weakSize === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
-        <button class="primary" id="wstart">Start weak-area drill</button></div>`);
-    $$("#wsize button").forEach(b => b.onclick = () => { weakSize = +b.dataset.n; renderWeak(); });
-    $("#wstart").onclick = () => startWeak(weakSize);
-  }
-
-  // ================================================================== OBJECTIVE DRILL
-  function renderDrill() {
-    const os = C.objectiveStats(BANK, st.qstats);
-    const n = drillSel.size;
-    const avail = [...drillSel].reduce((a, o) => a + OBJ[o].weight * 6, 0);
-    shell("drill", `<div class="page-head"><h1>Objective drill</h1><p class="lead">Pick one or more exam objectives and practice only those. Questions you haven't seen come first.</p></div>
-      <div class="card stack" style="gap:6px"><div class="row spread"><b>${n ? plural(n, "objective") + " selected · " + avail + " questions available" : "Select objectives"}</b>
-        <div class="row"><button class="ghost small" id="selWeak">Select weak</button><button class="ghost small" id="selAll">All</button><button class="ghost small" id="selNone">Clear</button></div></div>
-        ${objList(os, { select: true })}</div>
-      <div class="card row spread" style="position:sticky;bottom:12px;box-shadow:var(--shadow)">
-        <div class="row" style="gap:18px"><div class="row"><span class="muted small">Questions</span><select id="dcount">${[5, 10, 20, 40, 0].map(v => `<option value="${v}" ${drillCount === v ? "selected" : ""}>${v || "All"}</option>`).join("")}</select></div>
-          <label class="switch"><input type="checkbox" id="dstudy" ${drillStudy ? "checked" : ""}> Show answers as I go</label></div>
-        <button class="primary" id="dstart" ${n ? "" : "disabled"}>Start drill</button></div>`);
-    $$("[data-obj]").forEach(i => i.onchange = () => { i.checked ? drillSel.add(i.dataset.obj) : drillSel.delete(i.dataset.obj); const y = scrollY; renderDrill(); scrollTo(0, y); });
-    $("#selAll").onclick = () => { Object.keys(OBJ).forEach(o => drillSel.add(o)); renderDrill(); };
-    $("#selNone").onclick = () => { drillSel.clear(); renderDrill(); };
-    $("#selWeak").onclick = () => { drillSel = new Set(C.weakObjectives(BANK, st.qstats, 19)); if (!drillSel.size) toast("No weak objectives yet"); renderDrill(); };
-    $("#dcount").onchange = e => drillCount = +e.target.value;
-    $("#dstudy").onchange = e => drillStudy = e.target.checked;
-    $("#dstart").onclick = () => startDrill([...drillSel].sort(), drillCount, drillStudy);
   }
 
   // ================================================================== FLASHCARDS
@@ -416,18 +435,18 @@
         <li><b>Single answer:</b> pick the one best option.</li>
         <li><b>Multiple answer:</b> the question tells you how many to pick, as in "Choose TWO".</li>
         <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li></ul></div>
-      <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every practice test in this app follows this table.</p>
+      <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table.</p>
         <div class="tablewrap"><table class="table"><thead><tr><th>Obj.</th><th>Objective</th><th style="text-align:right">Questions</th><th>Study</th></tr></thead><tbody>${bp}
         <tr class="topic"><td colspan="2">Total</td><td class="n">40</td><td></td></tr></tbody></table></div></div>
       <div class="card stack guide" id="difficulty"><h2>How hard is the real exam?</h2>
         <p>LPI sets the pass mark for a "minimally qualified candidate": someone with basic Linux knowledge who is most likely the end user of a mostly managed system and can work on the command line. LPI doesn't publish difficulty data. Candidates and trainers mostly describe the challenge as breadth plus exact recall: precise command options, permission notation, package tools and directory names.</p>
         <p>Every question in this app is tagged by the kind of thinking it needs:</p>
         <ul>${[1, 2, 3].map(lv => `<li><b>${C.LEVELS[lv][0]}</b>: ${C.LEVELS[lv][1].toLowerCase()}. ${C.levelMix(BANK)[lv]} questions in the bank.</li>`).join("")}</ul>
-        <p class="small muted">The tags are a guide, not an official rating. Your Progress page shows your accuracy at each level. Strong Apply and Analyze scores are the best sign that you're ready for exact-syntax questions on the real exam.</p></div>
+        <p class="small muted">The tags are a guide, not an official rating. Your Progress page shows your accuracy at each level, and Study mode can filter by level. Strong Apply and Analyze scores are the best sign that you're ready for exact-syntax questions on the real exam.</p></div>
       <div class="grid2">
         <div class="card stack guide"><h2>A study plan that works</h2><ol>
-          <li>Run a practice test cold to get a baseline.</li><li>Drill your weak areas with answers shown.</li>
-          <li>Do a short flashcard session every day to keep your streak going.</li><li>Retest. Book the exam when your readiness stays at 80% or higher.</li></ol></div>
+          <li>Take an exam cold to get a baseline.</li><li>Study your weak objectives. Use hints only when stuck, and read the linked lesson for anything you miss.</li>
+          <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your readiness stays at 80% or higher.</li></ol></div>
         <div class="card stack guide"><h2>Test-day tips</h2><ul>
           <li>Answer every question, because a blank can't score.</li><li>Flag hard questions and come back. Don't let one question eat your time.</li>
           <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></div></div>
@@ -445,16 +464,13 @@
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
-      <div class="card stack"><h2>Practice</h2>
-        <div class="row spread"><span>Time practice tests (60 minutes)</span><label class="switch"><input type="checkbox" id="stimed" ${s.timed ? "checked" : ""}> <span class="sr">Timed</span></label></div>
-        <div class="row spread"><div><div>Show answers as I go</div><div class="small muted">See the correct answer and explanation after each question. Off matches the real exam, with answers hidden until you submit. Tests with answers shown don't count toward readiness.</div></div>
-          <label class="switch"><input type="checkbox" id="sreveal" ${s.reveal ? "checked" : ""}> <span class="sr">Show answers</span></label></div>
+      <div class="card stack"><h2>Daily goal</h2>
         <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
           <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       ${window.pywebview || /exit0-desktop/.test(navigator.userAgent) ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
         <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
-          <a class="btn" href="${REPO}/releases/latest/download/exit0.rpm" target="_blank" rel="noopener">Fedora (.rpm)</a>
-          <a class="btn" href="${REPO}/releases/latest/download/exit0.deb" target="_blank" rel="noopener">Ubuntu / Debian (.deb)</a></div></div>`}
+          <a class="btn" href="${REPO}#fedora" target="_blank" rel="noopener">Fedora (dnf)</a>
+          <a class="btn" href="${REPO}#ubuntu--debian" target="_blank" rel="noopener">Ubuntu / Debian (apt)</a></div></div>`}
       <div class="card stack"><h2>Your data</h2><p class="small muted">Progress is saved in this browser only. To move it to another device, copy the export code there and paste it under Import.</p>
         <div class="row"><button id="exp">${exportOpen ? "Hide export code" : "Show export code"}</button></div>
         ${exportOpen ? `<textarea id="expData" readonly aria-label="Export code">${esc(data)}</textarea><div class="row"><button class="primary" id="copy">Copy</button></div>` : ""}
@@ -467,8 +483,6 @@
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     $$("#goal button").forEach(b => b.onclick = () => { s.goal = +b.dataset.v; save(); renderSettings(); });
-    $("#stimed").onchange = e => { s.timed = e.target.checked; save(); };
-    $("#sreveal").onchange = e => { s.reveal = e.target.checked; save(); };
     $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
     if ($("#copy")) $("#copy").onclick = () => {
       const ta = $("#expData");
@@ -497,6 +511,7 @@
     const done = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length;
     const flagged = Object.values(S.flags).filter(Boolean).length;
     const revealed = S.study && S.checked[id];
+    const hintOn = S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
     let body;
     if (q.type === "fill") {
@@ -516,19 +531,19 @@
     const ok = revealed && C.isCorrect(q, a);
     const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${ok ? "Correct" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
         ${q.type === "fill" ? `<div class="mono small">Accepted: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>` : ""}
-        <div>${rich(q.explanation)}</div><a class="small" href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}</a></div>` : "";
+        <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
     app.innerHTML = `<div class="exam-bar"><div class="in">
         <span class="title">${esc(S.label)}</span><span class="small muted mono hide-sm" id="cnt">${done}/${n} answered</span>
         <span class="grow"></span>
         <span class="timer" id="timer">${S.deadline ? fmt((S.deadline - Date.now()) / 1000) : fmt((Date.now() - S.start) / 1000)}</span>
-        <button class="ghost" id="exit" title="Progress is kept. Resume from the Practice test page.">Save &amp; exit</button>
+        <button class="ghost" id="exit" title="Progress is kept. Resume from the ${isTest ? "Exam" : "Study"} page.">Save &amp; exit</button>
         <button class="ghost hide-sm" id="gridBtn" aria-expanded="${showGrid}">${showGrid ? "Hide" : "All"} questions</button>
         <button class="primary" id="submit">${isTest ? "Submit" : "Finish"}</button></div>
       <div class="progress"><i style="width:${100 * done / n}%"></i></div></div>
       <main class="page" style="gap:20px">
-        ${confirming ? `<div class="card confirm stack" style="gap:10px"><h3>${isTest ? "Submit your test?" : "Finish this drill?"}</h3>
-          <p>${n - done ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged.` : ""}</p>
+        ${confirming ? `<div class="card confirm stack" style="gap:10px"><h3>${isTest ? "Submit your exam?" : "Finish this study session?"}</h3>
+          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged.` : ""}</p>
           <div class="row"><button id="keep">Keep working</button><button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${showGrid ? `<div class="card"><div class="qgrid">${S.qids.map((qid, i) => { let c = C.answered(BANK.byId[qid], S.answers[qid]) ? "ans" : "";
             if (S.study && S.checked[qid]) c = C.isCorrect(BANK.byId[qid], S.answers[qid]) ? "ok" : "no";
@@ -536,12 +551,13 @@
         <div class="qhead"><span class="qnum">Question <b>${S.cur + 1}</b> of ${n}</span><span class="row" style="gap:8px">${S.study ? lvChip(q) : ""}<span class="eyebrow">${typeTag}${S.study ? " · " + q.obj : ""}</span></span></div>
         <p class="qtext">${rich(q.q)}</p>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${fb}
+        ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}
         <div class="nav-row"><button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>
           <span class="row"><button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>
+          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${S.study && !revealed ? `<button id="check">Check answer</button>` : ""}
           ${S.cur < n - 1 ? `<button class="primary" id="next">Next</button>` : `<button class="primary" id="end">${isTest ? "Review & submit" : "Finish"}</button>`}</span></div>
-        <p class="small muted hide-sm"><span class="kbd">←</span> <span class="kbd">→</span> move · <span class="kbd">1</span>–<span class="kbd">5</span> choose · <span class="kbd">F</span> flag</p>
+        <p class="small muted hide-sm"><span class="kbd">←</span> <span class="kbd">→</span> move · <span class="kbd">1</span>–<span class="kbd">5</span> choose · <span class="kbd">F</span> flag${S.study ? ` · <span class="kbd">H</span> hint` : ""}</p>
       </main>`;
     const move = i => { S.cur = Math.max(0, Math.min(n - 1, i)); save(); renderExam(); scrollTo(0, 0); };
     $("#prev").onclick = () => move(S.cur - 1);
@@ -551,7 +567,9 @@
     $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
     $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
     $("#submit").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
-    $("#exit").onclick = () => { save(); go("test"); };
+    $("#exit").onclick = () => { save(); go(isTest ? "test" : "study"); };
+    if ($("#hintBtn")) $("#hintBtn").onclick = () => showHint(S, id);
+    $$("[data-cards-obj]").forEach(b => b.onclick = e => { e.preventDefault(); save(); startObjCards(b.dataset.cardsObj); });
     if (confirming) { $("#keep").onclick = () => { confirming = false; renderExam(); }; $("#doSubmit").onclick = finish; }
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
@@ -573,6 +591,18 @@
       else t.textContent = fmt((Date.now() - S.start) / 1000);
     }, 1000);
   }
+  function showHint(S, id) {
+    if (!S.study || S.checked[id] || !BANK.byId[id].hint) return;
+    S.hints = S.hints || {}; S.hints[id] = 1; save(); const y = scrollY; renderExam(); scrollTo(0, y);
+  }
+  // "Study this" links shown with every answer in Study mode and in result reviews
+  function studyRef(q) {
+    const nc = CARDS.filter(c => c.obj === q.obj).length;
+    return `<div class="studyref"><span class="eyebrow">Study this</span>
+      <a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener">${icon("guide")}LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}</a>
+      ${nc ? `<a href="#cards" data-cards-obj="${q.obj}">${icon("cards")}${nc} flashcards for ${q.obj}</a>` : ""}
+      <span class="grow"></span>${reportLink(q)}</div>`;
+  }
   function pickByNumber(pos) {
     const S = st.current, id = S.qids[S.cur], q = BANK.byId[id];
     if (q.type === "fill" || (S.study && S.checked[id])) return;
@@ -584,7 +614,13 @@
   }
   function finish() {
     clearInterval(timerId);
-    const S = st.current; const res = C.grade(BANK, S);
+    const S = st.current;
+    if (S.mode !== "test") {          // study sessions are scored on the questions you actually answered
+      const done = S.qids.filter(id => C.answered(BANK.byId[id], S.answers[id]));
+      if (!done.length) { st.current = null; confirming = false; showGrid = false; save(); toast("Nothing answered, so nothing was saved"); return go("study"); }
+      S.qids = done;
+    }
+    const res = C.grade(BANK, S);
     lastRec = C.recordResult(st, BANK, S, res);
     st.current = null; confirming = false; showGrid = false; save();
     reviewFilter = res.score < res.total ? "wrong" : "all";
@@ -601,7 +637,7 @@
       (byLevel[lv] = byLevel[lv] || [0, 0])[1]++; if (ok) byLevel[lv][0]++;
       (byObj[o] = byObj[o] || [0, 0])[1]++; (byTopic[t] = byTopic[t] || [0, 0])[1]++; if (ok) { byObj[o][0]++; byTopic[t][0]++; }
     }
-    const flags = new Set(rec.flags || []);
+    const flags = new Set(rec.flags || []), hintsUsed = new Set(rec.hints || []);
     const pct = rec.pct, isTest = rec.mode === "test";
     const verdict = pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing";
     const wrongN = rec.qids.filter(id => !perQ[id]).length;
@@ -613,23 +649,26 @@
         ${ok ? "" : `<div class="mono small">Accepted: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>`}`;
       else body = `<div class="stack" style="gap:4px">${rec.optOrder[id].map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
         return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span>${rich(q.options[oi])}</span>${k || p ? `<span class="why">${k && p ? "Your answer ✓" : k ? "Correct" : "Your answer"}</span>` : ""}</div>`; }).join("")}</div>`;
-      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}</span>${lvChip(q)}</span>
+      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
         <span class="verdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
-        <div class="ex">${rich(q.explanation)} <a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${q.obj}</a></div></article>`;
+        <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
-    shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Test results" : "Drill results"}</h1></div>
+    shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : "Study results"}</h1></div>
       <div class="card score">${ring(pct, 128, 12, pct + "%", "", col(pct))}
         <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="verdict ${vclass(pct)}">${verdict}</span><code class="exitcode" style="color:${col(pct)}">$ echo $? → ${pct >= 80 ? 0 : 1}</code></span>
           <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in <span class="mono">${fmt(rec.secs)}</span></p>
-          <p class="small muted">LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target.</p></div></div>
-      <div class="row"><button class="primary" data-start="test">Run another test</button>${C.missedIds(BANK, st.qstats).length ? `<button data-start="weak">Review weak areas</button>` : ""}<button class="ghost" data-go="progress">See progress</button></div>
+          <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
+            : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>
+      <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>` : `<button class="primary" data-go="study">Study more</button>`}
+        ${C.missedIds(BANK, st.qstats).length ? `<button data-start="missed">Study my misses</button>` : ""}${isTest ? "" : `<button data-start="test">Take an exam</button>`}<button class="ghost" data-go="progress">See progress</button></div>
       <div class="grid2">
         <div class="card stack"><h2>By topic</h2><div class="bars">${Object.keys(TOP).filter(t => byTopic[t]).map(t => { const [r, nn] = byTopic[t]; const p = Math.round(100 * r / nn);
           return `<div class="bar"><div class="lbl"><span>${t}. ${esc(TOP[t])}</span><b>${r}/${nn}</b></div><div class="track2"><i style="width:${p}%;background:${col(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div></div>
-        <div class="card stack"><h2>Objectives to study</h2>${weakRows.length ? `<div class="olist">${weakRows.map(o => `<div class="orow" style="grid-template-columns:auto minmax(0,1fr) auto auto"><span class="o">${o}</span><span>${esc(OBJ[o].name)}</span>
-          <span class="pct" style="color:var(--bad)">${byObj[o][0]}/${byObj[o][1]}</span><button class="ghost small" data-drill="${o}" style="padding:.4rem .6rem">Drill</button></div>`).join("")}</div>`
+        <div class="card stack"><h2>Where to study next</h2>${weakRows.length ? `<div class="olist">${weakRows.map(o => `<div class="orow" style="grid-template-columns:auto minmax(0,1fr) auto auto"><span class="o">${o}</span>
+          <span>${esc(OBJ[o].name)}<br><a class="small" href="${OBJ[o].lesson}" target="_blank" rel="noopener">Read the LPI lesson</a></span>
+          <span class="pct" style="color:var(--bad)">${byObj[o][0]}/${byObj[o][1]}</span><button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`).join("")}</div>`
           : `<p class="muted small">You got every objective right. ${icon("trophy")}</p>`}</div></div>
       <div class="card stack"><div class="row spread"><h2>By question difficulty</h2><span class="small muted">How you did on each kind of thinking</span></div>${levelBars(byLevel)}</div>
       <div class="stack" id="review"><div class="row spread"><h2>Answers</h2><div class="filters">
@@ -653,6 +692,7 @@
       else if (e.key === "ArrowLeft" && S.cur > 0) { S.cur--; save(); renderExam(); }
       else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
       else if (e.key.toLowerCase() === "f") { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
+      else if (e.key.toLowerCase() === "h") showHint(S, S.qids[S.cur]);
     } else if (h === "cards" && cs && cs.i < cs.queue.length && !typing) {
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); cs.flipped = !cs.flipped; renderCardSession(); }
       else if (cs.flipped && e.key === "1") gradeCard(false);

@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: LPI Linux Essentials lessons
+    url: https://learning.lpi.org/en/learning-materials/010-160/
+    about: Free official study material for every 010-160 objective.

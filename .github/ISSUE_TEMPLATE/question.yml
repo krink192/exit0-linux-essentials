@@ -1,0 +1,44 @@
+name: Problem with a question
+description: Wrong answer, typo, unclear wording or an out-of-date fact in a question or flashcard.
+title: "[question] "
+labels: ["question-content"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping make the practice questions accurate. If you used the **Report a problem** link in the app, the question ID is already filled in.
+  - type: input
+    id: qid
+    attributes:
+      label: Question or flashcard ID
+      description: Shown on the link in the app, for example 3.2-07 or k-2.1-04.
+      placeholder: 3.2-07
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What's wrong?
+      options:
+        - The keyed answer is wrong
+        - More than one answer is correct
+        - My typed answer should be accepted
+        - The explanation is wrong or misleading
+        - Typo or unclear wording
+        - Out of date or not on the 010-160 objectives
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What should it say instead? If it's a command question, paste what you ran and the output you got.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source (optional)
+      description: A man page, LPI lesson or other reference that backs this up.

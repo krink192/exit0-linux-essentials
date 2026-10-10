@@ -9,8 +9,8 @@ const C = require(path.join(__dirname, "../docs/js/core.js"));
 const bank = C.indexBank(window.LE_BANK), cards = window.LE_CARDS;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log("ok -", name); };
 
-t("bank has 240 questions and weights sum to 40", () => {
-  assert.strictEqual(bank.questions.length, 240);
+t("bank has 360 questions and weights sum to 40", () => {
+  assert.strictEqual(bank.questions.length, 360);
   assert.strictEqual(Object.values(bank.objectives).reduce((a, o) => a + o.weight, 0), 40);
 });
 t("every practice test matches the blueprint exactly", () => {
@@ -57,6 +57,31 @@ t("weak drill uses missed questions first", () => {
 t("objective drill stays inside chosen objectives", () => {
   const d = C.buildDrill(bank, {}, ["5.3", "5.4"], 10, { seed: 2 });
   assert.strictEqual(d.qids.length, 10); assert(d.qids.every(id => ["5.3", "5.4"].includes(bank.byId[id].obj)));
+});
+t("study mode filters by objective, difficulty and source", () => {
+  const s = C.buildStudy(bank, {}, { objs: ["3.3"], levels: [3], count: 5 }, { seed: 9 });
+  assert.strictEqual(s.qids.length, 5); assert(s.study); assert.strictEqual(s.mode, "study"); assert(!s.deadline);
+  assert(s.qids.every(id => bank.byId[id].obj === "3.3" && bank.byId[id].level === 3));
+  const all = C.studyPool(bank, {}, {}); assert.strictEqual(all.length, 360);
+  const qs = { [all[0]]: { seen: 1, right: 0, last: false }, [all[1]]: { seen: 1, right: 1, last: true } };
+  assert.deepStrictEqual(C.studyPool(bank, qs, { source: "missed" }), [all[0]]);
+  assert.strictEqual(C.studyPool(bank, qs, { source: "unseen" }).length, 358);
+  assert.strictEqual(C.buildStudy(bank, {}, { source: "missed" }), null);
+  const st = C.freshState(); s.hints[s.qids[0]] = 1;
+  const rec = C.recordResult(st, bank, s, C.grade(bank, s));
+  assert.deepStrictEqual(rec.hints, [s.qids[0]]); assert.strictEqual(C.readiness(st.tests), null);
+});
+t("every question has a hint that doesn't contain the answer", () => {
+  for (const q of bank.questions) {
+    assert(q.hint && q.hint.length >= 12, q.id + " has no hint");
+    if (q.type === "fill") assert(!q.accept.some(a => a.length > 2 && q.hint.includes(a)), q.id + " hint gives away the answer");
+  }
+});
+t("old settings migrate: exam is always timed with answers hidden", () => {
+  const st = C.migrate({ settings: { theme: "dark", timed: false, reveal: true } });
+  assert.strictEqual(st.settings.theme, "dark"); assert(!("timed" in st.settings)); assert(!("reveal" in st.settings));
+  assert.deepStrictEqual(st.settings.study.levels, [1, 2, 3]);
+  const s = C.buildTest(bank, {}, { seed: 1 }); assert(s.deadline && !s.study); assert.strictEqual(s.label, "Exam");
 });
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(new Set(cards.map(c => c.id)).size, cards.length);

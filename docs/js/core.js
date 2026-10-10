@@ -76,16 +76,16 @@
       if (q.type !== "fill") optOrder[id] = shuffle(q.options.map((_, i) => i), rand);
     }
     const now = opts.now || Date.now();
-    return { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, cur: 0, study: !!opts.study,
+    return { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, cur: 0, study: !!opts.study,
              timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
   }
 
-  /** 40 questions with exactly `weight` questions from every objective. */
+  /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden. */
   function buildTest(bank, qstats, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
     let ids = [];
     for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand));
-    const label = opts.study ? "Practice test · answers shown" : "Practice test";
+    const label = opts.study ? "Practice test · answers shown" : "Exam";
     return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now });
   }
 
@@ -96,6 +96,29 @@
     const label = objs.length === 1 ? "Drill · " + objs[0] + " " + bank.objectives[objs[0]].name
       : "Drill · " + objs.length + " objectives";
     return newSession(bank, "drill", label, shuffle(ids, rand), { study: opts.study !== false, seed: opts.seed });
+  }
+
+  /** Study mode filters. objs/levels empty = all. source: "mix" (everything), "unseen" or "missed". */
+  function studyPool(bank, qstats, f) {
+    f = f || {}; qstats = qstats || {};
+    const objs = f.objs && f.objs.length ? f.objs : Object.keys(bank.objectives);
+    const levels = f.levels && f.levels.length ? f.levels : [1, 2, 3];
+    let ids = [].concat(...objs.map(o => bank.byObj[o] || [])).filter(id => levels.indexOf(bank.byId[id].level || 1) >= 0);
+    if (f.source === "missed") ids = ids.filter(id => qstats[id] && qstats[id].last === false);
+    else if (f.source === "unseen") ids = ids.filter(id => !qstats[id] || !qstats[id].seen);
+    return ids;
+  }
+  /** Study session: answers, hints and explanations as you go. Returns null when nothing matches. */
+  function buildStudy(bank, qstats, f, opts) {
+    f = f || {}; opts = opts || {}; const rand = rng(opts.seed);
+    const pool = studyPool(bank, qstats, f);
+    if (!pool.length) return null;
+    const ids = pickBy(pool, qstats || {}, f.count || pool.length, rand);
+    const all = Object.keys(bank.objectives).length;
+    const objs = f.objs && f.objs.length && f.objs.length < all ? f.objs : null;
+    const what = !objs ? "All objectives" : objs.length === 1 ? objs[0] + " " + bank.objectives[objs[0]].name : objs.length + " objectives";
+    const src = { missed: "Missed last time", unseen: "New questions" }[f.source];
+    return newSession(bank, "study", "Study · " + (src ? src + " · " : "") + what, shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
   function objectiveStats(bank, qstats) {
@@ -162,10 +185,10 @@
     }
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
-                  flags: Object.keys(s.flags).filter(k => s.flags[k]) };
+                  flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]) };
     state.tests.push(rec);
     // keep full detail for the 30 most recent records
-    state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; } });
+    state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; } });
     addActivity(state, res.answered, now);
     return rec;
   }
@@ -235,12 +258,15 @@
 
   // ------------------------------------------------------------- state
   function freshState() {
-    return { v: 3, settings: { theme: "system", timed: true, reveal: false, goal: 20 }, tests: [], qstats: {}, cards: {}, days: {}, current: null };
+    return { v: 3, settings: { theme: "system", goal: 20, study: { objs: [], levels: [1, 2, 3], source: "mix", count: 20 } },
+             tests: [], qstats: {}, cards: {}, days: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
     const st = Object.assign(freshState(), raw || {});
     st.settings = Object.assign(freshState().settings, (raw && raw.settings) || {});
+    st.settings.study = Object.assign(freshState().settings.study, st.settings.study || {});
+    delete st.settings.timed; delete st.settings.reveal;    // Exam mode is always timed with answers hidden
     if (!raw && legacy) {
       if (legacy.qstats) st.qstats = legacy.qstats;
       if (Array.isArray(legacy.history)) {
@@ -252,6 +278,6 @@
   }
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect,
-           priority, newSession, buildTest, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
+           priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
 });

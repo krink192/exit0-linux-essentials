@@ -81,6 +81,8 @@ so `docker compose up -d` works too. The image is nginx serving the same web app
 listens on port 8080 and has a health check. Versions are tagged as `1.2.1`, `1.2` and `latest`.
 To update, run `docker pull ghcr.io/krink192/exit0:latest` and recreate the container.
 Progress is still saved in each person's browser, not on the server, so many people can share one container.
+**Want progress on the server and synced across devices?** Run [exit0-sync](https://github.com/krink192/exit0-sync)
+instead: one container that serves this same app plus accounts and sync.
 
 ### Sync across your devices (optional, self-hosted)
 Run [exit0-sync](https://github.com/krink192/exit0-sync) on your own server and sign in under **Settings → Sync** on

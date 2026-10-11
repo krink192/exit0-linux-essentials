@@ -564,7 +564,8 @@
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
           <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
           <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${t.id}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
-      </tbody></table></div></div>`);
+      </tbody></table></div></div>
+      ${SYNC && !SYNC.linked ? `<p class="small muted">Studying on more than one device? <a href="#settings">Set up sync</a> with your own exit0-sync server to keep this progress in step.</p>` : ""}`);
     wirePlan(renderProgress);
     wireStarts($("#page"));
     $$("[data-review]").forEach(b => b.onclick = () => { lastRec = st.tests.find(t => t.id === b.dataset.review); reviewFilter = "all"; go("results"); });
@@ -880,11 +881,11 @@
         <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
           <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
-          <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device.</p></div>
+          <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device${SYNC && SYNC.linked ? " and synced" : " (or synced, if you set up Sync below)"}.</p></div>
         ${installEvt ? `<div class="row"><button class="primary" id="installNow">${icon("download")}Install exit 0</button></div>`
           : IOS ? `<p class="small">In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</p>`
           : `<p class="small">In Chrome or Edge, open the browser menu and choose <b>Install app</b> (on Android: <b>Add to Home screen</b>). Firefox doesn't support installing web apps on desktop; use the desktop app below instead.</p>`}</div>`}
-      ${DESKTOP() ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
+      ${DESKTOP() ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline, saves progress on your computer and can sync with your server too.</p></div>
         <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
           <a class="btn" href="${REPO}#fedora" target="_blank" rel="noopener">Fedora (dnf)</a>
           <a class="btn" href="${REPO}#ubuntu--debian" target="_blank" rel="noopener">Ubuntu / Debian (apt)</a></div></div>`}

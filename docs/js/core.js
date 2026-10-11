@@ -229,6 +229,71 @@
     return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
+  // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
+  const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
+  const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
+  function xpInfo(state) {          // 1 XP per answer, +1 when right, 1 per flashcard review
+    let total = 0;
+    for (const id in state.qstats) total += (state.qstats[id].seen || 0) + (state.qstats[id].right || 0);
+    for (const id in state.cards) total += state.cards[id].seen || 0;
+    let lv = 0; while (lv + 1 < LEVEL_XP.length && total >= LEVEL_XP[lv + 1]) lv++;
+    return { xp: total, level: lv + 1, name: LEVEL_NAMES[lv], floor: LEVEL_XP[lv], next: lv + 1 < LEVEL_XP.length ? LEVEL_XP[lv + 1] : null };
+  }
+  function longestStreak(days, goal) {
+    const nums = Object.keys(days).filter(k => days[k] >= goal).map(k => { const [y, m, d] = k.split("-").map(Number); return dayNum(new Date(y, m - 1, d)); }).sort((a, b) => a - b);
+    let best = 0, run = 0;
+    nums.forEach((n, i) => { run = i && n === nums[i - 1] + 1 ? run + 1 : 1; best = Math.max(best, run); });
+    return best;
+  }
+  const BADGES = [
+    ["first-exam", "First exam", "Finish an exam.", "test"],
+    ["ready", "Ready range", "Score 80% or higher on an exam.", "check"],
+    ["three-ready", "Ready to book", "Score 80% or higher on three exams in a row.", "trophy"],
+    ["perfect", "Perfect run", "Score 100% on an exam.", "trophy"],
+    ["speed", "Fast and right", "Score 80% or higher on an exam in under 30 minutes.", "clock"],
+    ["streak3", "On a roll", "Meet your daily goal 3 days in a row.", "flame"],
+    ["streak7", "Week streak", "Meet your daily goal 7 days in a row.", "flame"],
+    ["streak30", "Habit formed", "Meet your daily goal 30 days in a row.", "flame"],
+    ["review7", "Spaced out", "Finish 7 daily reviews.", "repeat"],
+    ["no-hints", "No hints needed", "Score 80% or higher on a study session of 10+ questions without using a hint.", "bulb"],
+    ["analyst", "Analyst", "Answer 50 Analyze questions correctly.", "terminal"],
+    ["seen-all", "Seen it all", "Answer every question in the bank at least once.", "progress"],
+    ["obj-1", "First mastery", "Master an objective.", "weak"],
+    ["obj-all", "Full coverage", "Master all 19 objectives.", "weak"],
+    ["cards100", "Card shark", "Review 100 flashcards.", "cards"],
+    ["cards-all", "Total recall", "Master every flashcard.", "cards"],
+  ];
+  /** Every badge with done/progress. progress = [current, goal] where that makes sense. */
+  function badgeStatus(state, bank, cards) {
+    const exams = state.tests.filter(t => t.mode === "test");
+    let run = 0, bestRun = 0; exams.forEach(t => { run = t.pct >= TARGET ? run + 1 : 0; bestRun = Math.max(bestRun, run); });
+    const streak = longestStreak(state.days, state.settings.goal);
+    const seen = Object.keys(state.qstats).filter(id => bank.byId[id] && state.qstats[id].seen).length;
+    let analyze = 0; for (const id in state.qstats) if (bank.byId[id] && bank.byId[id].level === 3) analyze += state.qstats[id].right || 0;
+    const os = objectiveStats(bank, state.qstats); const mastered = Object.values(os).filter(o => o.level === "mastered").length;
+    const nObj = Object.keys(bank.objectives).length;
+    let cardSeen = 0; for (const id in state.cards) cardSeen += state.cards[id].seen || 0;
+    const cardsMastered = cards.filter(c => state.cards[c.id] && state.cards[c.id].box >= 4).length;
+    const reviews = state.tests.filter(t => t.mode === "review").length;
+    const p = (n, goal) => ({ done: n >= goal, progress: [Math.min(n, goal), goal] });
+    const flag = done => ({ done: !!done });
+    const res = {
+      "first-exam": p(exams.length, 1), "ready": flag(exams.some(t => t.pct >= TARGET)), "three-ready": p(bestRun, 3),
+      "perfect": flag(exams.some(t => t.pct === 100)), "speed": flag(exams.some(t => t.pct >= TARGET && t.secs < 1800)),
+      "streak3": p(streak, 3), "streak7": p(streak, 7), "streak30": p(streak, 30), "review7": p(reviews, 7),
+      "no-hints": flag(state.tests.some(t => t.mode !== "test" && t.total >= 10 && t.pct >= TARGET && Array.isArray(t.hints) && !t.hints.length)),
+      "analyst": p(analyze, 50), "seen-all": p(seen, bank.questions.length), "obj-1": p(mastered, 1), "obj-all": p(mastered, nObj),
+      "cards100": p(cardSeen, 100), "cards-all": p(cardsMastered, cards.length),
+    };
+    return BADGES.map(([id, name, desc, icon]) => Object.assign({ id, name, desc, icon, at: (state.badges || {})[id] || null }, res[id]));
+  }
+  /** Record newly earned badges in state.badges and return them. */
+  function awardBadges(state, bank, cards, now) {
+    state.badges = state.badges || {}; const fresh = [];
+    for (const b of badgeStatus(state, bank, cards)) if (b.done && !state.badges[b.id]) { state.badges[b.id] = now || Date.now(); fresh.push(b); }
+    return fresh;
+  }
+
   const LEVELS = { 1: ["Recall", "Remember a fact, term or definition"],
                    2: ["Apply", "Pick or type the right command, option or setting"],
                    3: ["Analyze", "Trace code, output, globs or permissions to a result"] };
@@ -295,7 +360,7 @@
   // ------------------------------------------------------------- state
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 20, study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
-             tests: [], qstats: {}, cards: {}, days: {}, current: null };
+             tests: [], qstats: {}, cards: {}, days: {}, badges: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -318,6 +383,7 @@
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
+           xpInfo, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
 });

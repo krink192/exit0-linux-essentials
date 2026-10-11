@@ -365,3 +365,40 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .revn { font-size: 1rem; color: var(--muted); }
 .revn b { font-size: 2.4rem; font-weight: 800; color: var(--ink); margin-right: 4px; letter-spacing: -.02em; }
 .install-btn { justify-content: flex-start; gap: 8px; width: 100%; color: var(--accent); }
+
+/* ---------- Level and badges */
+.lvl-row { display: flex; gap: 16px; align-items: center; }
+.lvl-badge { width: 54px; height: 54px; border-radius: 14px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+  font: 800 1.5rem var(--mono); flex: none; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.badge { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 10px; background: var(--sunk); opacity: .6; }
+.badge svg.i { width: 22px; height: 22px; color: var(--muted); margin-top: 2px; }
+.badge b { display: block; font-size: .9rem; }
+.badge span { font-size: .78rem; color: var(--muted); line-height: 1.35; display: block; }
+.badge.got { opacity: 1; background: var(--accent-soft); }
+.badge.got svg.i { color: var(--accent); }
+
+/* ---------- Cheat sheets */
+.sheet { display: flex; flex-direction: column; gap: 14px; }
+.sheet-head h2 { margin-top: 4px; }
+.sheet-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.sheet-sec { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; break-inside: avoid; }
+.sheet-sec h3 { font-size: .95rem; margin-bottom: 8px; color: var(--accent); }
+.sheet-sec dl { margin: 0; display: grid; grid-template-columns: minmax(90px, max-content) minmax(0, 1fr); gap: 6px 12px; font-size: .86rem; line-height: 1.45; }
+.sheet-sec dt { font-weight: 700; }
+.sheet-sec dd { margin: 0; color: var(--ink-2); }
+.sheet-sec code { font-size: .8rem; }
+.sheet-tools .seg { flex-wrap: wrap; }
+@media (max-width: 900px) { .sheet-grid { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .sheet-sec dl { grid-template-columns: 1fr; gap: 2px; } .sheet-sec dd { margin-bottom: 6px; } }
+@media print {
+  :root { --bg: #fff; --surface: #fff; --sunk: #f3f3f3; --ink: #000; --ink-2: #222; --muted: #555; --line: #ccc; --accent: #0b5d4e; }
+  body { background: #fff; font-size: 11px; }
+  .side, .top, .sheet-tools, .page-head, .toast { display: none !important; }
+  .shell { display: block; } .main, .page { padding: 0 !important; max-width: none; }
+  .sheet { break-after: page; gap: 8px; } .sheet:last-child { break-after: auto; }
+  .sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .sheet-sec { padding: 10px 12px; border-radius: 6px; } .sheet-sec h3 { font-size: 13px; }
+  .sheet-sec dl { font-size: 11px; gap: 3px 10px; grid-template-columns: minmax(70px, max-content) minmax(0, 1fr); }
+  .sheet-sec code { font-size: 10.5px; padding: 0 2px; }
+}

@@ -66,6 +66,8 @@
     bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
     terminal: '<path d="M4 17l6-6-6-6M12 19h8"/>',
     trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+    sheet: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
+    print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
     download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
     repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
   };
@@ -91,6 +93,14 @@
     return C.migrate(raw, raw ? null : { history: readJSON("le010.v2.history"), qstats: readJSON("le010.v2.qstats") });
   })();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ } }
+  C.awardBadges(st, BANK, CARDS); save();         // credit for progress made before badges existed, without toasts
+  function celebrate() {
+    const lvBefore = celebrate.lv;
+    C.awardBadges(st, BANK, CARDS).forEach((b, i) => setTimeout(() => toast("Badge earned: " + b.name), 400 + i * 1600));
+    const x = C.xpInfo(st); if (x.level > lvBefore) setTimeout(() => toast(`Level ${x.level}: ${x.name}`), 200);
+    celebrate.lv = x.level; save();
+  }
+  celebrate.lv = C.xpInfo(st).level;
 
   function applyTheme() {
     const t = st.settings.theme;
@@ -108,7 +118,7 @@
   // ------------------------------------------------------------------ shell
   const NAV = [
     ["Practice", [["review", "Daily review", "repeat"], ["test", "Exam", "test"], ["study", "Study", "drill"], ["cards", "Flashcards", "cards"]]],
-    ["You", [["progress", "Progress", "progress"], ["guide", "Exam guide", "guide"], ["settings", "Settings", "settings"]]],
+    ["You", [["progress", "Progress", "progress"], ["guide", "Exam guide", "guide"], ["sheets", "Cheat sheets", "sheet"], ["settings", "Settings", "settings"]]],
   ];
   function sidebarHTML(active) {
     const qdue = C.reviewForecast(BANK, st.qstats).due;
@@ -157,7 +167,7 @@
     if (h === "exam") return go("test");
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
-    const pages = { review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
+    const pages = { sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings };
     (pages[h] || renderTest)();
   }
@@ -364,6 +374,17 @@
             <button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`;
       }).join("")).join("")}</div>`;
   }
+  function achievementsCard() {
+    const x = C.xpInfo(st), bs = C.badgeStatus(st, BANK, CARDS), got = bs.filter(b => b.done).length;
+    const pct = x.next ? Math.round(100 * (x.xp - x.floor) / (x.next - x.floor)) : 100;
+    return `<div class="card stack"><div class="row spread"><h2>Level and badges</h2><span class="small muted">${got} of ${bs.length} badges</span></div>
+      <div class="lvl-row"><div class="lvl-badge">${x.level}</div><div class="grow"><div class="row spread"><b>${esc(x.name)}</b>
+        <span class="small muted mono">${x.xp} XP${x.next ? ` · ${x.next - x.xp} to level ${x.level + 1}` : " · max level"}</span></div>
+        <div class="track2" style="margin-top:8px"><i style="width:${pct}%;background:var(--accent)"></i></div>
+        <div class="small muted" style="margin-top:6px">1 XP for every answer, 1 more when it's right, and 1 for every flashcard.</div></div></div>
+      <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
+          <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div></div>`;
+  }
   function renderProgress() {
     const tests = st.tests.filter(t => t.mode === "test");
     if (!st.tests.length) {
@@ -392,6 +413,7 @@
             <div class="stat"><b>${tests.length ? Math.max(...tests.map(t => t.pct)) + "%" : "—"}</b><span>Best</span></div>
             <div class="stat"><b>${seen}<span class="muted" style="font-size:.9rem">/${BANK.questions.length}</span></b><span>Questions seen</span></div>
             <div class="stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/19</span></b><span>Objectives mastered</span></div></div></div></div>
+      ${achievementsCard()}
       ${tests.length >= 2 ? `<div class="card stack"><div class="row spread"><h2>Score trend</h2><span class="small muted">Last ${Math.min(15, tests.length)} exams</span></div>${trendChart(tests)}</div>` : ""}
       <div class="grid2">
         <div class="card stack"><h2>Troubled sections</h2>${weak.length ? `<div class="bars">${weak.map(o => `<div class="bar"><div class="lbl"><span><span class="mono muted">${o}</span> ${esc(OBJ[o].name)}</span><b>${os[o].pct}%</b></div>
@@ -478,6 +500,7 @@
     const c = cs.queue[cs.i];
     C.reviewCard(st.cards, c.id, knew, C.dayNum());
     C.addActivity(st, 1); save();
+    if (cs.i + 1 >= cs.queue.length) celebrate();
     cs.done++; if (knew) cs.knew++;
     cs.i++; cs.flipped = false; renderCardSession();
   }
@@ -524,6 +547,20 @@
         <li><a href="https://www.lpi.org/our-certifications/exam-010-objectives/" target="_blank" rel="noopener">Exam 010 objectives (v1.6)</a></li>
         <li><a href="https://www.lpi.org/about-lpi/frequently-asked-questions/" target="_blank" rel="noopener">LPI FAQ: scoring, delivery and results</a></li>
         <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a></li></ul></div>`);
+  }
+
+  // ================================================================== CHEAT SHEETS
+  let sheetTopic = "1";
+  function renderSheets() {
+    const SHEETS = window.LE_SHEETS || [];
+    const shown = sheetTopic === "all" ? SHEETS : SHEETS.filter(x => x.topic === sheetTopic);
+    shell("sheets", `<div class="page-head"><h1>Cheat sheets</h1><p class="lead">One page per exam topic with the commands, options, files and facts you need on test day. Print them or save them as PDF.</p></div>
+      <div class="card row spread sheet-tools"><div class="seg" id="stopic">${SHEETS.map(x => `<button data-v="${x.topic}" class="${sheetTopic === x.topic ? "on" : ""}" title="${esc(TOP[x.topic])}">Topic ${x.topic}</button>`).join("")}<button data-v="all" class="${sheetTopic === "all" ? "on" : ""}">All</button></div>
+        <button class="primary" id="sprint">${icon("print")}Print${sheetTopic === "all" ? " all" : ""}</button></div>
+      ${shown.map(x => `<section class="sheet"><div class="sheet-head"><span class="eyebrow">exit 0 · Linux Essentials 010-160 · Topic ${x.topic}</span><h2>${esc(TOP[x.topic])}</h2></div>
+        <div class="sheet-grid">${x.sections.map(sec => `<div class="sheet-sec"><h3>${esc(sec.h)}</h3><dl>${sec.rows.map(([k, v]) => `<dt>${rich(k)}</dt><dd>${rich(v)}</dd>`).join("")}</dl></div>`).join("")}</div></section>`).join("")}`);
+    $$("#stopic button").forEach(b => b.onclick = () => { sheetTopic = b.dataset.v; renderSheets(); });
+    $("#sprint").onclick = () => window.print();
   }
 
   // ================================================================== SETTINGS
@@ -697,6 +734,7 @@
     }
     const res = C.grade(BANK, S);
     lastRec = C.recordResult(st, BANK, S, res);
+    celebrate();
     st.current = null; confirming = false; showGrid = false; save();
     reviewFilter = res.score < res.total ? "wrong" : "all";
     go("results");

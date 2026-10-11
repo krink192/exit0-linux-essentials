@@ -122,6 +122,10 @@ with the terminal output.
 - **Flashcards.** 250 cards in two decks, *Concepts* and *Commands & files*, with spaced repetition, so cards
   you miss come back first. There's also a searchable glossary.
 - **Exam guide.** Format, scoring, the blueprint with links to LPI's free lessons, a study plan and test-day tips.
+- **Cheat sheets.** One printable page per exam topic: distro families, licenses, shell quoting, `ls`/`tar`/`grep`
+  options, redirection, scripting, device names, key directories, networking and permissions.
+- **Levels and badges.** Earn XP for every answer and flashcard, level up from *Newcomer* to *root*, and collect
+  16 badges for things like three ready-range exams in a row or a 7-day streak.
 - **Daily goal and streak.** Keeps you studying a little every day.
 - **Report a problem.** Every question has a link that opens a GitHub issue with its ID filled in.
 - **Light and dark themes,** following your system setting or chosen in Settings.
@@ -159,7 +163,7 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
                       docker.yml (container image)
 Dockerfile, docker/   Container image: nginx serving docs/ (compose.yaml for docker compose)
 bank.json             The question bank
-tools/                Questions t1.py–t6.py, hints.py, cards.py, build.py, verify.py, test_core.js
+tools/                Questions t1.py–t6.py, hints.py, cards.py, sheets.py, build.py, verify.py, test_core.js
 ```
 
 ### Releasing

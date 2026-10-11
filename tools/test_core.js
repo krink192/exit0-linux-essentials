@@ -104,6 +104,22 @@ t("daily review: misses return tomorrow, right answers space out", () => {
   const legacy = { "1.1-01": { seen: 1, right: 0, last: false }, "1.1-02": { seen: 1, right: 1, last: true, at: now } };
   assert.deepStrictEqual(C.dueIds(bank, legacy, today), ["1.1-01"]);
 });
+t("xp, levels, streaks and badges come from saved progress", () => {
+  const st = C.freshState();
+  assert.strictEqual(C.xpInfo(st).level, 1); assert.strictEqual(C.badgeStatus(st, bank, cards).filter(b => b.done).length, 0);
+  const s = C.buildTest(bank, {}, { seed: 31 });
+  s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  const now = new Date(2026, 9, 10, 12).getTime();
+  C.recordResult(st, bank, s, C.grade(bank, s, s.start + 600000), now);
+  const x = C.xpInfo(st); assert.strictEqual(x.xp, 80); assert.strictEqual(x.level, 1); assert.strictEqual(x.next, 100);
+  const got = C.awardBadges(st, bank, cards, now).map(b => b.id).sort();
+  assert.deepStrictEqual(got, ["first-exam", "obj-1", "perfect", "ready", "speed"]);  // 3.3 (weight 4) all right = mastered
+  assert.strictEqual(C.awardBadges(st, bank, cards, now).length, 0, "badges are only awarded once");
+  const days = {}; for (let i = 0; i < 5; i++) { const d = new Date(2026, 9, 1 + i); days[C.dayKey(d)] = 30; } days[C.dayKey(new Date(2026, 9, 9))] = 30;
+  assert.strictEqual(C.longestStreak(days, 20), 5);
+  st.days = days; assert(C.awardBadges(st, bank, cards, now).some(b => b.id === "streak3"));
+  assert.deepStrictEqual(C.badgeStatus(st, bank, cards).find(b => b.id === "streak7").progress, [5, 7]);
+});
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(new Set(cards.map(c => c.id)).size, cards.length);
   assert(cards.some(c => c.deck === "concepts") && cards.some(c => c.deck === "commands"));

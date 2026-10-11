@@ -1,7 +1,0 @@
-# docker compose up -d   then open http://localhost:8080
-services:
-  exit0:
-    image: ghcr.io/krink192/exit0:latest
-    ports:
-      - "8080:8080"
-    restart: unless-stopped

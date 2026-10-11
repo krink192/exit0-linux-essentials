@@ -22,7 +22,7 @@
   <a href="https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe"><b>Windows</b></a> ·
   <a href="#fedora"><b>Fedora</b></a> ·
   <a href="#ubuntu--debian"><b>Ubuntu / Debian</b></a> ·
-  <a href="#docker"><b>Docker</b></a>
+  <a href="#self-host-with-sync-docker"><b>Self-host + sync</b></a>
 </p>
 
 ![exit 0 exam mode](docs/screenshots/home.png)
@@ -35,7 +35,7 @@
 | **Windows 10 / 11** | [Download Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe) | A single file with no installer. |
 | **Fedora** | [Add the repository](#fedora), then `sudo dnf install exit0` | Signed packages. Updates arrive with `dnf upgrade`. |
 | **Ubuntu / Debian / Mint / Pop!_OS** | [Add the repository](#ubuntu--debian), then `sudo apt install exit0` | Signed repository. Updates arrive with `apt upgrade`. |
-| **Docker** | `docker run -d -p 8080:8080 ghcr.io/krink192/exit0` | Self-host it for a class, team or homelab. amd64 and arm64. |
+| **Self-host (Docker)** | [exit0-sync](#self-host-with-sync-docker) | Your own server for a homelab, class or team: the app plus accounts and sync across devices. amd64 and arm64. |
 
 All versions are the same app, work offline once installed, and are free.
 
@@ -72,25 +72,25 @@ Download **[Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releas
 Windows may show *"Windows protected your PC"* because the app isn't code-signed. Click **More info → Run anyway**.
 It uses the Microsoft Edge WebView2 runtime that comes with Windows 10 and 11.
 
-### Docker
+### Self-host with sync (Docker)
+Run [exit0-sync](https://github.com/krink192/exit0-sync) on your own server. It's one container that serves this
+same app and adds optional accounts and sync, so progress stays in step across the web app, the installed phone
+app and the desktop app. Question history, review schedule, flashcards, labs, streak and exam date sync; each device
+keeps working offline and catches up later. People who don't sign in just use the app as normal, with progress
+saved in their browser, so one server works for a whole class too.
+
 ```bash
-docker run -d --name exit0 -p 8080:8080 --restart unless-stopped ghcr.io/krink192/exit0:latest
+mkdir exit0-sync && cd exit0-sync
+curl -fsSLO https://raw.githubusercontent.com/krink192/exit0-sync/main/compose.yaml
+docker compose up -d
+docker compose exec exit0-sync exit0-sync user add yourname
 ```
-Then open http://localhost:8080 (or the server's address). The repository also has a [compose.yaml](compose.yaml),
-so `docker compose up -d` works too. The image is nginx serving the same web app. It runs as a non-root user,
-listens on port 8080 and has a health check. Versions are tagged as `1.2.1`, `1.2` and `latest`.
-To update, run `docker pull ghcr.io/krink192/exit0:latest` and recreate the container.
-Progress is still saved in each person's browser, not on the server, so many people can share one container.
-**Want progress on the server and synced across devices?** Run [exit0-sync](https://github.com/krink192/exit0-sync)
-instead: one container that serves this same app plus accounts and sync.
+Open `http://<server>:8080`, then **Settings → Sync** to sign in. Phones and other computers need HTTPS (a reverse
+proxy or tunnel). See the [exit0-sync README](https://github.com/krink192/exit0-sync#readme) for the full setup,
+backups and updates. The desktop apps and the website can sync with your server too: enter its address under
+**Settings → Sync**.
 
-### Sync across your devices (optional, self-hosted)
-Run [exit0-sync](https://github.com/krink192/exit0-sync) on your own server and sign in under **Settings → Sync** on
-each device: the web app, the installed phone app and the desktop app. Question history, review schedule,
-flashcards, labs, streak and exam date stay in step, and each device keeps working offline and catches up later.
-The exit0-sync container serves the web app too, so one address gives you both.
-
-**Where progress is saved:** in your browser for the web version and Docker, `~/.local/share/exit0` on Linux, and `%APPDATA%\Exit0`
+**Where progress is saved:** in your browser for the web version and self-hosted server, `~/.local/share/exit0` on Linux, and `%APPDATA%\Exit0`
 on Windows. To move it between devices, use **Settings → Sync**, or an export code under **Settings → Your data**.
 
 **Linux window opens and closes right away?** Update to the latest version. If it still happens, run
@@ -187,7 +187,7 @@ docs/                 The web app (published by GitHub Pages)
 desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
 .github/workflows/    tests.yml (every push), release.yml (desktop builds), pages.yml (website + package repo),
                       docker.yml (container image)
-Dockerfile, docker/   Container image: nginx serving docs/ (compose.yaml for docker compose)
+Dockerfile, docker/   App-only container image (nginx serving docs/). exit0-sync builds on it; point users to exit0-sync
 bank.json             The question bank
   js/shell.js         the simulated Linux system used by the labs
   js/sync.js          optional sync with an exit0-sync server (merge rules are in core.js)
@@ -203,7 +203,8 @@ gh release create v1.2.0 --title "exit 0 v1.2.0" --notes "What changed"
 Linux packages on Ubuntu and Fedora, and attaches all three to the release. When it finishes, `pages.yml`
 republishes the website and the signed dnf/apt repository, then installs from that repository to make sure it works.
 `docker.yml` builds the container image, runs it and checks that it serves the app, then publishes it to
-`ghcr.io/krink192/exit0` for amd64 and arm64.
+`ghcr.io/krink192/exit0` for amd64 and arm64. That app-only image is what exit0-sync copies the app from, so after
+an app release, rebuild or release exit0-sync to ship the new version to self-hosters.
 
 To try the image locally: `docker build -t exit0 . && docker run --rm -p 8080:8080 exit0`.
 

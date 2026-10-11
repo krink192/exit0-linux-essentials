@@ -456,10 +456,10 @@
     const fresh = pool.filter(c => !cstate[c.id]);
     return due.concat(fresh).slice(0, limit);
   }
-  function reviewCard(cstate, id, knew, today) {
+  function reviewCard(cstate, id, knew, today, now) {
     today = today == null ? dayNum() : today;
     const s = cstate[id] || { box: 0, seen: 0, right: 0 };
-    s.seen++; if (knew) s.right++;
+    s.seen++; if (knew) s.right++; s.at = now || Date.now();   // `at` lets sync tell which device reviewed it last
     s.box = knew ? Math.min(s.box + 1, BOX_DAYS.length - 1) : 0;
     s.due = today + (knew ? BOX_DAYS[s.box] : 0);
     cstate[id] = s;
@@ -492,6 +492,108 @@
     return { count, metToday, today: days[dayKey(now)] || 0 };
   }
 
+  // ------------------------------------------------------------- sync (merging progress from several devices)
+  // Each device uploads only its own progress (its "replica"). Merging all replicas gives the same result on
+  // every device, in any order: counts add up, schedules come from the device that answered last, lists are unions.
+  const LOCAL_SETTINGS = ["theme", "study"];   // per-device: look and the Study page's last filters
+  const TEST_DETAIL = ["qids", "answers", "optOrder", "flags", "hints"];
+  const KEEP_DETAIL = 30;
+  const clone = x => x == null ? x : JSON.parse(JSON.stringify(x));
+
+  function syncedSettings(settings) {
+    const out = {};
+    for (const k in settings || {}) if (LOCAL_SETTINGS.indexOf(k) < 0) out[k] = clone(settings[k]);
+    return out;
+  }
+  /** Update per-key change times for synced settings by comparing with the last snapshot. */
+  function stampSettings(settings, snap, ts, now) {
+    const cur = syncedSettings(settings); ts = Object.assign({}, ts); snap = snap || {};
+    for (const k in cur) if (JSON.stringify(cur[k]) !== JSON.stringify(snap[k])) ts[k] = now || Date.now();
+    return { snap: cur, ts };
+  }
+  // Counters (seen, right) add up; the schedule (last, at, box, due) comes from whichever copy is newest.
+  function mergeSched(map, id, s) {
+    const o = map[id];
+    if (!o) { map[id] = Object.assign({}, s); return; }
+    const newer = (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && (s.box || 0) > (o.box || 0));
+    const m = newer ? Object.assign({}, o, s) : Object.assign({}, s, o);
+    m.seen = (o.seen || 0) + (s.seen || 0); m.right = (o.right || 0) + (s.right || 0);
+    map[id] = m;
+  }
+  /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
+  function mergeStates(docs) {
+    const out = { tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, settings: {}, settingsTs: {} };
+    const tests = {};
+    for (const d of docs || []) {
+      if (!d) continue;
+      for (const id in d.qstats || {}) mergeSched(out.qstats, id, d.qstats[id]);
+      for (const id in d.cards || {}) mergeSched(out.cards, id, d.cards[id]);
+      for (const k in d.days || {}) out.days[k] = (out.days[k] || 0) + (d.days[k] || 0);
+      for (const id in d.badges || {}) { const t = d.badges[id]; if (t && (!out.badges[id] || t < out.badges[id])) out.badges[id] = t; }
+      for (const id in d.labs || {}) {
+        const a = d.labs[id] || {}, o = out.labs[id] || (out.labs[id] = { done: [] });
+        o.done = Array.from(new Set(o.done.concat(a.done || []))).sort((x, y) => x - y);
+        if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
+      }
+      for (const t of d.tests || []) { const h = tests[t.id]; if (!h || (t.qids && !h.qids)) tests[t.id] = t; }
+      const ts = d.settingsTs || {};
+      for (const k in d.settings || {}) {
+        if (LOCAL_SETTINGS.indexOf(k) >= 0) continue;
+        const t = ts[k] || 0, cur = out.settingsTs[k];
+        // newer wins; on a tie a real value beats an empty one, then the larger JSON wins so every device agrees
+        const win = cur == null || t > cur || (t === cur && (out.settings[k] == null ? d.settings[k] != null
+          : d.settings[k] != null && JSON.stringify(d.settings[k]) > JSON.stringify(out.settings[k])));
+        if (win) { out.settings[k] = clone(d.settings[k]); out.settingsTs[k] = t; }
+      }
+    }
+    out.tests = Object.values(tests).sort((a, b) => (a.date - b.date) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((t, i, all) => { if (i >= all.length - KEEP_DETAIL) return t; const c = Object.assign({}, t); TEST_DETAIL.forEach(k => delete c[k]); return c; });
+    return out;
+  }
+  /**
+   * This device's own share of the merged view: the view minus what the other devices contributed.
+   * `others` is mergeStates(other devices' replicas). Only counters need subtracting; everything else merges
+   * idempotently, so entries the other devices already have are simply left out to keep the upload small.
+   */
+  function ownPart(view, others, settingsTs) {
+    others = others || mergeStates([]);
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    for (const key of ["qstats", "cards"]) {
+      for (const id in view[key] || {}) {
+        const s = view[key][id], o = others[key][id];
+        const seen = Math.max(0, (s.seen || 0) - (o ? o.seen || 0 : 0));
+        const right = Math.max(0, Math.min(seen, (s.right || 0) - (o ? o.right || 0 : 0)));
+        const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last]) !== JSON.stringify([o.box, o.due, o.last]));
+        if (seen > 0 || newer) own[key][id] = Object.assign({}, s, { seen, right });
+      }
+    }
+    for (const k in view.days || {}) { const n = (view.days[k] || 0) - (others.days[k] || 0); if (n > 0) own.days[k] = n; }
+    const theirs = {}; for (const t of others.tests) theirs[t.id] = t;
+    own.tests = (view.tests || []).filter(t => !theirs[t.id] || (t.qids && !theirs[t.id].qids));
+    for (const id in view.badges || {}) if (!others.badges[id] || view.badges[id] < others.badges[id]) own.badges[id] = view.badges[id];
+    for (const id in view.labs || {}) {
+      const l = view.labs[id], o = others.labs[id];
+      const extra = (l.done || []).filter(x => !o || o.done.indexOf(x) < 0);
+      if (extra.length || (l.completedAt && (!o || !o.completedAt || l.completedAt < o.completedAt))) own.labs[id] = clone(l);
+    }
+    return own;
+  }
+  /** Copy a merged view into the app state, keeping this device's local settings and any session in progress. */
+  function applyMerged(state, view) {
+    state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.days = view.days;
+    state.badges = view.badges; state.labs = view.labs;
+    for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
+    return state;
+  }
+  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length));
+  /** True when local progress looks like a copy of the account's (export/import, or this browser was linked before). */
+  function looksCopied(local, remote) {
+    const ids = {}; for (const t of remote.tests) ids[t.id] = 1;
+    if (local.tests.some(t => ids[t.id])) return true;
+    for (const id in local.qstats) if (remote.qstats[id] && local.qstats[id].at && local.qstats[id].at === remote.qstats[id].at) return true;
+    return false;
+  }
+
   // ------------------------------------------------------------- state
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 20, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
@@ -520,5 +622,6 @@
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
            xpInfo, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
-           recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
+           recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

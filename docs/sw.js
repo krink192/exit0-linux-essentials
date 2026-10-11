@@ -3,7 +3,7 @@
 // Same-origin files are network-first (always fresh when online, cached copy when offline).
 // Google Fonts are cache-first. The package repository under /repo/ is never touched.
 const CACHE = "exit0-v6";
-const SHELL = ["./", "index.html", "css/styles.css", "js/core.js", "js/app.js", "data/bank.js", "data/cards.js", "data/sheets.js", "data/labs.js", "js/shell.js",
+const SHELL = ["./", "index.html", "css/styles.css", "js/core.js", "js/app.js", "data/bank.js", "data/cards.js", "data/sheets.js", "data/labs.js", "js/shell.js", "js/sync.js",
                "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
@@ -18,7 +18,7 @@ self.addEventListener("fetch", e => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin) {
-    if (url.pathname.includes("/repo/")) return;
+    if (url.pathname.includes("/repo/") || url.pathname.includes("/v1/")) return;   // package repo and sync API: never cached
     e.respondWith(networkFirst(req));
   } else if (/(^|\.)fonts\.(googleapis|gstatic)\.com$/.test(url.hostname)) {
     e.respondWith(cacheFirst(req));

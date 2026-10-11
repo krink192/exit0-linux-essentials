@@ -95,7 +95,51 @@
     const raw = readJSON(KEY);
     return C.migrate(raw, raw ? null : { history: readJSON("le010.v2.history"), qstats: readJSON("le010.v2.qstats") });
   })();
-  function save() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ } }
+  function save(fromSync) {
+    try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ }
+    if (!fromSync) scheduleSync();
+  }
+
+  // ------------------------------------------------------------------ optional sync (exit0-sync server)
+  const safeStorage = { getItem: k => { try { return localStorage.getItem(k); } catch (e) { return null; } },
+                        setItem: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* blocked */ } } };
+  function deviceName() {
+    const ua = navigator.userAgent;
+    const os = DESKTOP() ? "Desktop app" : /Android/.test(ua) ? "Android" : IOS ? (/iPad/.test(ua) || navigator.maxTouchPoints > 1 && /Mac/.test(ua) ? "iPad" : "iPhone")
+      : /Windows/.test(ua) ? "Windows" : /Mac/.test(ua) ? "Mac" : /CrOS/.test(ua) ? "Chromebook" : /Linux/.test(ua) ? "Linux" : "Device";
+    const br = DESKTOP() ? "" : /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "";
+    return br ? os + " · " + br : os;
+  }
+  const SYNC = window.LESync ? window.LESync.createSync({
+    core: C, storage: safeStorage, deviceName: deviceName(),
+    fetch: (url, o) => fetch(url, o),
+    getState: () => st,
+    resetProgress: () => { const keep = st.settings; st = C.freshState(); st.settings = keep; save(true); },
+    onChange: () => { save(true); C.awardBadges(st, BANK, CARDS, null, (window.LE_LABS || []).length); save(true); rerenderIfIdle(); },
+  }) : null;
+  let syncTimer = null;
+  function scheduleSync(delay) {
+    if (!SYNC || !SYNC.linked) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => SYNC.syncNow().catch(() => {}).then(() => { if ((location.hash || "").slice(1) === "settings") rerenderIfIdle(); }), delay == null ? 3000 : delay);
+  }
+  // Re-render after remote changes, but never in the middle of a question, lab, flashcard or while typing.
+  function rerenderIfIdle() {
+    const h = (location.hash || "#test").slice(1), el = document.activeElement;
+    if (h === "exam" || h.startsWith("lab/") || (h === "cards" && cs && cs.i < cs.queue.length)) return;
+    if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+    render();
+  }
+  if (SYNC) {
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") scheduleSync(0); });
+    window.addEventListener("online", () => scheduleSync(0));
+    setInterval(() => { if (document.visibilityState === "visible") scheduleSync(0); }, 60000);
+  }
+  // When the app is served by an exit0-sync server, offer that server as the sync address.
+  let originServer = null;
+  if (SYNC && /^https?:$/.test(location.protocol) && !DESKTOP()) {
+    SYNC.probe(location.origin).then(h => { originServer = { url: location.origin, signup: h.signup }; if ((location.hash || "").slice(1) === "settings") rerenderIfIdle(); }, () => {});
+  }
   const LABS = window.LE_LABS || [];
   st.labs = st.labs || {};
   C.awardBadges(st, BANK, CARDS, null, LABS.length); save();         // credit for progress made before badges existed, without toasts
@@ -590,7 +634,7 @@
   }
   function gradeCard(knew) {
     const c = cs.queue[cs.i];
-    C.reviewCard(st.cards, c.id, knew, C.dayNum());
+    C.reviewCard(st.cards, c.id, knew, C.dayNum(), Date.now());
     C.addActivity(st, 1); save();
     if (cs.i + 1 >= cs.queue.length) celebrate();
     cs.done++; if (knew) cs.knew++;
@@ -753,8 +797,81 @@
   }
 
   // ================================================================== SETTINGS
+  // ------------------------------------------------------------------ sync card
+  let syncDevices = null, syncPwOpen = false, syncBusy = false;
+  const ago = ms => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : fmtDate(ms); };
+  function syncCardHTML() {
+    if (!SYNC) return "";
+    const i = SYNC.info, dis = syncBusy ? " disabled" : "";
+    const head = `<div><h2>Sync</h2><p class="small muted">Keep progress in step across your computer, phone and the desktop app through your own
+      <a href="https://github.com/krink192/exit0-sync" target="_blank" rel="noopener">exit0-sync</a> server. Optional: everything works offline without it.</p></div>`;
+    if (SYNC.pending) {
+      const copied = SYNC.pending.copied;
+      return `<div class="card stack" id="sync">${head}<p><b>This device and your account both have progress.</b></p>
+        <p class="small muted">${copied ? "This device's progress looks like a copy of your account's (from an export code, or an earlier sign-in), so using the account's progress avoids counting it twice."
+          : "Combining adds this device's history to your account. Using the account's progress replaces what's on this device."}</p>
+        <div class="row"><button id="syCloud" class="${copied ? "primary" : ""}"${dis}>Use account progress</button><button id="syMerge" class="${copied ? "" : "primary"}"${dis}>Combine both</button>
+          <button id="syOut" class="ghost"${dis}>Cancel</button></div></div>`;
+    }
+    if (!SYNC.linked) {
+      const url = i.url || (originServer && originServer.url) || "";
+      const signup = originServer && originServer.url === url && originServer.signup;
+      return `<div class="card stack" id="sync">${head}
+        ${i.lastError ? `<p class="small" style="color:var(--bad)">${esc(i.lastError)}</p>` : ""}
+        <label class="small muted" for="syUrl">Server address</label><input id="syUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://exit0.example.com" value="${esc(url)}">
+        <div class="row" style="gap:10px;flex-wrap:wrap"><input id="syUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" value="${esc(i.username || "")}" style="flex:1;min-width:140px">
+          <input id="syPass" type="password" autocomplete="current-password" placeholder="Password" style="flex:1;min-width:140px"></div>
+        <div class="row"><button class="primary" id="syIn"${dis}>${syncBusy ? "Signing in…" : "Sign in"}</button>${signup ? `<button id="syUp"${dis}>Create account</button>` : ""}</div></div>`;
+    }
+    return `<div class="card stack" id="sync">${head}
+      <div class="row spread" style="flex-wrap:wrap;gap:8px"><span>Signed in as <b>${esc(i.username)}</b> on <span class="mono small">${esc(i.url.replace(/^https?:\/\//, ""))}</span></span>
+        <span class="small muted">${i.lastSync ? "Synced " + ago(i.lastSync) : "Not synced yet"} · ${plural(i.others, "other device")}</span></div>
+      ${i.lastError ? `<p class="small" style="color:var(--bad)">${esc(i.lastError)}</p>` : ""}
+      <div class="row" style="flex-wrap:wrap"><button class="primary" id="syNow"${dis}>${syncBusy ? "Syncing…" : "Sync now"}</button>
+        <button id="syDev">${syncDevices ? "Hide devices" : "Devices"}</button><button id="syPw">${syncPwOpen ? "Cancel" : "Change password"}</button><button class="ghost" id="syOut">Sign out</button></div>
+      ${syncDevices ? `<div class="stack" style="gap:6px">${syncDevices.devices.map(d => `<div class="row spread"><span>${esc(d.name)}${d.id === syncDevices.current ? ` <span class="chip lv-mastered">This device</span>` : ""}
+          <span class="small muted"> · last seen ${ago(d.lastSeen)}</span></span>${d.id === syncDevices.current ? "" : `<button class="small" data-sy-rm="${esc(d.id)}">Sign out</button>`}</div>`).join("")}
+        <p class="small muted">Signing a device out stops it syncing. The progress it already made stays.</p></div>` : ""}
+      ${syncPwOpen ? `<div class="stack" style="gap:8px"><input id="syCur" type="password" autocomplete="current-password" placeholder="Current password">
+        <input id="syNew" type="password" autocomplete="new-password" placeholder="New password (10+ characters)">
+        <label class="small"><input type="checkbox" id="syOthers" checked> Sign out my other devices</label>
+        <div class="row"><button class="primary" id="sySavePw">Change password</button></div></div>` : ""}</div>`;
+  }
+  async function syncAction(fn, okMsg) {
+    syncBusy = true; renderSettings();
+    try { const r = await fn(); const m = typeof okMsg === "function" ? okMsg(r) : okMsg; if (m) toast(m); }
+    catch (e) { toast(e.message || "Something went wrong"); }
+    syncBusy = false; render();
+  }
+  function bindSyncCard() {
+    if (!SYNC) return;
+    const signIn = signup => {
+      const url = $("#syUrl").value.trim(), user = $("#syUser").value.trim(), pass = $("#syPass").value;
+      if (location.protocol === "https:" && /^http:/.test(url)) return toast("This page uses https, so the server address must too.");
+      if (!url || !user || !pass) return toast("Enter the server address, username and password.");
+      syncAction(() => SYNC.signIn(url, user, pass, { signup }), r => r.needsChoice ? "Signed in. Choose how to combine progress." : "Signed in. Progress synced.");
+    };
+    if ($("#syIn")) { $("#syIn").onclick = () => signIn(false); $("#syPass").onkeydown = e => { if (e.key === "Enter") signIn(false); }; }
+    if ($("#syUp")) $("#syUp").onclick = () => signIn(true);
+    if ($("#syCloud")) $("#syCloud").onclick = () => syncAction(() => SYNC.choose("cloud"), "Using your account's progress");
+    if ($("#syMerge")) $("#syMerge").onclick = () => syncAction(() => SYNC.choose("merge"), "Progress combined");
+    if ($("#syNow")) $("#syNow").onclick = () => syncAction(() => SYNC.syncNow(), () => SYNC.info.lastError ? null : "Synced");
+    if ($("#syOut")) $("#syOut").onclick = () => syncAction(async () => { await SYNC.signOut(); syncDevices = null; syncPwOpen = false; }, "Signed out. Progress stays on this device.");
+    if ($("#syDev")) $("#syDev").onclick = async () => {
+      if (syncDevices) { syncDevices = null; return renderSettings(); }
+      try { syncDevices = await SYNC.devices(); } catch (e) { toast(e.message); } renderSettings();
+    };
+    $$("[data-sy-rm]").forEach(b => b.onclick = () => syncAction(async () => { await SYNC.removeDevice(b.dataset.syRm); syncDevices = await SYNC.devices(); }, "Device signed out"));
+    if ($("#syPw")) $("#syPw").onclick = () => { syncPwOpen = !syncPwOpen; renderSettings(); };
+    if ($("#sySavePw")) $("#sySavePw").onclick = () => {
+      const cur = $("#syCur").value, nw = $("#syNew").value, others = $("#syOthers").checked;
+      syncAction(async () => { await SYNC.changePassword(cur, nw, others); syncPwOpen = false; if (syncDevices) syncDevices = await SYNC.devices(); }, "Password changed");
+    };
+  }
+
   function renderSettings() {
     const s = st.settings;
+    const linked = !!(SYNC && SYNC.linked);
     const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, days: st.days, labs: st.labs, badges: st.badges, settings: st.settings }) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
@@ -771,12 +888,13 @@
         <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
           <a class="btn" href="${REPO}#fedora" target="_blank" rel="noopener">Fedora (dnf)</a>
           <a class="btn" href="${REPO}#ubuntu--debian" target="_blank" rel="noopener">Ubuntu / Debian (apt)</a></div></div>`}
-      <div class="card stack"><h2>Your data</h2><p class="small muted">Progress is saved in this browser only. To move it to another device, copy the export code there and paste it under Import.</p>
+      ${syncCardHTML()}
+      <div class="card stack"><h2>Your data</h2><p class="small muted">${linked ? "Progress is saved in this browser and synced with your server." : "Progress is saved in this browser only. To move it to another device, copy the export code there and paste it under Import, or set up sync above."}</p>
         <div class="row"><button id="exp">${exportOpen ? "Hide export code" : "Show export code"}</button></div>
         ${exportOpen ? `<textarea id="expData" readonly aria-label="Export code">${esc(data)}</textarea><div class="row"><button class="primary" id="copy">Copy</button></div>` : ""}
-        <label class="small muted" for="impData">Import from another device</label><textarea id="impData" placeholder="Paste an export code here"></textarea>
-        <div class="row"><button id="imp">Import</button></div></div>
-      <div class="card stack"><h2>Reset</h2><p class="small muted">Deletes tests, question history, flashcard progress and streak. Settings are kept.</p>
+        ${linked ? `<p class="small muted">To import an export code, sign out of sync first.</p>` : `<label class="small muted" for="impData">Import from another device</label><textarea id="impData" placeholder="Paste an export code here"></textarea>
+        <div class="row"><button id="imp">Import</button></div>`}</div>
+      <div class="card stack"><h2>Reset</h2><p class="small muted">${linked ? "Deletes tests, question history, flashcard progress and streak on <b>every device</b> signed in to this account. Settings are kept." : "Deletes tests, question history, flashcard progress and streak. Settings are kept."}</p>
         ${resetOpen ? `<div class="row card confirm spread"><span>Delete all progress? This can't be undone.</span><span class="row"><button id="rno">Cancel</button><button class="primary" id="ryes">Delete</button></span></div>`
           : `<div class="row"><button id="reset">Reset all progress</button></div>`}</div>
       <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU GPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
@@ -791,7 +909,8 @@
       try { navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); toast("Selected. Press Ctrl+C to copy"); }); }
       catch (e) { ta.select(); toast("Selected. Press Ctrl+C to copy"); }
     };
-    $("#imp").onclick = () => {
+    bindSyncCard();
+    if ($("#imp")) $("#imp").onclick = () => {
       try {
         const d = JSON.parse($("#impData").value);
         if (d.app !== "le010" || !Array.isArray(d.tests)) throw new Error("bad");
@@ -802,7 +921,11 @@
     };
     if ($("#reset")) $("#reset").onclick = () => { resetOpen = true; renderSettings(); };
     if ($("#rno")) { $("#rno").onclick = () => { resetOpen = false; renderSettings(); };
-      $("#ryes").onclick = () => { const keep = st.settings; st = C.freshState(); st.settings = keep; resetOpen = false; save(); toast("Progress reset"); renderSettings(); }; }
+      $("#ryes").onclick = () => {
+        resetOpen = false;
+        if (linked) return syncAction(() => SYNC.resetEverywhere(), "Progress reset on every device");
+        const keep = st.settings; st = C.freshState(); st.settings = keep; save(); toast("Progress reset"); renderSettings();
+      }; }
   }
 
   // ================================================================== EXAM
@@ -1012,4 +1135,5 @@
   });
 
   render();
+  scheduleSync(0);
 })();

@@ -82,8 +82,14 @@ listens on port 8080 and has a health check. Versions are tagged as `1.2.1`, `1.
 To update, run `docker pull ghcr.io/krink192/exit0:latest` and recreate the container.
 Progress is still saved in each person's browser, not on the server, so many people can share one container.
 
+### Sync across your devices (optional, self-hosted)
+Run [exit0-sync](https://github.com/krink192/exit0-sync) on your own server and sign in under **Settings → Sync** on
+each device: the web app, the installed phone app and the desktop app. Question history, review schedule,
+flashcards, labs, streak and exam date stay in step, and each device keeps working offline and catches up later.
+The exit0-sync container serves the web app too, so one address gives you both.
+
 **Where progress is saved:** in your browser for the web version and Docker, `~/.local/share/exit0` on Linux, and `%APPDATA%\Exit0`
-on Windows. To move it between devices, use **Settings → Your data**.
+on Windows. To move it between devices, use **Settings → Sync**, or an export code under **Settings → Your data**.
 
 **Linux window opens and closes right away?** Update to the latest version. If it still happens, run
 `GDK_BACKEND=x11 exit0` and [open an issue](https://github.com/krink192/exit0-linux-essentials/issues/new?template=bug.yml)
@@ -182,8 +188,9 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
 Dockerfile, docker/   Container image: nginx serving docs/ (compose.yaml for docker compose)
 bank.json             The question bank
   js/shell.js         the simulated Linux system used by the labs
+  js/sync.js          optional sync with an exit0-sync server (merge rules are in core.js)
 tools/                Questions t1.py–t6.py, hints.py, whys.py, cards.py, sheets.py, labs.py, build.py, verify.py,
-                      test_core.js, test_shell.js
+                      test_core.js, test_shell.js, test_sync.js
 ```
 
 ### Releasing

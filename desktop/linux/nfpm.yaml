@@ -10,7 +10,7 @@ priority: optional
 maintainer: krink192 <krink192@users.noreply.github.com>
 vendor: krink192
 homepage: https://github.com/krink192/exit0-linux-essentials
-license: GPL-3.0-or-later
+license: AGPL-3.0-or-later
 description: |
   exit 0: free practice for LPI Linux Essentials 010-160.
   360 questions. Exam mode follows the real exam's blueprint and timing; Study mode

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Run: node tools/test_sync.js
 // Simulates several devices syncing through an in-memory server that follows exit0-sync protocol v1,
 // and checks that every device ends up with the same progress and nothing is counted twice.

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """'Why that's wrong' notes: one short note for every wrong option of every choice question.
 
 Keyed by question ID, then by the option's exact text (without the check mark). build.py attaches the

@@ -10,6 +10,8 @@ jobs:
         with:
           node-version: "20"
       - run: node tools/test_core.js
+      - name: Every file is under the AGPL
+        run: node tools/test_license.js
       - name: Sync merges progress from several devices correctly
         run: node tools/test_sync.js
       - name: Lab shell matches real Bash, and every lab can be completed

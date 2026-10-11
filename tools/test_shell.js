@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Differential tests for the lab shell: each case runs in real Bash (in an empty temp directory, as a
 // regular user) and in the simulator (in an empty directory under /home/student), and the outputs must match.
 // Run: node tools/test_shell.js        (needs bash and GNU coreutils; as root it uses `runuser -u le010user`)

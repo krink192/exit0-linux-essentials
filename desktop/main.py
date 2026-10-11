@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """exit 0 - free practice for LPI Linux Essentials 010-160 (desktop app).
 
 Opens the web app in docs/ inside a native window (Edge WebView2 on Windows).

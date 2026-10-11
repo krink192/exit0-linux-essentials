@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 from common import S, F
 
 # ---------------- 5.1 Basic Security and Identifying User Types (12) ----------------

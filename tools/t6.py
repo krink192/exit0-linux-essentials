@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Harder pack: 120 questions (three more 40-question forms), weighted toward
 Apply (level 2) and Analyze (level 3) items: reading output, tracing scripts and
 choosing exact syntax."""

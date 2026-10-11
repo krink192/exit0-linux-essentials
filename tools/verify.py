@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Run every question that has a shell check and compare the real output with the keyed answer."""
 import json, os, subprocess, tempfile, pwd, shutil, sys, collections
 

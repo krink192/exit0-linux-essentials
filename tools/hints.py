@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Hints shown in Study mode, keyed by question ID.
 
 A hint points the learner at the right idea without giving the answer away.

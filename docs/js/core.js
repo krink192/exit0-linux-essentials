@@ -181,6 +181,7 @@
       if (!answered(bank.byId[id], s.answers[id]) && s.mode !== "test") continue; // drills: skip untouched
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
+      scheduleQuestion(st, res.perQ[id], dayNum(now));
       state.qstats[id] = st;
     }
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct,
@@ -191,6 +192,41 @@
     state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; } });
     addActivity(state, res.answered, now);
     return rec;
+  }
+
+  // ------------------------------------------------------------- daily review (spaced repetition for questions)
+  // A miss comes back tomorrow. Each right answer pushes the next review further out: 1, 2, 4, 8, then 16 days.
+  function scheduleQuestion(s, ok, today) {
+    s.box = ok ? Math.min((s.box || 0) + 1, BOX_DAYS.length - 1) : 0;
+    s.due = today + (ok ? BOX_DAYS[s.box] : 1);
+    return s;
+  }
+  function questionDue(s) {                 // older saved data has no schedule yet
+    if (s.due != null) return s.due;
+    if (s.last === false) return 0;
+    return (s.at ? dayNum(s.at) : 0) + 2;
+  }
+  function dueIds(bank, qstats, today) {
+    today = today == null ? dayNum() : today;
+    return Object.keys(qstats).filter(id => bank.byId[id] && questionDue(qstats[id]) <= today)
+      .sort((a, b) => questionDue(qstats[a]) - questionDue(qstats[b]) || (qstats[a].box || 0) - (qstats[b].box || 0));
+  }
+  function reviewForecast(bank, qstats, today) {
+    today = today == null ? dayNum() : today;
+    let due = 0, tomorrow = 0, week = 0;
+    for (const id in qstats) {
+      if (!bank.byId[id]) continue;
+      const d = questionDue(qstats[id]);
+      if (d <= today) due++; else if (d === today + 1) tomorrow++;
+      if (d > today && d <= today + 7) week++;
+    }
+    return { due, tomorrow, week };
+  }
+  function buildReview(bank, qstats, count, opts) {
+    opts = opts || {}; const rand = rng(opts.seed);
+    const ids = dueIds(bank, qstats, opts.today).slice(0, count || 20);
+    if (!ids.length) return null;
+    return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
   const LEVELS = { 1: ["Recall", "Remember a fact, term or definition"],
@@ -281,6 +317,7 @@
   }
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect,
+           scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
 });

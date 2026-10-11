@@ -361,3 +361,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .fnote { margin-top: 6px; }
 .picklist { margin: -6px 0 0 124px; padding: 4px 0; border-top: 1px solid var(--line); }
 @media (max-width: 560px) { .picklist { margin-left: 0; } }
+.revcard svg.i { color: var(--accent); }
+.revn { font-size: 1rem; color: var(--muted); }
+.revn b { font-size: 2.4rem; font-weight: 800; color: var(--ink); margin-right: 4px; letter-spacing: -.02em; }
+.install-btn { justify-content: flex-start; gap: 8px; width: 100%; color: var(--accent); }

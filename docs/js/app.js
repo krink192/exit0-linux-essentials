@@ -11,6 +11,21 @@
   // Opens a GitHub issue form with the question ID filled in.
   const reportLink = q => `<a class="muted" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub.">Report a problem (${q.id})</a>`;
   const app = document.getElementById("app");
+  // ------------------------------------------------------------------ install on phone / offline (PWA)
+  const DESKTOP = () => !!window.pywebview || /exit0-desktop/.test(navigator.userAgent) || location.hostname === "127.0.0.1";
+  const STANDALONE = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const IOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  let installEvt = null;
+  window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; if (!st.current) render(); });
+  window.addEventListener("appinstalled", () => { installEvt = null; toast("exit 0 is installed"); render(); });
+  if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol) && !DESKTOP()) {
+    window.addEventListener("load", () => { try { navigator.serviceWorker.register("sw.js").catch(() => {}); } catch (e) { /* not allowed here */ } });
+  }
+  const canInstall = () => !DESKTOP() && !STANDALONE() && (installEvt || IOS);
+  function promptInstall() {
+    if (installEvt) { installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; render(); }); }
+    else go("settings");
+  }
   const L = "ABCDEF";
 
   // ------------------------------------------------------------------ helpers
@@ -51,6 +66,8 @@
     bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
     terminal: '<path d="M4 17l6-6-6-6M12 19h8"/>',
     trophy: '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/>',
+    download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+    repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -90,11 +107,11 @@
 
   // ------------------------------------------------------------------ shell
   const NAV = [
-    ["Practice", [["test", "Exam", "test"], ["study", "Study", "drill"], ["cards", "Flashcards", "cards"]]],
+    ["Practice", [["review", "Daily review", "repeat"], ["test", "Exam", "test"], ["study", "Study", "drill"], ["cards", "Flashcards", "cards"]]],
     ["You", [["progress", "Progress", "progress"], ["guide", "Exam guide", "guide"], ["settings", "Settings", "settings"]]],
   ];
   function sidebarHTML(active) {
-    const missed = C.missedIds(BANK, st.qstats).length;
+    const qdue = C.reviewForecast(BANK, st.qstats).due;
     const due = C.deckStats(CARDS, st.cards).due;
     const sk = C.streak(st.days, st.settings.goal);
     const goalPct = Math.min(100, Math.round(100 * sk.today / st.settings.goal));
@@ -102,7 +119,7 @@
     return `<aside class="side" id="side">
       <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span><small>Linux Essentials 010-160</small></div></div>
       ${NAV.map(([label, items]) => `<div class="nav-label">${label}</div><nav class="nav">${items.map(([id, name, ic]) => {
-        const badge = id === "study" && missed ? `<span class="count">${missed}</span>` : id === "cards" && due ? `<span class="count">${due}</span>` : "";
+        const badge = id === "review" && qdue ? `<span class="count">${qdue}</span>` : id === "cards" && due ? `<span class="count">${due}</span>` : "";
         return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${name}</span>${badge}</a>`;
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
@@ -111,6 +128,7 @@
           <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
             <div class="t2">${sk.metToday ? "Today's goal done" : `${Math.max(0, st.settings.goal - sk.today)} to today's goal`}</div></div>
         </div>
+        ${canInstall() ? `<button class="ghost small install-btn" id="installSide">${icon("download")}Install app</button>` : ""}
         <div class="theme-row"><span class="small muted">Theme</span>
           <div class="seg" role="group" aria-label="Theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) =>
             `<button data-theme-set="${k}" class="${t === k ? "on" : ""}" title="${n}" aria-label="${n} theme">${icon(k === "system" ? "system" : k === "light" ? "sun" : "moon")}</button>`).join("")}</div></div>
@@ -127,6 +145,7 @@
     $("#menuBtn").onclick = () => $("#shell").classList.toggle("open");
     $("#shell").addEventListener("click", e => { if (e.target.id === "shell") $("#shell").classList.remove("open"); });
     $$("[data-theme-set]").forEach(b => b.onclick = () => { st.settings.theme = b.dataset.themeSet; save(); applyTheme(); render(); });
+    if ($("#installSide")) $("#installSide").onclick = promptInstall;
     window.scrollTo(0, 0);
   }
 
@@ -138,7 +157,7 @@
     if (h === "exam") return go("test");
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
-    const pages = { test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
+    const pages = { review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings };
     (pages[h] || renderTest)();
   }
@@ -148,6 +167,14 @@
   function begin(s) { st.current = s; confirming = false; showGrid = false; save(); go("exam"); }
   function startTest() { begin(C.buildTest(BANK, st.qstats, {})); }
   function startStudy(f) { const s = C.buildStudy(BANK, st.qstats, f); if (s) begin(s); else toast("No questions match those choices"); }
+  let reviewSize = 20;
+  function startReview() { const s = C.buildReview(BANK, st.qstats, reviewSize); if (s) begin(s); else toast("Nothing is due right now"); }
+  function startDueCards() {
+    const today = C.dayNum();
+    const queue = C.cardQueue(CARDS, st.cards, c => st.cards[c.id] && st.cards[c.id].due <= today, today, 40);
+    if (!queue.length) return toast("No flashcards are due");
+    cs = { queue, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
+  }
   function startWeakStudy() {
     const weak = C.weakObjectives(BANK, st.qstats, 19);
     startStudy(weak.length ? { objs: weak, count: 20 } : { source: "missed", count: 20 });
@@ -160,6 +187,8 @@
   }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
+    $$("[data-start=review]", root).forEach(b => b.onclick = startReview);
+    $$("[data-start=duecards]", root).forEach(b => b.onclick = startDueCards);
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
     $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
     $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
@@ -177,6 +206,36 @@
     if (!$("#resume")) return;
     $("#resume").onclick = () => go("exam");
     $("#discard").onclick = () => { st.current = null; save(); render(); };
+  }
+
+  // ================================================================== DAILY REVIEW
+  function renderReview() {
+    const f = C.reviewForecast(BANK, st.qstats), cardsDue = C.deckStats(CARDS, st.cards).due;
+    const started = Object.keys(st.qstats).length > 0;
+    const caught = started && !f.due && !cardsDue;
+    shell("review", `${resumeBanner()}
+      <div class="page-head"><span class="eyebrow">Daily review · a few minutes a day</span><h1>Daily review</h1>
+        <p class="lead">Every question you answer comes back on a schedule. A miss returns tomorrow, and each right answer pushes the next review further out: 1, 2, 4, 8, then 16 days. Flashcards that are due show up here too.</p></div>
+      ${!started ? `<div class="card empty">${icon("repeat")}<b>Nothing to review yet</b>
+          <p class="muted small">Take an exam or a study session. Every question you answer gets scheduled here automatically.</p>
+          <div class="row" style="justify-content:center"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`
+        : caught ? `<div class="card celebrate">${icon("trophy")}<h2>All caught up for today</h2><p class="muted">Nothing is due. Come back tomorrow, or keep going with a study session.</p>
+          <div class="row" style="justify-content:center"><button class="primary" data-go="study">Study</button><button data-start="test">Take an exam</button></div></div>` : ""}
+      ${started ? `<div class="grid2">
+        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
+          <div class="revn"><b>${f.due}</b> due</div>
+          <p class="small muted">${f.due ? `Oldest first, up to ${reviewSize} at a time, with hints and answers as you go.` : "No questions due today."}</p>
+          <div class="row spread"><div class="seg" id="rsize">${[10, 20, 40].map(n => `<button data-n="${n}" class="${reviewSize === n ? "on" : ""}">${n}</button>`).join("")}</div>
+            <button class="primary" data-start="review" ${f.due ? "" : "disabled"}>Review questions</button></div></div>
+        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("cards")}<span class="eyebrow">Flashcards</span></div>
+          <div class="revn"><b>${cardsDue}</b> due</div>
+          <p class="small muted">${cardsDue ? "Cards from both decks that are scheduled for today." : "No flashcards due today."}</p>
+          <div class="row" style="justify-content:flex-end"><button data-start="duecards" ${cardsDue ? "" : "disabled"}>Review flashcards</button></div></div>
+      </div>
+      <div class="card row spread"><span class="muted">Coming up</span><span><b>${f.tomorrow}</b> ${f.tomorrow === 1 ? "question" : "questions"} tomorrow · <b>${f.week}</b> in the next 7 days</span></div>` : ""}`);
+    $$("#rsize button").forEach(b => b.onclick = () => { reviewSize = +b.dataset.n; renderReview(); });
+    wireResume();
+    wireStarts($("#page"));
   }
 
   // ================================================================== EXAM MODE (home)
@@ -204,7 +263,11 @@
         <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
         <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
         <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
-    shell("test", `${resumeBanner()}
+    const fq = C.reviewForecast(BANK, st.qstats), dueCards = C.deckStats(CARDS, st.cards).due;
+    const nudge = !st.current && (fq.due || dueCards) ? `<div class="card banner"><div class="row grow" style="gap:12px;flex-wrap:nowrap">${icon("repeat")}<div><b>Daily review is ready</b>
+        <div class="small muted">${[fq.due ? plural(fq.due, "question") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" and ")} due today. A few minutes keeps what you've learned fresh.</div></div></div>
+        <button data-go="review">Open daily review</button></div>` : "";
+    shell("test", `${resumeBanner()}${nudge}
       <section class="hero">
         <div class="page-head"><span class="eyebrow">Exam mode · as close to test day as possible</span><h1>Exam</h1>
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
@@ -473,7 +536,12 @@
       <div class="card stack"><h2>Daily goal</h2>
         <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
           <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
-      ${window.pywebview || /exit0-desktop/.test(navigator.userAgent) ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
+      ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
+          <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device.</p></div>
+        ${installEvt ? `<div class="row"><button class="primary" id="installNow">${icon("download")}Install exit 0</button></div>`
+          : IOS ? `<p class="small">In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</p>`
+          : `<p class="small">In Chrome or Edge, open the browser menu and choose <b>Install app</b> (on Android: <b>Add to Home screen</b>). Firefox doesn't support installing web apps on desktop; use the desktop app below instead.</p>`}</div>`}
+      ${DESKTOP() ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline and saves progress on your computer.</p></div>
         <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
           <a class="btn" href="${REPO}#fedora" target="_blank" rel="noopener">Fedora (dnf)</a>
           <a class="btn" href="${REPO}#ubuntu--debian" target="_blank" rel="noopener">Ubuntu / Debian (apt)</a></div></div>`}
@@ -490,6 +558,7 @@
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     $$("#goal button").forEach(b => b.onclick = () => { s.goal = +b.dataset.v; save(); renderSettings(); });
     $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
+    if ($("#installNow")) $("#installNow").onclick = promptInstall;
     if ($("#copy")) $("#copy").onclick = () => {
       const ta = $("#expData");
       const done = () => toast("Copied");
@@ -573,7 +642,7 @@
     $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
     $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
     $("#submit").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
-    $("#exit").onclick = () => { save(); go(isTest ? "test" : "study"); };
+    $("#exit").onclick = () => { save(); go(isTest ? "test" : S.mode === "review" ? "review" : "study"); };
     if ($("#hintBtn")) $("#hintBtn").onclick = () => showHint(S, id);
     $$("[data-cards-obj]").forEach(b => b.onclick = e => { e.preventDefault(); save(); startObjCards(b.dataset.cardsObj); });
     if (confirming) { $("#keep").onclick = () => { confirming = false; renderExam(); }; $("#doSubmit").onclick = finish; }
@@ -661,13 +730,15 @@
         <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
-    shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : "Study results"}</h1></div>
+    shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1></div>
       <div class="card score">${ring(pct, 128, 12, pct + "%", "", col(pct))}
         <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="verdict ${vclass(pct)}">${verdict}</span><code class="exitcode" style="color:${col(pct)}">$ echo $? → ${pct >= 80 ? 0 : 1}</code></span>
           <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in <span class="mono">${fmt(rec.secs)}</span></p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
             : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>
-      <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>` : `<button class="primary" data-go="study">Study more</button>`}
+      <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
+          : rec.mode === "review" ? (C.deckStats(CARDS, st.cards).due ? `<button class="primary" data-start="duecards">Review ${plural(C.deckStats(CARDS, st.cards).due, "due flashcard")}</button>` : `<button class="primary" data-go="review">Back to daily review</button>`)
+          : `<button class="primary" data-go="study">Study more</button>`}
         ${C.missedIds(BANK, st.qstats).length ? `<button data-start="missed">Study my misses</button>` : ""}${isTest ? "" : `<button data-start="test">Take an exam</button>`}<button class="ghost" data-go="progress">See progress</button></div>
       <div class="grid2">
         <div class="card stack"><h2>By topic</h2><div class="bars">${Object.keys(TOP).filter(t => byTopic[t]).map(t => { const [r, nn] = byTopic[t]; const p = Math.round(100 * r / nn);

@@ -31,7 +31,7 @@
 
 | Platform | How | Notes |
 |---|---|---|
-| **Any browser** | [krink192.github.io/exit0-linux-essentials](https://krink192.github.io/exit0-linux-essentials/) | Nothing to install. Works on phones too. |
+| **Any browser or phone** | [krink192.github.io/exit0-linux-essentials](https://krink192.github.io/exit0-linux-essentials/) | Nothing to install. On a phone, add it to your home screen and it works offline. |
 | **Windows 10 / 11** | [Download Exit0.exe](https://github.com/krink192/exit0-linux-essentials/releases/latest/download/Exit0.exe) | A single file with no installer. |
 | **Fedora** | [Add the repository](#fedora), then `sudo dnf install exit0` | Signed packages. Updates arrive with `dnf upgrade`. |
 | **Ubuntu / Debian / Mint / Pop!_OS** | [Add the repository](#ubuntu--debian), then `sudo apt install exit0` | Signed repository. Updates arrive with `apt upgrade`. |
@@ -108,6 +108,11 @@ with the terminal output.
 
 - **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
   *Apply* or *Analyze* (129, 152 and 79 of them) and each with a written explanation and a hint.
+- **Daily review.** Every question you answer comes back on a schedule: a miss returns tomorrow, and each right
+  answer pushes it further out (1, 2, 4, 8, then 16 days). Due flashcards are included, so a few minutes a day
+  keeps everything fresh.
+- **Install on your phone.** Add it to your home screen from the browser (Settings → Install on this device).
+  It opens like an app and works offline.
 - **Exam mode.** A fresh 40-question exam every time, matching LPI's blueprint exactly (weight = number of
   questions). Flag questions, review them, then submit and see every answer explained.
 - **Study mode.** Pick objectives, difficulty and question count, or start with one click from *Review my misses*,
@@ -121,9 +126,9 @@ with the terminal output.
 - **Report a problem.** Every question has a link that opens a GitHub issue with its ID filled in.
 - **Light and dark themes,** following your system setting or chosen in Settings.
 
-| Progress | Flashcards (dark) |
-|---|---|
-| ![](docs/screenshots/progress.png) | ![](docs/screenshots/flashcards-dark.png) |
+| Daily review | Progress | Flashcards (dark) |
+|---|---|---|
+| ![](docs/screenshots/review.png) | ![](docs/screenshots/progress.png) | ![](docs/screenshots/flashcards-dark.png) |
 
 ## How the content was made and checked
 

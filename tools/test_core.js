@@ -85,6 +85,25 @@ t("old settings migrate: exam is always timed with answers hidden", () => {
   assert.strictEqual(st2.settings.study.objMode, "pick"); assert.deepStrictEqual(st2.settings.study.levels, []);
   const s = C.buildTest(bank, {}, { seed: 1 }); assert(s.deadline && !s.study); assert.strictEqual(s.label, "Exam");
 });
+t("daily review: misses return tomorrow, right answers space out", () => {
+  const s = {}; const day = 20000;
+  C.scheduleQuestion(s, false, day); assert.strictEqual(s.due, day + 1); assert.strictEqual(s.box, 0);
+  C.scheduleQuestion(s, true, day + 1); assert.strictEqual(s.box, 1); assert.strictEqual(s.due, day + 2);
+  C.scheduleQuestion(s, true, day + 2); assert.strictEqual(s.due, day + 4);
+  for (let i = 0; i < 6; i++) C.scheduleQuestion(s, true, day); assert.strictEqual(s.box, 5); assert.strictEqual(s.due, day + 16);
+  const st = C.freshState(); const ex = C.buildTest(bank, {}, { seed: 21 });
+  const right = ex.qids.slice(0, 30); right.forEach(id => { const q = bank.byId[id]; ex.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  const now = new Date(2026, 9, 10, 12).getTime(), today = C.dayNum(now);
+  C.recordResult(st, bank, ex, C.grade(bank, ex, now), now);
+  assert.strictEqual(C.dueIds(bank, st.qstats, today).length, 0, "nothing due the same day");
+  const f = C.reviewForecast(bank, st.qstats, today); assert.strictEqual(f.tomorrow, 40); assert.strictEqual(f.due, 0);
+  const r = C.buildReview(bank, st.qstats, 20, { today: today + 1, seed: 3 });
+  assert.strictEqual(r.qids.length, 20); assert.strictEqual(r.mode, "review"); assert(r.study);
+  assert(r.qids.every(id => ex.qids.includes(id)));
+  assert.strictEqual(C.buildReview(bank, st.qstats, 20, { today }), null);
+  const legacy = { "1.1-01": { seen: 1, right: 0, last: false }, "1.1-02": { seen: 1, right: 1, last: true, at: now } };
+  assert.deepStrictEqual(C.dueIds(bank, legacy, today), ["1.1-01"]);
+});
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(new Set(cards.map(c => c.id)).size, cards.length);
   assert(cards.some(c => c.deck === "concepts") && cards.some(c => c.deck === "commands"));

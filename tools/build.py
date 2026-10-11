@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Build bank.json from the topic source files and lint it."""
 import json, sys, os, collections
 sys.path.insert(0, os.path.dirname(__file__))

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Authoring helpers for the Linux Essentials 010-160 question bank.
 
 Correct options are marked with a leading check mark (U+2714). A choice

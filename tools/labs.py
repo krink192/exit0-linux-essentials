@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Hands-on labs for the simulated terminal. build.py writes docs/data/labs.js.
 
 Each task has instructions, a hint, a solution (one command per line) and a declarative check

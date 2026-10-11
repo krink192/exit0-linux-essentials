@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Pure logic for the Linux Essentials practice app: no DOM access here,
 // so it runs in the browser (window.LECore) and in Node tests (module.exports).
 (function (root, factory) {

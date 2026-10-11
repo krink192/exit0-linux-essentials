@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Cheat sheets: one printable page per exam topic. build.py writes docs/data/sheets.js.
 Each section is a heading plus rows of [term, meaning]. Backticks mark code."""
 

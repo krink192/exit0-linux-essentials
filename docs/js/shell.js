@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // exit 0 lab shell: a small simulated Linux system for hands-on labs.
 // A virtual filesystem with owners, modes, sticky/SUID bits, hard and symbolic links; users and
 // groups; and a Bash-like interpreter (quoting, variables, globs, pipes, redirection, &&/||, if/for/while,

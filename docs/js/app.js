@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // exit 0 - free practice for LPI Linux Essentials 010-160. User interface. Logic lives in core.js.
 (function () {
   "use strict";
@@ -898,7 +898,7 @@
       <div class="card stack"><h2>Reset</h2><p class="small muted">${linked ? "Deletes tests, question history, flashcard progress and streak on <b>every device</b> signed in to this account. Settings are kept." : "Deletes tests, question history, flashcard progress and streak. Settings are kept."}</p>
         ${resetOpen ? `<div class="row card confirm spread"><span>Delete all progress? This can't be undone.</span><span class="row"><button id="rno">Cancel</button><button class="primary" id="ryes">Delete</button></span></div>`
           : `<div class="row"><button id="reset">Reset all progress</button></div>`}</div>
-      <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU GPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
+      <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU AGPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     $$("#goal button").forEach(b => b.onclick = () => { s.goal = +b.dataset.v; save(); renderSettings(); });

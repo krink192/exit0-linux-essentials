@@ -13,7 +13,7 @@
   <a href="https://github.com/krink192/exit0-linux-essentials/releases/latest"><img src="https://img.shields.io/github/v/release/krink192/exit0-linux-essentials?label=release&color=0F7B67" alt="Latest release"></a>
   <a href="https://github.com/krink192/exit0-linux-essentials/actions/workflows/release.yml"><img src="https://github.com/krink192/exit0-linux-essentials/actions/workflows/release.yml/badge.svg" alt="Build"></a>
   <a href="https://github.com/krink192/exit0-linux-essentials/actions/workflows/tests.yml"><img src="https://github.com/krink192/exit0-linux-essentials/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License: GPL-3.0"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License: AGPL-3.0"></a>
   <a href="https://github.com/krink192/exit0-linux-essentials/releases"><img src="https://img.shields.io/github/downloads/krink192/exit0-linux-essentials/total?color=555" alt="Downloads"></a>
 </p>
 
@@ -226,7 +226,11 @@ Corrections and new questions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## License
 Copyright (C) 2026 krink192 and contributors. The app and the Linux Essentials content are free software under
-the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE). It comes with no warranty.
+the **GNU Affero General Public License v3.0 or later**. See [LICENSE](LICENSE). It comes with no warranty.
+
+The AGPL covers network use too. If you modify exit 0 and let other people use it over a network (a website, an
+intranet page, a hosted service), you must offer them the source code of your modified version. The app's
+**Source code** link does that: point it (`REPO` in `docs/js/app.js`) at your own published source.
 
 **Linux Essentials stays free.** Practice packs for other certifications may be offered later as a separate,
 paid product under different terms. Contributions to this repository come with a license grant that makes that

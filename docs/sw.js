@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // exit 0 service worker: lets the installed web app open and work offline.
 // Same-origin files are network-first (always fresh when online, cached copy when offline).
 // Google Fonts are cache-first. The package repository under /repo/ is never touched.

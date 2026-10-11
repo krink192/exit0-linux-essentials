@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """exit 0 - free practice for LPI Linux Essentials 010-160 (Linux desktop launcher).
 
 Serves the web app from /usr/share/exit0/web on 127.0.0.1 and shows it in a

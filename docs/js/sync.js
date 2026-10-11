@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 // Optional progress sync with an exit0-sync server (self-hosted, or exit 0 Cloud). The app works fully without it.
 // No DOM access here, so it runs in the browser (window.LESync) and in Node tests (module.exports).
 (function (root, factory) {

@@ -70,7 +70,7 @@ repository, you agree that:
 
 1. **You have the right to contribute it.** It is your own work, or you have permission to submit it under these
    terms. It does not copy real exam questions or other material you aren't allowed to share.
-2. **Everyone gets it under the GPL.** Your contribution is licensed to the public under the GNU General Public
+2. **Everyone gets it under the AGPL.** Your contribution is licensed to the public under the GNU Affero General Public
    License v3.0 or later, the same as the rest of the project.
 3. **The maintainer gets extra rights.** You also grant krink192, the project maintainer, a perpetual, worldwide,
    non-exclusive, royalty-free, irrevocable license to use, copy, modify, distribute, sublicense and relicense

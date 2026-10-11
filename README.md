@@ -96,7 +96,7 @@ with the terminal output.
 | Goal | Test yourself the way the real exam will | Learn the material and fix weak spots |
 | Questions | 40, with exactly as many per objective as the real exam | You choose: objectives, difficulty, how many, and all, unseen or missed |
 | Time | 60-minute countdown | No limit |
-| Answers | Hidden until you submit | Checked as you go, with the explanation |
+| Answers | Hidden until you submit | Checked as you go, with the explanation and why each wrong option is wrong |
 | Help | None, as on test day | A hint for every question, plus links to the LPI lesson and matching flashcards |
 | Readiness score | Counts | Doesn't count |
 
@@ -110,6 +110,9 @@ with the terminal output.
 
 - **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
   *Apply* or *Analyze* (129, 152 and 79 of them) and each with a written explanation and a hint.
+- **Why that's wrong.** Every wrong option on every multiple-choice question (923 of them) has a one-line
+  note saying why it's wrong or what it actually does. You see them after checking an answer in Study mode
+  and when reviewing a finished exam.
 - **Labs.** 12 hands-on labs in a terminal built into the app: variables and history, navigation, files and
   globs, archives, grep/sort/cut and redirection, shell scripts (with a nano/vi editor panel), logs, networking,
   users and groups, permissions, and links. Each task is checked as you type and has a hint and a solution.
@@ -146,7 +149,8 @@ with the terminal output.
   lessons at learning.lpi.org. Every item on each objective's "terms and utilities" list is covered.
 - **166 command-based questions were run on a real Linux system** (`tools/verify.py`), including every
   accepted fill-in answer. The output must match the answer key.
-- The build checks blueprint counts, duplicates, that every question has a hint, and whether the correct
+- The build checks blueprint counts, duplicates, that every question has a hint and every wrong option has
+  a note, and whether the correct
   answer tends to be the longest option (it is the longest in 14% of single-answer questions, below the 25%
   you'd expect by chance).
 - The lab terminal is tested against real Bash: `node tools/test_shell.js` runs 106 command sequences in both and
@@ -172,7 +176,7 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
 Dockerfile, docker/   Container image: nginx serving docs/ (compose.yaml for docker compose)
 bank.json             The question bank
   js/shell.js         the simulated Linux system used by the labs
-tools/                Questions t1.py–t6.py, hints.py, cards.py, sheets.py, labs.py, build.py, verify.py,
+tools/                Questions t1.py–t6.py, hints.py, whys.py, cards.py, sheets.py, labs.py, build.py, verify.py,
                       test_core.js, test_shell.js
 ```
 

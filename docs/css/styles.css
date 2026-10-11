@@ -209,6 +209,10 @@ pre.code { margin: 0; font: 400 .92rem/1.6 var(--mono); background: var(--sunk);
 .opt.w { border-color: var(--bad); background: var(--bad-soft); }
 .opt.w .key { background: var(--bad); border-color: var(--bad); color: #fff; }
 .opt.locked { cursor: default; }
+.opt .note, .rev .ropt .note { display: block; margin-top: 4px; font-size: .85rem; line-height: 1.4; color: var(--muted); }
+.opt .note b, .rev .ropt .note b { font-weight: 600; color: var(--ink-2); }
+.opt.w .note b, .rev .ropt.picked .note b { color: var(--bad); }
+.rev .ropt .rt { min-width: 0; overflow-wrap: anywhere; }
 .opt .tag { margin-left: auto; font: 600 .7rem var(--mono); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; padding-left: 8px; padding-top: 4px; }
 .opt.k .tag { color: var(--good); } .opt.w .tag { color: var(--bad); }
 .fill { display: flex; align-items: center; border: 1.5px solid var(--accent); border-radius: var(--r); background: var(--surface); overflow: hidden; }

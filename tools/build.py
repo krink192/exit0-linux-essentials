@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from common import BANK, MARK
 import t1, t2, t3, t4, t5, t6  # noqa: F401  (populate BANK; t6 = harder pack)
 from hints import HINTS
+from whys import WHY
 
 TOPICS = {
     "1": "The Linux Community and a Career in Open Source",
@@ -105,11 +106,29 @@ def build():
         q["hint"] = HINTS.get(q["id"])
         if not q["hint"]:
             errors.append(f"{q['id']}: no hint in tools/hints.py")
+        if q.get("options"):
+            notes = WHY.get(q["id"], {})
+            for k in sorted(set(notes) - set(q["options"])):
+                errors.append(f"{q['id']}: whys.py note for unknown option {k!r}")
+            q["why"] = []
+            for i, t in enumerate(q["options"]):
+                if i in q["answer"]:
+                    if t in notes:
+                        errors.append(f"{q['id']}: whys.py has a note for the correct option {t!r}")
+                    q["why"].append(None)
+                else:
+                    if not notes.get(t):
+                        errors.append(f"{q['id']}: no whys.py note for wrong option {t!r}")
+                    q["why"].append(notes.get(t))
+        elif q["id"] in WHY:
+            errors.append(f"{q['id']}: whys.py note on a fill-in question")
         q["_run"], q["_expect"], q["_user"] = raw.get("run"), raw.get("expect"), raw.get("user")
         out.append(q)
 
     for hid in sorted(set(HINTS) - {q["id"] for q in out}):
         errors.append(f"hints.py: {hid} is not a question ID")
+    for wid in sorted(set(WHY) - {q["id"] for q in out}):
+        errors.append(f"whys.py: {wid} is not a question ID")
     _, viol = assign_forms(out)
     for grp in viol:
         print("WARN conflict set shares a form:", grp)

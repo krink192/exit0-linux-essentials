@@ -77,6 +77,18 @@ t("every question has a hint that doesn't contain the answer", () => {
     if (q.type === "fill") assert(!q.accept.some(a => a.length > 2 && q.hint.includes(a)), q.id + " hint gives away the answer");
   }
 });
+t("every wrong option has a 'why not' note, and correct options have none", () => {
+  let n = 0;
+  for (const q of bank.questions) {
+    if (q.type === "fill") { assert(!q.why, q.id + " fill-in has why notes"); continue; }
+    assert(Array.isArray(q.why) && q.why.length === q.options.length, q.id + " why array doesn't match options");
+    q.options.forEach((_, i) => {
+      if (q.answer.includes(i)) assert.strictEqual(q.why[i], null, q.id + " has a note on a correct option");
+      else { assert(typeof q.why[i] === "string" && q.why[i].length >= 10, q.id + " option " + i + " has no note"); n++; }
+    });
+  }
+  assert(n > 900, "only " + n + " notes");
+});
 t("old settings migrate: exam is always timed with answers hidden", () => {
   const st = C.migrate({ settings: { theme: "dark", timed: false, reveal: true } });
   assert.strictEqual(st.settings.theme, "dark"); assert(!("timed" in st.settings)); assert(!("reveal" in st.settings));

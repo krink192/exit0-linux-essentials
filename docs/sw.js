@@ -2,7 +2,7 @@
 // exit 0 service worker: lets the installed web app open and work offline.
 // Same-origin files are network-first (always fresh when online, cached copy when offline).
 // Google Fonts are cache-first. The package repository under /repo/ is never touched.
-const CACHE = "exit0-v3";
+const CACHE = "exit0-v4";
 const SHELL = ["./", "index.html", "css/styles.css", "js/core.js", "js/app.js", "data/bank.js", "data/cards.js", "data/sheets.js", "data/labs.js", "js/shell.js",
                "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png"];
 

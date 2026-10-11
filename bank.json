@@ -134,7 +134,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Ubuntu's packages are .deb files. Which older community distribution created that format?"
+   "hint": "Ubuntu's packages are .deb files. Which older community distribution created that format?",
+   "why": [
+    null,
+    "Fedora is Red Hat's community distribution and uses .rpm packages, not .deb.",
+    "openSUSE is SUSE's community distribution, an RPM-based family of its own.",
+    "Slackware is one of the oldest distributions, independent of Debian and without dependency-resolving package tools."
+   ]
   },
   {
    "id": "1.1-02",
@@ -153,7 +159,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Think of the phone OS that Google leads. It runs a Linux kernel with its own userland on top."
+   "hint": "Think of the phone OS that Google leads. It runs a Linux kernel with its own userland on top.",
+   "why": [
+    null,
+    "iOS is Apple's proprietary OS, built on Darwin, not Linux.",
+    "Windows 10 Mobile used Microsoft's Windows NT kernel.",
+    "BlackBerry 10 was based on QNX, a separate Unix-like real-time OS."
+   ]
   },
   {
    "id": "1.1-03",
@@ -174,7 +186,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Red Hat descendants are rebuilt from Red Hat's sources. Two options are such rebuilds; the rest come from the Debian family."
+   "hint": "Red Hat descendants are rebuilt from Red Hat's sources. Two options are such rebuilds; the rest come from the Debian family.",
+   "why": [
+    null,
+    null,
+    "Linux Mint is built from Ubuntu, so it's Debian family and uses .deb.",
+    "Raspbian is a Debian derivative for the Raspberry Pi.",
+    "Ubuntu is derived from Debian and uses .deb packages with dpkg and APT."
+   ]
   },
   {
    "id": "1.1-04",
@@ -193,7 +212,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Think about cost when you run hundreds of VMs, and how much a server OS really needs."
+   "hint": "Think about cost when you run hundreds of VMs, and how much a server OS really needs.",
+   "why": [
+    null,
+    "Clouds offer Windows Server VMs too; Linux wins on cost and efficiency, not exclusivity.",
+    "Hypervisors run many guest OSes, including Windows and BSD.",
+    "Cloud images are usually minimal servers without a desktop, which is part of why they're lean."
+   ]
   },
   {
    "id": "1.1-05",
@@ -212,7 +237,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The Raspberry Pi OS uses .deb packages and apt. Which family is that?"
+   "hint": "The Raspberry Pi OS uses .deb packages and apt. Which family is that?",
+   "why": [
+    null,
+    "RHEL is the commercial Red Hat distribution and uses .rpm packages.",
+    "openSUSE belongs to the SUSE family, not Debian.",
+    "Android uses a Linux kernel but isn't a base for desktop distributions like Raspbian."
+   ]
   },
   {
    "id": "1.1-06",
@@ -231,7 +262,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Picture the board: there's no SATA disk, just a small removable card slot."
+   "hint": "Picture the board: there's no SATA disk, just a small removable card slot.",
+   "why": [
+    null,
+    "The Pi has no built-in SATA disk; storage comes from the SD card or USB.",
+    "The Pi has no PC-style BIOS holding an OS; firmware only starts the boot from the card.",
+    "The Pi doesn't boot from optical drives; the OS image lives on the microSD card."
+   ]
   },
   {
    "id": "1.1-07",
@@ -250,7 +287,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The word 'embedded' means it sits inside something else and does one job."
+   "hint": "The word 'embedded' means it sits inside something else and does one job.",
+   "why": [
+    null,
+    "That's a cloud VM, a general-purpose system rather than a dedicated device.",
+    "That's a dual-boot setup.",
+    "That describes a built-in kernel driver or feature, not an embedded system."
+   ]
   },
   {
    "id": "1.1-08",
@@ -283,7 +326,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "SUSE's all-in-one admin tool has a name that sounds like 'Yet another…'."
+   "hint": "SUSE's all-in-one admin tool has a name that sounds like 'Yet another…'.",
+   "why": [
+    null,
+    "Synaptic is a graphical package manager front end for APT on Debian-based systems.",
+    "dpkg-reconfigure re-runs a Debian package's setup questions.",
+    "Kickstart automates Red Hat installations."
+   ]
   },
   {
    "id": "1.1-10",
@@ -302,7 +351,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Linux Mint wanted Ubuntu's software and hardware support with a different desktop."
+   "hint": "Linux Mint wanted Ubuntu's software and hardware support with a different desktop.",
+   "why": [
+    null,
+    "Fedora is Red Hat's community distribution; Mint uses Ubuntu's packages.",
+    "openSUSE is the SUSE community distribution.",
+    "CentOS was a rebuild of Red Hat Enterprise Linux."
+   ]
   },
   {
    "id": "1.1-11",
@@ -321,7 +376,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Ubuntu LTS versions end in .04 and have even-numbered years: 20.04, 22.04, 24.04…"
+   "hint": "Ubuntu LTS versions end in .04 and have even-numbered years: 20.04, 22.04, 24.04…",
+   "why": [
+    null,
+    "Six months is the interval for all Ubuntu releases; only every fourth one is LTS.",
+    "Ubuntu releases twice a year, and the April release of even years is LTS.",
+    "Five years is roughly how long an LTS release is supported, not how often one comes out."
+   ]
   },
   {
    "id": "1.1-12",
@@ -342,7 +403,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Ubuntu is downstream of Debian. Who owns Ubuntu, and is Debian a company project?"
+   "hint": "Ubuntu is downstream of Debian. Who owns Ubuntu, and is Debian a company project?",
+   "why": [
+    null,
+    null,
+    "Ubuntu uses .deb packages with dpkg and APT, like Debian.",
+    "Canonical makes Ubuntu; Debian is a volunteer community project.",
+    "Debian stable comes out roughly every two years; six months is Ubuntu's cycle."
+   ]
   },
   {
    "id": "1.2-01",
@@ -361,7 +429,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "You want the open source office suite that most distributions install by default."
+   "hint": "You want the open source office suite that most distributions install by default.",
+   "why": [
+    null,
+    "GIMP edits images, not office documents.",
+    "Thunderbird is an email client.",
+    "Nextcloud syncs and shares files; it isn't an office suite."
+   ]
   },
   {
    "id": "1.2-02",
@@ -396,7 +470,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "A web server answers HTTP requests. Look for the two that serve websites, not files or databases."
+   "hint": "A web server answers HTTP requests. Look for the two that serve websites, not files or databases.",
+   "why": [
+    null,
+    null,
+    "MariaDB is a database server.",
+    "Samba shares files and printers with Windows (SMB).",
+    "Thunderbird is a desktop email client."
+   ]
   },
   {
    "id": "1.2-04",
@@ -415,7 +496,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "On CentOS, the repository tool sits on top of rpm and fetches dependencies for you."
+   "hint": "On CentOS, the repository tool sits on top of rpm and fetches dependencies for you.",
+   "why": [
+    null,
+    "rpm installs a local .rpm file but doesn't fetch dependencies from repositories.",
+    "dpkg is the Debian low-level tool and doesn't run on CentOS.",
+    "apt-get is the Debian/Ubuntu repository tool."
+   ]
   },
   {
    "id": "1.2-05",
@@ -434,7 +521,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Windows shares folders with the SMB/CIFS protocol. Which Linux software speaks SMB?"
+   "hint": "Windows shares folders with the SMB/CIFS protocol. Which Linux software speaks SMB?",
+   "why": [
+    null,
+    "NFS is the Unix/Linux sharing protocol; Windows Explorer expects SMB, which Samba provides.",
+    "NGINX is a web server.",
+    "MariaDB is a database server."
+   ]
   },
   {
    "id": "1.2-06",
@@ -469,7 +562,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Look for self-hosted file-sync platforms. One was forked from the other."
+   "hint": "Look for self-hosted file-sync platforms. One was forked from the other.",
+   "why": [
+    null,
+    null,
+    "Samba shares folders over SMB but has no sync, calendar or contacts.",
+    "MariaDB is a database that such platforms might use, not the platform itself.",
+    "Thunderbird is an email client."
+   ]
   },
   {
    "id": "1.2-08",
@@ -488,7 +588,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "MariaDB was started by the original author of a very popular open source database after Oracle bought it."
+   "hint": "MariaDB was started by the original author of a very popular open source database after Oracle bought it.",
+   "why": [
+    null,
+    "PostgreSQL is a separate database with its own history.",
+    "SQLite is an embedded, file-based database library.",
+    "Oracle Database is proprietary; Oracle's purchase of MySQL is what prompted the MariaDB fork."
+   ]
   },
   {
    "id": "1.2-09",
@@ -509,7 +615,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Scripts you can run straight from source, with no separate compile step, are interpreted."
+   "hint": "Scripts you can run straight from source, with no separate compile step, are interpreted.",
+   "why": [
+    null,
+    null,
+    "C is compiled ahead of time into machine code.",
+    "Java is compiled ahead of time to bytecode, which the JVM then runs.",
+    "Go is compiled ahead of time into native binaries."
+   ]
   },
   {
    "id": "1.2-10",
@@ -528,7 +641,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "LAMP is Linux, Apache, MySQL and a P language that generates web pages."
+   "hint": "LAMP is Linux, Apache, MySQL and a P language that generates web pages.",
+   "why": [
+    null,
+    "Bash is a shell for commands and scripts, not the usual LAMP page generator.",
+    "C programs aren't the P in LAMP; pages are typically generated by PHP.",
+    "Java web apps exist, but LAMP's P stands for PHP (or Perl/Python)."
+   ]
   },
   {
    "id": "1.2-11",
@@ -547,7 +666,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "LibreOffice was created when developers left a Sun/Oracle office suite project."
+   "hint": "LibreOffice was created when developers left a Sun/Oracle office suite project.",
+   "why": [
+    null,
+    "Microsoft Office is proprietary and was never open sourced.",
+    "Google Docs is an online proprietary service.",
+    "Calligra is a separate suite from the KDE community."
+   ]
   },
   {
    "id": "1.2-12",
@@ -566,7 +691,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "It's the GNU Image Manipulation Program."
+   "hint": "It's the GNU Image Manipulation Program.",
+   "why": [
+    null,
+    "Inkscape edits vector graphics (SVG), not raster photos.",
+    "Blender is for 3D modeling and animation.",
+    "Audacity edits audio."
+   ]
   },
   {
    "id": "1.3-01",
@@ -585,7 +716,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "You want copyleft: modified versions must stay free. Which license family enforces that?"
+   "hint": "You want copyleft: modified versions must stay free. Which license family enforces that?",
+   "why": [
+    null,
+    "BSD is permissive: others may distribute modified versions as closed source.",
+    "MIT is permissive and doesn't require modified versions to stay open.",
+    "CC licenses are meant for creative works, and BY doesn't keep derivatives free."
+   ]
   },
   {
    "id": "1.3-02",
@@ -604,7 +741,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "This organization's name literally contains 'Open Source'."
+   "hint": "This organization's name literally contains 'Open Source'.",
+   "why": [
+    null,
+    "The FSF maintains the Free Software Definition and the GPL, not the Open Source Definition.",
+    "The Linux Foundation supports Linux development but doesn't approve licenses.",
+    "The ASF runs Apache projects and the Apache License, not the OSD."
+   ]
   },
   {
    "id": "1.3-03",
@@ -625,7 +768,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Which freedoms involve changing the program or sharing your changes? You can't do either without the code."
+   "hint": "Which freedoms involve changing the program or sharing your changes? You can't do either without the code.",
+   "why": [
+    null,
+    null,
+    "Running a program (freedom 0) doesn't need its source code.",
+    "Passing on unchanged copies (freedom 2) works without source.",
+    "That isn't one of the four freedoms."
+   ]
   },
   {
    "id": "1.3-04",
@@ -644,7 +794,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Each extra letter adds a restriction: NC means non-commercial and ND means no derivatives."
+   "hint": "Each extra letter adds a restriction: NC means non-commercial and ND means no derivatives.",
+   "why": [
+    null,
+    "BY only requires credit, so it's the least restrictive.",
+    "SA requires the same license on adaptations but still allows commercial use and changes.",
+    "NC blocks commercial use but still allows adaptations; ND adds that restriction too."
+   ]
   },
   {
    "id": "1.3-05",
@@ -677,7 +833,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The same code is offered under two licenses: one free and one paid."
+   "hint": "The same code is offered under two licenses: one free and one paid.",
+   "why": [
+    null,
+    "That's enforcing GPL terms, not selling a second license.",
+    "Shareware is proprietary software you can try before you pay.",
+    "SaaS means running the software for customers online."
+   ]
   },
   {
    "id": "1.4-01",
@@ -696,7 +858,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "A breach at one site shouldn't unlock your other accounts. What makes every password different and still manageable?"
+   "hint": "A breach at one site shouldn't unlock your other accounts. What makes every password different and still manageable?",
+   "why": [
+    null,
+    "One breach would expose every account that shares the password.",
+    "A plain text file is readable by anyone or anything that gets your files.",
+    "Short passwords are quick to guess or crack."
+   ]
   },
   {
    "id": "1.4-02",
@@ -717,7 +885,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Tracking relies on cookies that stay and follow you between sites. Which two options limit that?"
+   "hint": "Tracking relies on cookies that stay and follow you between sites. Which two options limit that?",
+   "why": [
+    null,
+    null,
+    "That's a security risk on shared machines and doesn't reduce tracking.",
+    "That adds interruptions and doesn't reduce tracking.",
+    "That weakens connection security and does nothing against tracking."
+   ]
   },
   {
    "id": "1.4-03",
@@ -736,7 +911,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Text consoles are on the function keys, and the combination needs Ctrl and Alt."
+   "hint": "Text consoles are on the function keys, and the combination needs Ctrl and Alt.",
+   "why": [
+    null,
+    "That usually opens a logout/shutdown dialog or reboots.",
+    "Alt+Tab switches between windows on the desktop.",
+    "That opens a new tab in many terminal emulators and browsers."
+   ]
   },
   {
    "id": "1.4-04",
@@ -755,7 +936,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "LibreOffice has a separate program for each job. Which one makes slides?"
+   "hint": "LibreOffice has a separate program for each job. Which one makes slides?",
+   "why": [
+    null,
+    "Calc is the spreadsheet program.",
+    "GIMP edits images; it doesn't build slide decks.",
+    "Firefox is a web browser."
+   ]
   },
   {
    "id": "1.4-05",
@@ -774,7 +961,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Private mode is about what stays on your computer after you close the window."
+   "hint": "Private mode is about what stays on your computer after you close the window.",
+   "why": [
+    null,
+    "Sites still see your IP address; that needs a VPN or Tor.",
+    "Encryption comes from HTTPS, in any window.",
+    "Your traffic still crosses their network; private mode only affects your device."
+   ]
   },
   {
    "id": "1.4-06",
@@ -793,7 +986,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "DNT is only a request header. Can a browser force a website to honor it?"
+   "hint": "DNT is only a request header. Can a browser force a website to honor it?",
+   "why": [
+    null,
+    "Blocking cookies is a separate setting; DNT only sends a request.",
+    "DNT has nothing to do with stored history.",
+    "Sites are free to ignore it, and most do."
+   ]
   },
   {
    "id": "1.4-07",
@@ -812,7 +1011,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "It's a window on your desktop that pretends to be an old hardware terminal."
+   "hint": "It's a window on your desktop that pretends to be an old hardware terminal.",
+   "why": [
+    null,
+    "That's a physical console.",
+    "Terminal emulators run a shell; they don't compile scripts.",
+    "That's an RDP client."
+   ]
   },
   {
    "id": "1.4-08",
@@ -831,7 +1036,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "You manage the OS yourself and the provider gives you virtual hardware."
+   "hint": "You manage the OS yourself and the provider gives you virtual hardware.",
+   "why": [
+    null,
+    "With PaaS the provider runs the OS; you only bring code.",
+    "SaaS is a finished application, such as webmail.",
+    "That only rents storage, not virtual machines; it isn't one of the three main models."
+   ]
   },
   {
    "id": "1.4-09",
@@ -864,7 +1075,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The S stands for secure: it adds encryption plus proof that the site is who it says it is."
+   "hint": "The S stands for secure: it adds encryption plus proof that the site is who it says it is.",
+   "why": [
+    null,
+    "A valid certificate proves who the site is, not that it's safe.",
+    "The site still sees your IP address.",
+    "HTTPS is about security, not compression."
+   ]
   },
   {
    "id": "1.4-11",
@@ -883,7 +1100,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Length and unpredictability beat clever substitutions. Find the long, mixed one."
+   "hint": "Length and unpredictability beat clever substitutions. Find the long, mixed one.",
+   "why": [
+    null,
+    "A common word plus predictable numbers and a symbol is on every cracking list.",
+    "A keyboard row is one of the first patterns attackers try.",
+    "A pet name plus a year is easy to guess from personal details."
+   ]
   },
   {
    "id": "1.4-12",
@@ -902,7 +1125,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Firefox uses P for private, with Ctrl and Shift."
+   "hint": "Firefox uses P for private, with Ctrl and Shift.",
+   "why": [
+    null,
+    "That's Chrome's and Edge's shortcut for an incognito window.",
+    "That reopens the last closed tab.",
+    "That prints the page."
+   ]
   },
   {
    "id": "2.1-01",
@@ -922,7 +1151,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Look at the kind of quotes. Which quotes stop variables from expanding?"
+   "hint": "Look at the kind of quotes. Which quotes stop variables from expanding?",
+   "why": [
+    null,
+    "That would need double quotes or no quotes; single quotes stop $HOME from expanding.",
+    "An empty result would mean an unset variable, but single quotes print $HOME literally.",
+    "The $ isn't dropped; inside single quotes every character prints as typed."
+   ]
   },
   {
    "id": "2.1-02",
@@ -954,7 +1189,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "This builtin tells you what kind of thing a command name is."
+   "hint": "This builtin tells you what kind of thing a command name is.",
+   "why": [
+    null,
+    "which only searches PATH for program files and doesn't report builtins or aliases.",
+    "whereis looks for binary, source and man page files, not builtins.",
+    "file identifies the type of a file named cd in the current directory."
+   ]
   },
   {
    "id": "2.1-04",
@@ -974,7 +1215,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "The outer quotes are double quotes, so variables expand. The inner single quotes are just characters."
+   "hint": "The outer quotes are double quotes, so variables expand. The inner single quotes are just characters.",
+   "why": [
+    null,
+    "The outer quotes are double, so $OS expands; the inner single quotes are plain characters.",
+    "The single quotes inside double quotes are printed too.",
+    "Double quotes allow expansion, so $OS becomes Linux."
+   ]
   },
   {
    "id": "2.1-05",
@@ -1006,7 +1253,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Keep what's already there by expanding the old value, then add the new directory after a colon."
+   "hint": "Keep what's already there by expanding the old value, then add the new directory after a colon.",
+   "why": [
+    null,
+    "That replaces the whole PATH, so ls, cp and the rest are no longer found.",
+    "PATH entries are separated by colons; ; ends the command and tries to run /opt/tools/bin.",
+    "Don't put $ on the left; the shell expands it and tries to run the result as a command."
+   ]
   },
   {
    "id": "2.1-07",
@@ -1025,7 +1278,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The prompt character changes for one special account."
+   "hint": "The prompt character changes for one special account.",
+   "why": [
+    null,
+    "The default prompt doesn't change on errors; check $? for that.",
+    "Your home directory shows up as ~ in the prompt.",
+    "A continuation prompt is >, not #."
+   ]
   },
   {
    "id": "2.1-08",
@@ -1044,7 +1303,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Options start with a dash. What do you call the thing the command acts on?"
+   "hint": "Options start with a dash. What do you call the thing the command acts on?",
+   "why": [
+    null,
+    "Options start with a dash, like -l.",
+    "The command is the first word, ls.",
+    "Variables are referenced with $, such as $HOME."
+   ]
   },
   {
    "id": "2.1-09",
@@ -1063,7 +1328,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "The space must not split the name into two words. Escape it or quote it."
+   "hint": "The space must not split the name into two words. Escape it or quote it.",
+   "why": [
+    null,
+    "The space splits it into two arguments, creating my and file.txt.",
+    "The slash means a file named file.txt inside a directory named my.",
+    "$my expands to nothing, so this just creates file.txt."
+   ]
   },
   {
    "id": "2.1-10",
@@ -1083,7 +1354,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "The variable was set but never exported. Does the child bash see it?"
+   "hint": "The variable was set but never exported. Does the child bash see it?",
+   "why": [
+    null,
+    "The child bash only sees exported variables, and color wasn't exported.",
+    "Single quotes stop the parent shell from expanding it, but the child bash expands it to an empty value.",
+    "Unset variables expand to an empty string without an error."
+   ]
   },
   {
    "id": "2.1-11",
@@ -1116,7 +1393,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "This builtin is the opposite of setting a variable."
+   "hint": "This builtin is the opposite of setting a variable.",
+   "why": [
+    null,
+    "$temp expands first, so this would unset a variable named after temp's value.",
+    "rm deletes files, not shell variables.",
+    "export has no -d option; export -n only removes the export flag."
+   ]
   },
   {
    "id": "2.1-13",
@@ -1135,7 +1418,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Two identical punctuation marks repeat the last command."
+   "hint": "Two identical punctuation marks repeat the last command.",
+   "why": [
+    null,
+    "!$ is the last argument of the previous command.",
+    "$! is the process ID of the most recent background job.",
+    "#! starts the shebang line of a script."
+   ]
   },
   {
    "id": "2.1-14",
@@ -1155,7 +1444,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Inside double quotes, a backslash stops the next character from being special."
+   "hint": "Inside double quotes, a backslash stops the next character from being special.",
+   "why": [
+    null,
+    "Inside double quotes the backslash is removed after it escapes the $.",
+    "The escaped dollar sign is printed, not dropped.",
+    "That's what an unescaped $5 would give (an empty parameter)."
+   ]
   },
   {
    "id": "2.1-15",
@@ -1176,7 +1471,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Builtins change the shell itself, such as its directory or environment. A separate program couldn't do that."
+   "hint": "Builtins change the shell itself, such as its directory or environment. A separate program couldn't do that.",
+   "why": [
+    null,
+    null,
+    "ls is a program in /usr/bin.",
+    "cat is a program in /usr/bin.",
+    "grep is a program in /usr/bin."
+   ]
   },
   {
    "id": "2.1-16",
@@ -1195,7 +1497,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Writing NAME=value before a command affects only that one command."
+   "hint": "Writing NAME=value before a command affects only that one command.",
+   "why": [
+    null,
+    "It only affects that one date process; system settings stay the same.",
+    "That would be TZ=UTC on its own line, or export TZ=UTC.",
+    "NAME=value before a command is valid and sets it just for that command."
+   ]
   },
   {
    "id": "2.1-17",
@@ -1228,7 +1536,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Braces around a variable name don't change its value."
+   "hint": "Braces around a variable name don't change its value.",
+   "why": [
+    null,
+    "$( ) runs a command named USER and substitutes its output.",
+    "%NAME% is Windows cmd syntax.",
+    "$[ ] is old Bash arithmetic syntax, not variable expansion."
+   ]
   },
   {
    "id": "2.2-01",
@@ -1247,7 +1561,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Section 1 is user commands. File formats live in a different numbered section."
+   "hint": "Section 1 is user commands. File formats live in a different numbered section.",
+   "why": [
+    null,
+    "Section 1 is user commands, such as passwd the command.",
+    "Section 3 covers library functions for programmers.",
+    "Section 8 covers system administration commands."
+   ]
   },
   {
    "id": "2.2-02",
@@ -1266,7 +1586,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Extra package docs live under /usr/share, in a folder named after what they contain."
+   "hint": "Extra package docs live under /usr/share, in a folder named after what they contain.",
+   "why": [
+    null,
+    "/etc holds configuration, not documentation.",
+    "/var/log holds log files.",
+    "/boot holds the kernel and boot loader files."
+   ]
   },
   {
    "id": "2.2-03",
@@ -1285,7 +1611,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You want a keyword search across man page descriptions, the same as man -k."
+   "hint": "You want a keyword search across man page descriptions, the same as man -k.",
+   "why": [
+    null,
+    "whatis matches page names exactly and prints their one-line descriptions.",
+    "info opens a document; it doesn't search all man pages.",
+    "locate searches file names on disk."
+   ]
   },
   {
    "id": "2.2-04",
@@ -1317,7 +1649,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "locate searches a database. When was that database last refreshed?"
+   "hint": "locate searches a database. When was that database last refreshed?",
+   "why": [
+    null,
+    "Its database covers the whole filesystem.",
+    "Logging out doesn't matter; the database is only rebuilt by updatedb.",
+    "-r takes a regular expression; it doesn't refresh the database."
+   ]
   },
   {
    "id": "2.2-06",
@@ -1350,7 +1688,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "less and man search forward with the same key you'd use in vi."
+   "hint": "less and man search forward with the same key you'd use in vi.",
+   "why": [
+    null,
+    "? searches backward.",
+    "Colon commands aren't searches in the man pager.",
+    "Ctrl+F pages forward a screen; it doesn't search."
+   ]
   },
   {
    "id": "2.2-08",
@@ -1383,7 +1727,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You want just the one-line NAME description. The command asks 'what is' something."
+   "hint": "You want just the one-line NAME description. The command asks 'what is' something.",
+   "why": [
+    null,
+    "apropos searches descriptions and lists many matching pages.",
+    "info has no --short option for one-line descriptions.",
+    "-h prints man's own help."
+   ]
   },
   {
    "id": "2.2-10",
@@ -1402,7 +1752,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "info documents are split into linked nodes, like simple web pages."
+   "hint": "info documents are split into linked nodes, like simple web pages.",
+   "why": [
+    null,
+    "Info documents cover many GNU programs, such as coreutils and tar.",
+    "Info files live under /usr/share/info and are read with the info viewer.",
+    "The info viewer runs in the terminal."
+   ]
   },
   {
    "id": "2.2-11",
@@ -1434,7 +1790,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Is cd a separate program, or part of the shell itself?"
+   "hint": "Is cd a separate program, or part of the shell itself?",
+   "why": [
+    null,
+    "cd is part of Bash itself, so there's nothing to install.",
+    "The database is fine; there's simply no separate page for a builtin.",
+    "cd isn't an alias; chdir is a system call documented for programmers in section 2."
+   ]
   },
   {
    "id": "2.3-01",
@@ -1470,7 +1832,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Each .. climbs one directory from /home/carol/Documents."
+   "hint": "Each .. climbs one directory from /home/carol/Documents.",
+   "why": [
+    null,
+    "That's only one level up; ../../ climbs two levels, to /home.",
+    "Reaching / would take three .. steps.",
+    "That would be cd tom, with no .. at all."
+   ]
   },
   {
    "id": "2.3-03",
@@ -1489,7 +1857,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "An absolute path starts at the root of the filesystem."
+   "hint": "An absolute path starts at the root of the filesystem.",
+   "why": [
+    null,
+    "It starts from the parent of the current directory, so it's relative.",
+    "It doesn't start with /, so it's relative to the current directory.",
+    ". means the current directory, so this is relative."
+   ]
   },
   {
    "id": "2.3-04",
@@ -1522,7 +1896,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "With no argument, cd goes to the place in $HOME."
+   "hint": "With no argument, cd goes to the place in $HOME.",
+   "why": [
+    null,
+    "That's cd . (or nothing at all).",
+    "That's cd /.",
+    "That's pwd."
+   ]
   },
   {
    "id": "2.3-06",
@@ -1554,7 +1934,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "~ expands to the current user's home directory."
+   "hint": "~ expands to the current user's home directory.",
+   "why": [
+    null,
+    "That's at the root of the filesystem.",
+    "Only if you happen to be in your home directory; ~ always means home.",
+    "/root is root's home directory, not tom's."
+   ]
   },
   {
    "id": "2.3-08",
@@ -1573,7 +1959,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "A dash as the argument to cd means 'where I just was'."
+   "hint": "A dash as the argument to cd means 'where I just was'.",
+   "why": [
+    null,
+    "That's cd ...",
+    "That's cd /.",
+    "That's cd or cd ~."
+   ]
   },
   {
    "id": "2.3-09",
@@ -1592,7 +1984,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The option stands for 'human-readable'."
+   "hint": "The option stands for 'human-readable'.",
+   "why": [
+    null,
+    "Uppercase -H makes ls follow symbolic links named on the command line.",
+    "-S sorts by size; it doesn't change the units.",
+    "-k reports block sizes in kibibytes, not readable K/M/G units."
+   ]
   },
   {
    "id": "2.3-10",
@@ -1611,7 +2009,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "ls has an option that sorts by modification time, newest first."
+   "hint": "ls has an option that sorts by modification time, newest first.",
+   "why": [
+    null,
+    "-S sorts by size, largest first.",
+    "-r reverses the order (by name, here).",
+    "-R lists subdirectories recursively."
+   ]
   },
   {
    "id": "2.3-11",
@@ -1630,7 +2034,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Linux has no hidden attribute. A naming convention does the job."
+   "hint": "Linux has no hidden attribute. A naming convention does the job.",
+   "why": [
+    null,
+    "chmod has no hidden bit; that's a Windows idea.",
+    "There's no such special directory.",
+    "A trailing ~ usually marks an editor's backup file, which still shows in ls."
+   ]
   },
   {
    "id": "2.3-12",
@@ -1649,7 +2059,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Go up one level to /var, then down into tmp."
+   "hint": "Go up one level to /var, then down into tmp.",
+   "why": [
+    null,
+    "That's the top-level /tmp, a different directory from /var/tmp.",
+    "That looks for /var/log/tmp, inside the current directory.",
+    "./ means the current directory, so this is /var/log/tmp too."
+   ]
   },
   {
    "id": "2.4-01",
@@ -1668,7 +2084,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "rmdir only removes directories that are already empty."
+   "hint": "rmdir only removes directories that are already empty.",
+   "why": [
+    null,
+    "That's rm -r; rmdir refuses non-empty directories.",
+    "rmdir never deletes files.",
+    "Command-line tools have no trash; they delete or fail."
+   ]
   },
   {
    "id": "2.4-02",
@@ -1687,7 +2109,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "? matches exactly one character, and case matters."
+   "hint": "? matches exactly one character, and case matters.",
+   "why": [
+    null,
+    "? matches exactly one character, and file10 has two before .txt.",
+    "Globs are case-sensitive, and File2 starts with an uppercase F.",
+    "file.txt has no character where ? needs exactly one."
+   ]
   },
   {
    "id": "2.4-03",
@@ -1706,7 +2134,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "To copy a directory and its contents, cp needs its recursive option."
+   "hint": "To copy a directory and its contents, cp needs its recursive option.",
+   "why": [
+    null,
+    "Without -r, cp skips directories ('-r not specified; omitting directory').",
+    "mv has no -r, and it moves rather than copies.",
+    "-i only asks before overwriting; it still won't copy a directory."
+   ]
   },
   {
    "id": "2.4-04",
@@ -1725,7 +2159,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Linux file names are case-sensitive."
+   "hint": "Linux file names are case-sensitive.",
+   "why": [
+    null,
+    "Different names are different directory entries.",
+    "Only an identical name would be replaced.",
+    "Uppercase is allowed, and case matters."
+   ]
   },
   {
    "id": "2.4-05",
@@ -1744,7 +2184,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "mkdir needs an option to create missing parent directories."
+   "hint": "mkdir needs an option to create missing parent directories.",
+   "why": [
+    null,
+    "Without -p, the parent directories must already exist.",
+    "mkdir has no -r option.",
+    "touch -d sets a file's date; it doesn't create directories."
+   ]
   },
   {
    "id": "2.4-06",
@@ -1763,7 +2209,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "touch was originally made to update timestamps."
+   "hint": "touch was originally made to update timestamps.",
+   "why": [
+    null,
+    "That's > report.txt.",
+    "touch doesn't error on existing files; it updates their timestamps.",
+    "touch never makes copies."
+   ]
   },
   {
    "id": "2.4-07",
@@ -1782,7 +2234,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "[1-3] matches exactly one character in that range."
+   "hint": "[1-3] matches exactly one character in that range.",
+   "why": [
+    null,
+    "[1-3] matches one character, which must be followed directly by .txt.",
+    "log4 is outside the range, and log12 has an extra character.",
+    "log12 has two characters before .txt; the class matches only one."
+   ]
   },
   {
    "id": "2.4-08",
@@ -1803,7 +2261,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "* doesn't match a leading dot, and the name must end in .conf."
+   "hint": "* doesn't match a leading dot, and the name must end in .conf.",
+   "why": [
+    null,
+    null,
+    "* doesn't match a leading dot, so hidden files are skipped.",
+    "It ends in .bak, not .conf.",
+    "The name must end with .conf, and this one ends with .bak."
+   ]
   },
   {
    "id": "2.4-09",
@@ -1842,7 +2307,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "mv doesn't ask before overwriting unless you tell it to."
+   "hint": "mv doesn't ask before overwriting unless you tell it to.",
+   "why": [
+    null,
+    "Only mv -n or mv -i would stop or ask.",
+    "Backups are made only with mv -b.",
+    "mv never appends; that's cat a.txt >> b.txt."
+   ]
   },
   {
    "id": "2.4-11",
@@ -1861,7 +2332,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "When the last argument is a directory, cp copies every source into it."
+   "hint": "When the last argument is a directory, cp copies every source into it.",
+   "why": [
+    null,
+    "With several sources, the last argument is the target directory.",
+    "cp accepts any number of sources when the target is a directory.",
+    "cp copies files separately; joining is cat's job."
+   ]
   },
   {
    "id": "2.4-12",
@@ -1894,7 +2371,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "c creates, z compresses with gzip and f names the file. Watch out for the extract option."
+   "hint": "c creates, z compresses with gzip and f names the file. Watch out for the extract option.",
+   "why": [
+    null,
+    "-x extracts; it doesn't create an archive.",
+    "-j uses bzip2, which doesn't match the .gz name.",
+    "gzip compresses files one by one and can't build an archive."
+   ]
   },
   {
    "id": "3.1-02",
@@ -1929,7 +2412,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "tar's option for listing contents is t."
+   "hint": "tar's option for listing contents is t.",
+   "why": [
+    null,
+    "-x extracts the files.",
+    "-c creates a new archive and would overwrite this one.",
+    "-r appends files to the archive."
+   ]
   },
   {
    "id": "3.1-04",
@@ -1964,7 +2453,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "By default, gzip replaces the original file."
+   "hint": "By default, gzip replaces the original file.",
+   "why": [
+    null,
+    "gzip removes the original unless you add -k.",
+    "gzip doesn't use tar, so there's no .tar.",
+    "gzip makes .gz files; zip is a different tool."
+   ]
   },
   {
    "id": "3.1-06",
@@ -1983,7 +2478,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Lowercase j is bzip2. xz uses the same letter in uppercase."
+   "hint": "Lowercase j is bzip2. xz uses the same letter in uppercase.",
+   "why": [
+    null,
+    "Lowercase -j is bzip2.",
+    "-z is gzip.",
+    "-x extracts; it doesn't pick a compressor."
+   ]
   },
   {
    "id": "3.1-07",
@@ -2002,7 +2503,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "tar has an option that changes to a target directory before extracting."
+   "hint": "tar has an option that changes to a target directory before extracting.",
+   "why": [
+    null,
+    "Without -C, /tmp/restore is treated as the name of a member to extract.",
+    "-c creates an archive, overwriting backup.tar.gz.",
+    "-d compares the archive with the filesystem; it doesn't set a directory."
+   ]
   },
   {
    "id": "3.1-08",
@@ -2021,7 +2528,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "tar bundles files together, and compressors shrink them. They're separate jobs."
+   "hint": "tar bundles files together, and compressors shrink them. They're separate jobs.",
+   "why": [
+    null,
+    "Plain tar -cf makes an uncompressed archive; add -z, -j or -J to compress.",
+    "gzip handles single files, which is why tar is used first.",
+    "zip archives and compresses in one step."
+   ]
   },
   {
    "id": "3.1-09",
@@ -2058,7 +2571,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "gzip's compression levels run from 1 to 9."
+   "hint": "gzip's compression levels run from 1 to 9.",
+   "why": [
+    null,
+    "-1 is the fastest level with the least compression.",
+    "-c writes to standard output.",
+    "-d decompresses."
+   ]
   },
   {
    "id": "3.1-11",
@@ -2077,7 +2596,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Read the extensions from left to right: the archive came first, then the compression."
+   "hint": "Read the extensions from left to right: the archive came first, then the compression.",
+   "why": [
+    null,
+    "The extensions record steps (tar, then bzip2), not a file named tar.exe.",
+    "Zip archives end in .zip; .bz2 means bzip2.",
+    "It's one file: a tar archive that was then compressed."
+   ]
   },
   {
    "id": "3.1-12",
@@ -2098,7 +2623,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "You want tools that decompress to standard output instead of writing a file."
+   "hint": "You want tools that decompress to standard output instead of writing a file.",
+   "why": [
+    null,
+    null,
+    "cat prints the compressed bytes as garbage.",
+    "This is a compressed text file, not a tar archive.",
+    "unzip reads .zip files, not gzip."
+   ]
   },
   {
    "id": "3.2-01",
@@ -2118,7 +2650,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "wc counts things, and -l picks one kind of count."
+   "hint": "wc counts things, and -l picks one kind of count.",
+   "why": [
+    null,
+    "That's wc -w.",
+    "That's cat -n.",
+    "That's wc -c."
+   ]
   },
   {
    "id": "3.2-02",
@@ -2137,7 +2675,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Error messages travel on file descriptor 2."
+   "hint": "Error messages travel on file descriptor 2.",
+   "why": [
+    null,
+    "> captures normal output; errors would still go to the screen.",
+    "| pipes into a command, so the shell would try to run errors.log.",
+    "&> sends both output and errors to the file."
+   ]
   },
   {
    "id": "3.2-03",
@@ -2159,7 +2703,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "^ anchors the start of the line. [Bb] is one character, then any two characters, then k."
+   "hint": "^ anchors the start of the line. [Bb] is one character, then any two characters, then k.",
+   "why": [
+    null,
+    null,
+    "After b and two characters (ri) the next letter is c, not k.",
+    "The line must start with B or b because of ^.",
+    "After B and two characters (la) the next letter is c, not k."
+   ]
   },
   {
    "id": "3.2-04",
@@ -2179,7 +2730,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "-d: splits on colons and -f1 keeps the first field of each passwd line."
+   "hint": "-d: splits on colons and -f1 keeps the first field of each passwd line.",
+   "why": [
+    null,
+    "That's head -n 1; -f1 is the first field of every line.",
+    "The shell is field 7.",
+    "cut prints the selected field; it doesn't count fields."
+   ]
   },
   {
    "id": "3.2-05",
@@ -2212,7 +2769,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "tail shows the end of a file, and -n sets how many lines."
+   "hint": "tail shows the end of a file, and -n sets how many lines.",
+   "why": [
+    null,
+    "head shows the first lines.",
+    "That opens the whole file in a pager with a 20-line scroll size.",
+    "sort -n sorts numerically and would treat 20 as a file name."
+   ]
   },
   {
    "id": "3.2-07",
@@ -2231,7 +2794,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Without -n, sort compares character by character, not by numeric value."
+   "hint": "Without -n, sort compares character by character, not by numeric value.",
+   "why": [
+    null,
+    "That's numeric order, which needs sort -n.",
+    "That's reverse character order (sort -r).",
+    "That isn't sorted by characters or by numbers."
+   ]
   },
   {
    "id": "3.2-08",
@@ -2264,7 +2833,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "wc has separate options for lines, words and bytes."
+   "hint": "wc has separate options for lines, words and bytes.",
+   "why": [
+    null,
+    "-l counts lines.",
+    "-c counts bytes.",
+    "grep would treat essay.txt as the search pattern and read standard input."
+   ]
   },
   {
    "id": "3.2-10",
@@ -2283,7 +2858,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "head's default count is a round number."
+   "hint": "head's default count is a round number.",
+   "why": [
+    null,
+    "head defaults to 10 lines; -n 5 would show five.",
+    "The default is 10; use -n 20 for twenty.",
+    "That's what a pager like less shows; head prints a fixed number of lines."
+   ]
   },
   {
    "id": "3.2-11",
@@ -2302,7 +2883,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "grep has an option that inverts the match."
+   "hint": "grep has an option that inverts the match.",
+   "why": [
+    null,
+    "-i ignores case but still shows matching lines.",
+    "-c counts matching lines.",
+    "-n adds line numbers to matching lines."
+   ]
   },
   {
    "id": "3.2-12",
@@ -2337,7 +2924,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": ". matches exactly one character, and the whole line must fit."
+   "hint": ". matches exactly one character, and the whole line must fit.",
+   "why": [
+    null,
+    null,
+    ". needs exactly one character between c and t.",
+    "Two characters sit between c and t, and . matches only one.",
+    "Two characters sit between c and t, and . matches only one."
+   ]
   },
   {
    "id": "3.2-14",
@@ -2356,7 +2950,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "* repeats whatever comes right before it, including zero times."
+   "hint": "* repeats whatever comes right before it, including zero times.",
+   "why": [
+    null,
+    "That's * in a shell glob; in a regex, any sequence is .*",
+    "That's + in an extended regex.",
+    "That's . in a regex (or ? in a glob)."
+   ]
   },
   {
    "id": "3.2-15",
@@ -2375,7 +2975,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Anchor the start of the line, then match one digit."
+   "hint": "Anchor the start of the line, then match one digit.",
+   "why": [
+    null,
+    "$ anchors the end, so this finds lines ending in a digit.",
+    "[^0-9] inside brackets means 'not a digit' anywhere in the line.",
+    "Without brackets this matches the literal text 0-9 at the start."
+   ]
   },
   {
    "id": "3.2-16",
@@ -2394,7 +3000,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Send stdout to the file first, then point stderr at stdout."
+   "hint": "Send stdout to the file first, then point stderr at stdout.",
+   "why": [
+    null,
+    "Order matters: errors are pointed at the terminal before stdout moves to the file.",
+    "Only standard output goes to the file; errors still hit the screen.",
+    "Only errors go to the file."
+   ]
   },
   {
    "id": "3.2-17",
@@ -2413,7 +3025,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The vertical bar connects one command's output to another command's input."
+   "hint": "The vertical bar connects one command's output to another command's input.",
+   "why": [
+    null,
+    "That would be > less.",
+    "A pipe connects them: ls writes, less reads.",
+    "A pipe carries standard output; errors still go to the screen."
+   ]
   },
   {
    "id": "3.2-18",
@@ -2434,7 +3052,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "In extended regex, ? makes the character before it optional."
+   "hint": "In extended regex, ? makes the character before it optional.",
+   "why": [
+    null,
+    null,
+    "u? allows at most one u.",
+    "The o before u is required.",
+    "The letters must appear in the order c-o-l-o-(u)-r."
+   ]
   },
   {
    "id": "3.3-01",
@@ -2453,7 +3078,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The shebang gives the full path to the interpreter."
+   "hint": "The shebang gives the full path to the interpreter.",
+   "why": [
+    null,
+    "The ! is missing; without #! it's just a comment.",
+    "The characters are reversed; it must start with #!.",
+    "// isn't a comment or shebang in shell scripts."
+   ]
   },
   {
    "id": "3.3-02",
@@ -2472,7 +3103,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "$# counts the arguments, not including the script name."
+   "hint": "$# counts the arguments, not including the script name.",
+   "why": [
+    null,
+    "Three arguments were given; 0 would mean none.",
+    "That's $0, the script name.",
+    "That's $3, the third argument."
+   ]
   },
   {
    "id": "3.3-03",
@@ -2505,7 +3142,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "-n stops echo from adding a newline."
+   "hint": "-n stops echo from adding a newline.",
+   "why": [
+    null,
+    "-n stops echo from adding newlines.",
+    "Each echo also prints the dash after the number.",
+    "\"$n\" expands to the loop value; it isn't printed literally."
+   ]
   },
   {
    "id": "3.3-05",
@@ -2524,7 +3167,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "vi's colon commands can combine 'write' and 'quit' into one."
+   "hint": "vi's colon commands can combine 'write' and 'quit' into one.",
+   "why": [
+    null,
+    ":q! quits without saving.",
+    "Ctrl+O saves in nano, not vi.",
+    "i enters insert mode."
+   ]
   },
   {
    "id": "3.3-06",
@@ -2544,7 +3193,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "$1 is the first argument and $2 is the second. Look at the order echo prints them in."
+   "hint": "$1 is the first argument and $2 is the second. Look at the order echo prints them in.",
+   "why": [
+    null,
+    "The script prints $2 first, then $1.",
+    "Double quotes allow the parameters to expand.",
+    "That would be $0 and $1, and the script prints $2 $1."
+   ]
   },
   {
    "id": "3.3-07",
@@ -2563,7 +3218,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "No spaces around =, and quotes keep the space in the value."
+   "hint": "No spaces around =, and quotes keep the space in the value.",
+   "why": [
+    null,
+    "Spaces around = make Bash run a command named name.",
+    "No $ when assigning; $ is only for reading the value.",
+    "Without quotes, name=Carol is set just for a command named Smith."
+   ]
   },
   {
    "id": "3.3-08",
@@ -2595,7 +3256,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The current directory usually isn't in PATH, so give the path explicitly."
+   "hint": "The current directory usually isn't in PATH, so give the path explicitly.",
+   "why": [
+    null,
+    "The current directory isn't in PATH, so the shell won't look there.",
+    "There's no standard run command.",
+    "That isn't valid syntax; exec also replaces the shell."
+   ]
   },
   {
    "id": "3.3-10",
@@ -2614,7 +3281,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The file needs execute permission."
+   "hint": "The file needs execute permission.",
+   "why": [
+    null,
+    "Linux doesn't use extensions to decide what can run.",
+    "The location doesn't fix a missing execute permission.",
+    "cd only works on directories."
+   ]
   },
   {
    "id": "3.3-11",
@@ -2648,7 +3321,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Quoted \"$@\" gives each argument as a separate word."
+   "hint": "Quoted \"$@\" gives each argument as a separate word.",
+   "why": [
+    null,
+    "Quoted \"$@\" keeps the arguments separate, so the loop runs three times.",
+    "$x expands inside double quotes to each argument.",
+    "$@ holds a, b and c here."
+   ]
   },
   {
    "id": "3.3-13",
@@ -2667,7 +3346,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "nano writes the file with the O key ('write Out')."
+   "hint": "nano writes the file with the O key ('write Out').",
+   "why": [
+    null,
+    "Ctrl+X exits nano (offering to save first).",
+    "Ctrl+W searches (Where is).",
+    "Ctrl+K cuts the current line."
+   ]
   },
   {
    "id": "3.3-14",
@@ -2686,7 +3371,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "vi starts in command mode. Which key means insert?"
+   "hint": "vi starts in command mode. Which key means insert?",
+   "why": [
+    null,
+    ": starts a command-line command, such as :wq.",
+    "Esc goes back to command mode, where you already are.",
+    "q starts recording a macro in vi; it doesn't quit or insert."
+   ]
   },
   {
    "id": "3.3-15",
@@ -2718,7 +3409,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "0 means success. What does 'nothing matched' return?"
+   "hint": "0 means success. What does 'nothing matched' return?",
+   "why": [
+    null,
+    "0 means at least one line matched.",
+    "2 means an error, such as an unreadable file.",
+    "127 is the shell's 'command not found' status."
+   ]
   },
   {
    "id": "3.3-17",
@@ -2738,7 +3435,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "$# is 0. Does the script get past the if block?"
+   "hint": "$# is 0. Does the script get past the if block?",
+   "why": [
+    null,
+    "With no arguments $# is 0, so the script exits before reaching echo ok.",
+    "exit 1 ends the script immediately.",
+    "echo \"usage\" runs before exit."
+   ]
   },
   {
    "id": "3.3-18",
@@ -2757,7 +3460,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Numeric comparisons inside [ ] use dash-letter operators, not > or <."
+   "hint": "Numeric comparisons inside [ ] use dash-letter operators, not > or <.",
+   "why": [
+    null,
+    "Inside [ ], > is a redirection that creates a file named 10.",
+    "-ge is greater than or equal, so 10 itself would pass.",
+    "-lt is less than."
+   ]
   },
   {
    "id": "3.3-19",
@@ -2776,7 +3485,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The glob expands before the loop runs."
+   "hint": "The glob expands before the loop runs.",
+   "why": [
+    null,
+    "echo prints the name; cat would print contents.",
+    "That only happens when no file matches.",
+    "It loops once per matching file, then stops."
+   ]
   },
   {
    "id": "3.3-20",
@@ -2795,7 +3510,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "$( ) runs the command inside and captures its output."
+   "hint": "$( ) runs the command inside and captures its output.",
+   "why": [
+    null,
+    "$( ) runs the command instead of storing its text.",
+    "That would be in $?.",
+    "$( ) is standard command substitution."
+   ]
   },
   {
    "id": "3.3-21",
@@ -2814,7 +3535,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "exit ends the script right away with that status."
+   "hint": "exit ends the script right away with that status.",
+   "why": [
+    null,
+    "exit ends the script at that line.",
+    "Nothing after exit runs.",
+    "The number is the exit status, not a line count."
+   ]
   },
   {
    "id": "3.3-22",
@@ -2835,7 +3562,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "The kernel reads only the very first line, and it needs the interpreter's full path."
+   "hint": "The kernel reads only the very first line, and it needs the interpreter's full path.",
+   "why": [
+    null,
+    null,
+    "Naming the interpreter yourself means the shebang isn't needed.",
+    "The kernel reads the first line; the name doesn't matter.",
+    "Only chmod sets permissions."
+   ]
   },
   {
    "id": "3.3-23",
@@ -2855,7 +3589,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Plain echo doesn't do arithmetic."
+   "hint": "Plain echo doesn't do arithmetic.",
+   "why": [
+    null,
+    "echo doesn't do math; that would need $((x+y)).",
+    "Unquoted variables expand.",
+    "The + is printed between the values."
+   ]
   },
   {
    "id": "3.3-24",
@@ -2888,7 +3628,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "LTS stands for Long Term Support."
+   "hint": "LTS stands for Long Term Support.",
+   "why": [
+    null,
+    "That describes interim (non-LTS) releases.",
+    "Ubuntu LTS is free.",
+    "LTS releases are stable, the opposite of beta."
+   ]
   },
   {
    "id": "4.1-02",
@@ -2907,7 +3653,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Beta comes before stable."
+   "hint": "Beta comes before stable.",
+   "why": [
+    null,
+    "LTS releases are stable and supported for years.",
+    "EOL comes at the end of a release's life, not before it's released.",
+    "Betas come before the stable release."
+   ]
   },
   {
    "id": "4.1-03",
@@ -2926,7 +3678,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "macOS is Apple's closed OS, built on a Unix base called Darwin."
+   "hint": "macOS is Apple's closed OS, built on a Unix base called Darwin.",
+   "why": [
+    null,
+    "macOS uses Apple's XNU kernel in Darwin, not Linux.",
+    "macOS is proprietary.",
+    "macOS includes Terminal with zsh."
+   ]
   },
   {
    "id": "4.1-04",
@@ -2945,7 +3703,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Updates roll in continuously instead of coming as numbered versions."
+   "hint": "Updates roll in continuously instead of coming as numbered versions.",
+   "why": [
+    null,
+    "LTS keeps one release stable for years.",
+    "Point releases are numbered updates to a release, like 22.04.3.",
+    "A beta is a test version before a release."
+   ]
   },
   {
    "id": "4.1-05",
@@ -2964,7 +3728,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Compare the licensing models: proprietary versus free."
+   "hint": "Compare the licensing models: proprietary versus free.",
+   "why": [
+    null,
+    "It's the other way around.",
+    "Windows is closed source.",
+    "Linux has many desktops, such as GNOME and KDE."
+   ]
   },
   {
    "id": "4.1-06",
@@ -2983,7 +3753,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "What stops arriving after end of life?"
+   "hint": "What stops arriving after end of life?",
+   "why": [
+    null,
+    "It keeps running; it just stops getting fixes.",
+    "Nothing is removed from the disk.",
+    "The desktop still works, but unpatched."
+   ]
   },
   {
    "id": "4.2-01",
@@ -3015,7 +3791,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "One has spinning platters and the other uses flash memory."
+   "hint": "One has spinning platters and the other uses flash memory.",
+   "why": [
+    null,
+    "SSDs are non-volatile; RAM is what loses data.",
+    "HDDs use spinning magnetic platters; SSDs use flash.",
+    "SSDs are partitioned like any disk."
+   ]
   },
   {
    "id": "4.2-03",
@@ -3034,7 +3816,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The kernel needs a piece of code that knows how to talk to each device."
+   "hint": "The kernel needs a piece of code that knows how to talk to each device.",
+   "why": [
+    null,
+    "Settings live in configuration files, not drivers.",
+    "That's the kernel's scheduler.",
+    "That's the power supply unit."
+   ]
   },
   {
    "id": "4.2-04",
@@ -3053,7 +3841,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "sd plus a letter is the disk, and the number is the partition."
+   "hint": "sd plus a letter is the disk, and the number is the partition.",
+   "why": [
+    null,
+    "The letter picks the disk (a = first) and the number picks the partition.",
+    "The third disk would be /dev/sdc.",
+    "Device files name disks and partitions, not ports."
+   ]
   },
   {
    "id": "4.2-05",
@@ -3072,7 +3866,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "It converts wall-outlet AC power into the DC voltages the parts need."
+   "hint": "It converts wall-outlet AC power into the DC voltages the parts need.",
+   "why": [
+    null,
+    "The chipset connects components; it doesn't convert power.",
+    "UEFI is firmware that starts the computer.",
+    "A heat sink only cools the processor."
+   ]
   },
   {
    "id": "4.2-06",
@@ -3091,7 +3891,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The modern replacement for BIOS starts with U."
+   "hint": "The modern replacement for BIOS starts with U.",
+   "why": [
+    null,
+    "GRUB is a boot loader started by the firmware.",
+    "POST is the self-test the firmware runs at power-on.",
+    "CMOS is the small memory that stores firmware settings."
+   ]
   },
   {
    "id": "4.2-07",
@@ -3110,7 +3916,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Compatibility works in only one direction."
+   "hint": "Compatibility works in only one direction.",
+   "why": [
+    null,
+    "A 32-bit CPU can't run 64-bit code.",
+    "ARM and x86 are different instruction sets.",
+    "32-bit addresses reach about 4 GB."
+   ]
   },
   {
    "id": "4.2-08",
@@ -3142,7 +3954,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Think about reinstalling the OS without losing user files."
+   "hint": "Think about reinstalling the OS without losing user files.",
+   "why": [
+    null,
+    "A single root partition works fine.",
+    "Partitioning doesn't make files faster.",
+    "Home directories work on any partition."
+   ]
   },
   {
    "id": "4.2-10",
@@ -3161,7 +3979,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Optical drives use 'sr' names, and numbering starts at 0."
+   "hint": "Optical drives use 'sr' names, and numbering starts at 0.",
+   "why": [
+    null,
+    "Partitions are numbered from 1, and sda is a disk, not an optical drive.",
+    "There's no opt device name for optical drives.",
+    "hd names were for old IDE disks, and this doesn't match any real device."
+   ]
   },
   {
    "id": "4.2-11",
@@ -3180,7 +4004,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "SD cards appear as MMC devices, with 'p' before the partition number."
+   "hint": "SD cards appear as MMC devices, with 'p' before the partition number.",
+   "why": [
+    null,
+    "SD cards appear as MMC devices, not sd.",
+    "That isn't a Linux naming scheme.",
+    "The pattern is mmcblkN with pN for partitions."
+   ]
   },
   {
    "id": "4.2-12",
@@ -3201,7 +4031,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One command summarizes the CPU, and one kernel file describes each processor."
+   "hint": "One command summarizes the CPU, and one kernel file describes each processor.",
+   "why": [
+    null,
+    null,
+    "lsblk lists disks and partitions.",
+    "free shows memory.",
+    "uname -n prints the hostname."
+   ]
   },
   {
    "id": "4.3-01",
@@ -3220,7 +4057,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Variable data lives under /var, including logs."
+   "hint": "Variable data lives under /var, including logs.",
+   "why": [
+    null,
+    "/etc holds configuration.",
+    "/proc is a virtual view of processes and the kernel.",
+    "/usr holds installed programs and read-only data."
+   ]
   },
   {
    "id": "4.3-02",
@@ -3255,7 +4098,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One shows a memory summary, and one is a live process viewer that also shows memory."
+   "hint": "One shows a memory summary, and one is a live process viewer that also shows memory.",
+   "why": [
+    null,
+    null,
+    "df shows disk space per filesystem.",
+    "du shows disk space used by files.",
+    "lsblk lists block devices."
+   ]
   },
   {
    "id": "4.3-04",
@@ -3274,7 +4124,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "A virtual filesystem with a numbered directory for each running process."
+   "hint": "A virtual filesystem with a numbered directory for each running process.",
+   "why": [
+    null,
+    "/boot holds the kernel and boot files on disk.",
+    "/etc holds configuration files.",
+    "/var holds variable data such as logs and caches."
+   ]
   },
   {
    "id": "4.3-05",
@@ -3309,7 +4165,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One takes a snapshot of processes, and one updates continuously."
+   "hint": "One takes a snapshot of processes, and one updates continuously.",
+   "why": [
+    null,
+    null,
+    "free shows memory, not processes.",
+    "dmesg shows kernel messages.",
+    "host looks up DNS names."
+   ]
   },
   {
    "id": "4.3-07",
@@ -3328,7 +4191,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Think of it as the bit bucket."
+   "hint": "Think of it as the bit bucket.",
+   "why": [
+    null,
+    "Nothing is kept anywhere.",
+    "Printing goes through the print system, not /dev/null.",
+    "There's no such log; the data simply disappears."
+   ]
   },
   {
    "id": "4.3-08",
@@ -3347,7 +4216,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The first letter of ls -l shows the file type, and disks are block devices."
+   "hint": "The first letter of ls -l shows the file type, and disks are block devices.",
+   "why": [
+    null,
+    "Executables show - as the type, plus x permissions.",
+    "Links show l as the type.",
+    "The type letter doesn't mark backups."
+   ]
   },
   {
    "id": "4.3-09",
@@ -3380,7 +4255,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "On modern distributions, the init system is also the service manager."
+   "hint": "On modern distributions, the init system is also the service manager.",
+   "why": [
+    null,
+    "bash is a shell started for users, not process 1.",
+    "cron is a scheduler started by the init system.",
+    "sshd is a service started by the init system."
+   ]
   },
   {
    "id": "4.3-11",
@@ -3399,7 +4280,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Use ps with BSD-style options: a, u and x."
+   "hint": "Use ps with BSD-style options: a, u and x.",
+   "why": [
+    null,
+    "Plain ps shows only processes in your current terminal.",
+    "who lists login sessions, not processes.",
+    "free shows memory totals."
+   ]
   },
   {
    "id": "4.3-12",
@@ -3418,7 +4305,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "In top, sort keys are uppercase letters. Think of the first letter of the resource you want to sort by."
+   "hint": "In top, sort keys are uppercase letters. Think of the first letter of the resource you want to sort by.",
+   "why": [
+    null,
+    "P sorts by CPU usage.",
+    "k kills a process.",
+    "q quits top."
+   ]
   },
   {
    "id": "4.3-13",
@@ -3451,7 +4344,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "It's disk space used as extra memory when RAM runs low."
+   "hint": "It's disk space used as extra memory when RAM runs low.",
+   "why": [
+    null,
+    "That's CPU cache.",
+    "Swap stores memory pages, not backups.",
+    "That's video memory."
+   ]
   },
   {
    "id": "4.3-15",
@@ -3470,7 +4369,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "journalctl can filter by unit."
+   "hint": "journalctl can filter by unit.",
+   "why": [
+    null,
+    "dmesg shows kernel messages and doesn't filter by service.",
+    "/proc doesn't hold service logs.",
+    "systemctl has no --logs option; systemctl status shows only a few log lines."
+   ]
   },
   {
    "id": "4.3-16",
@@ -3489,7 +4394,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Debian logs authentication events to a file whose name starts with 'auth'."
+   "hint": "Debian logs authentication events to a file whose name starts with 'auth'.",
+   "why": [
+    null,
+    "kern.log holds kernel messages.",
+    "dpkg.log records package installs and removals.",
+    "boot.log records messages from startup."
+   ]
   },
   {
    "id": "4.3-17",
@@ -3508,7 +4419,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "There's a second virtual filesystem, next to /proc, that's organized around devices."
+   "hint": "There's a second virtual filesystem, next to /proc, that's organized around devices.",
+   "why": [
+    null,
+    "/dev holds device files, not an organized tree of drivers and classes.",
+    "/boot holds the kernel and boot loader.",
+    "/srv holds data served by the system, such as websites."
+   ]
   },
   {
    "id": "4.3-18",
@@ -3527,7 +4444,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "tail has an option to follow new lines as they're written."
+   "hint": "tail has an option to follow new lines as they're written.",
+   "why": [
+    null,
+    "head has no follow option.",
+    "cat has no follow option.",
+    "-n turns off line numbers; less follows with F, not -n."
+   ]
   },
   {
    "id": "4.4-01",
@@ -3546,7 +4469,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The resolver's configuration file has 'resolv' in its name."
+   "hint": "The resolver's configuration file has 'resolv' in its name.",
+   "why": [
+    null,
+    "/etc/hosts maps names to addresses locally; it doesn't list DNS servers.",
+    "/etc/hostname holds this system's own name.",
+    "/etc/networks maps network names to network numbers."
+   ]
   },
   {
    "id": "4.4-02",
@@ -3565,7 +4494,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The private ranges are 10/8, 172.16/12 (172.16 to 172.31) and 192.168/16."
+   "hint": "The private ranges are 10/8, 172.16/12 (172.16 to 172.31) and 192.168/16.",
+   "why": [
+    null,
+    "The private 172 range is 172.16 to 172.31.",
+    "Only 192.168.x.x is private.",
+    "8.8.8.8 is a public address (Google's DNS)."
+   ]
   },
   {
    "id": "4.4-03",
@@ -3605,7 +4540,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "IPv6 uses hex groups separated by colons, and :: compresses zeros."
+   "hint": "IPv6 uses hex groups separated by colons, and :: compresses zeros.",
+   "why": [
+    null,
+    ":: may appear only once in an address.",
+    "IPv6 uses hexadecimal digits 0-9 and a-f; g isn't valid.",
+    "That's IPv4-style, and 300 is over 255."
+   ]
   },
   {
    "id": "4.4-05",
@@ -3624,7 +4565,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Local name mappings are checked before DNS."
+   "hint": "Local name mappings are checked before DNS.",
+   "why": [
+    null,
+    "resolv.conf lists DNS servers.",
+    "/etc/hostname holds this machine's own name.",
+    "nsswitch.conf sets the lookup order but holds no mappings."
+   ]
   },
   {
    "id": "4.4-06",
@@ -3643,7 +4590,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "ip has a 'route' object, and the default route points to the gateway."
+   "hint": "ip has a 'route' object, and the default route points to the gateway.",
+   "why": [
+    null,
+    "That shows addresses, not routes.",
+    "ss lists TCP sockets.",
+    "host does DNS lookups."
+   ]
   },
   {
    "id": "4.4-07",
@@ -3675,7 +4628,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "A simple DNS lookup utility named after a computer on the network."
+   "hint": "A simple DNS lookup utility named after a computer on the network.",
+   "why": [
+    null,
+    "ip has no host object for DNS lookups.",
+    "route shows or edits the routing table.",
+    "ss lists sockets on this machine."
+   ]
   },
   {
    "id": "4.4-09",
@@ -3696,7 +4655,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One is the modern socket tool and the other is the older net-tools tool."
+   "hint": "One is the modern socket tool and the other is the older net-tools tool.",
+   "why": [
+    null,
+    null,
+    "ping tests reachability with ICMP echo requests.",
+    "host does DNS lookups.",
+    "ifconfig shows and configures interfaces and addresses, not sockets."
+   ]
   },
   {
    "id": "4.4-10",
@@ -3728,7 +4694,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "/24 means the first three octets must match."
+   "hint": "/24 means the first three octets must match.",
+   "why": [
+    null,
+    "With /24 the first three octets must match, and the third differs (2 vs 1).",
+    "The second octet differs (169 vs 168).",
+    "The first octet differs, so it's a different network entirely."
+   ]
   },
   {
    "id": "4.4-12",
@@ -3747,7 +4719,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "It connects different networks and forwards traffic between them."
+   "hint": "It connects different networks and forwards traffic between them.",
+   "why": [
+    null,
+    "MAC addresses are set by the card's manufacturer.",
+    "That's DNS. Home routers often run a DNS forwarder, but routing is moving packets between networks.",
+    "Connecting devices on one network is a switch's job."
+   ]
   },
   {
    "id": "5.1-01",
@@ -3766,7 +4744,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The superuser always has the lowest UID."
+   "hint": "The superuser always has the lowest UID.",
+   "why": [
+    null,
+    "UID 1 is usually daemon, a system account.",
+    "1000 is typically the first regular user.",
+    "65534 is nobody, the unprivileged placeholder account."
+   ]
   },
   {
    "id": "5.1-02",
@@ -3800,7 +4784,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One lists sessions, and the other adds what each user is doing."
+   "hint": "One lists sessions, and the other adds what each user is doing.",
+   "why": [
+    null,
+    null,
+    "id shows your UID and groups.",
+    "passwd changes passwords.",
+    "su switches users."
+   ]
   },
   {
    "id": "5.1-04",
@@ -3819,7 +4810,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "sudo uses your own password for one command, while su - asks for root's password and opens a shell."
+   "hint": "sudo uses your own password for one command, while su - asks for root's password and opens a shell.",
+   "why": [
+    null,
+    "That describes su -.",
+    "sudo doesn't update itself, and it runs the command as root.",
+    "By default sudo runs commands as root."
+   ]
   },
   {
    "id": "5.1-05",
@@ -3851,7 +4848,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "It reads the login history in wtmp."
+   "hint": "It reads the login history in wtmp.",
+   "why": [
+    null,
+    "who shows only current sessions.",
+    "w shows current sessions and activity.",
+    "id shows UIDs and groups."
+   ]
   },
   {
    "id": "5.1-07",
@@ -3870,7 +4873,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Service accounts have low UIDs and a shell that refuses logins."
+   "hint": "Service accounts have low UIDs and a shell that refuses logins.",
+   "why": [
+    null,
+    "Only root has UID 0.",
+    "That describes a regular user.",
+    "Those groups are for administrators, not services."
+   ]
   },
   {
    "id": "5.1-08",
@@ -3889,7 +4898,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The dash gives you root's full login environment."
+   "hint": "The dash gives you root's full login environment.",
+   "why": [
+    null,
+    "That's sudo.",
+    "su - switches to root (or a named user); exit returns you.",
+    "Locking is passwd -l."
+   ]
   },
   {
    "id": "5.1-09",
@@ -3910,7 +4925,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Account and group lists are world-readable, but the files with hashes aren't."
+   "hint": "Account and group lists are world-readable, but the files with hashes aren't.",
+   "why": [
+    null,
+    null,
+    "shadow holds password hashes and is readable only by root (and the shadow group).",
+    "sudoers is readable only by root.",
+    "gshadow holds group password hashes and is root-only."
+   ]
   },
   {
    "id": "5.1-10",
@@ -3942,7 +4964,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "$id$ marks the hash type, and 6 is a SHA-2 variant."
+   "hint": "$id$ marks the hash type, and 6 is a SHA-2 variant.",
+   "why": [
+    null,
+    "A lock is shown by ! at the start.",
+    "MD5 hashes start with $1$.",
+    "An empty field would mean no password."
+   ]
   },
   {
    "id": "5.1-12",
@@ -3961,7 +4989,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "w adds load averages and what each user is running."
+   "hint": "w adds load averages and what each user is running.",
+   "why": [
+    null,
+    "That's chage -l.",
+    "That's id.",
+    "Failed logins are in the auth log or lastb."
+   ]
   },
   {
    "id": "5.2-01",
@@ -3980,7 +5014,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "The skeleton directory holds the template files for new homes."
+   "hint": "The skeleton directory holds the template files for new homes.",
+   "why": [
+    null,
+    "/etc/default/useradd holds default settings, not files to copy.",
+    "There's no standard template directory under /home.",
+    "/root is root's home directory."
+   ]
   },
   {
    "id": "5.2-02",
@@ -4000,7 +5040,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "The fields are name, x, UID, GID, comment, home and… the last one is the program you log in to."
+   "hint": "The fields are name, x, UID, GID, comment, home and… the last one is the program you log in to.",
+   "why": [
+    null,
+    "The home directory is the sixth field.",
+    "The primary GID is the fourth field.",
+    "x means the hash is in /etc/shadow."
+   ]
   },
   {
    "id": "5.2-03",
@@ -4033,7 +5079,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "The fields are name, password placeholder, GID and member list."
+   "hint": "The fields are name, password placeholder, GID and member list.",
+   "why": [
+    null,
+    "1005 is the group's GID, and the member list doesn't make anyone an admin.",
+    "Both carol and tom are listed.",
+    "x means a group password, if any, lives in /etc/gshadow."
+   ]
   },
   {
    "id": "5.2-05",
@@ -4065,7 +5117,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "-m makes the home directory and -s sets the shell."
+   "hint": "-m makes the home directory and -s sets the shell.",
+   "why": [
+    null,
+    "-M means don't create a home directory.",
+    "-g sets the primary group; -s sets the shell.",
+    "-d needs a home path after it and doesn't create the directory by itself."
+   ]
   },
   {
    "id": "5.2-07",
@@ -4084,7 +5142,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Uppercase is for supplementary groups and lowercase for the primary group."
+   "hint": "Uppercase is for supplementary groups and lowercase for the primary group.",
+   "why": [
+    null,
+    "Lowercase -g sets the primary group.",
+    "-s sets the login shell.",
+    "-u sets the UID."
+   ]
   },
   {
    "id": "5.2-08",
@@ -4103,7 +5167,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "userdel has an option to remove the home directory too."
+   "hint": "userdel has an option to remove the home directory too.",
+   "why": [
+    null,
+    "Without -r the home directory stays behind.",
+    "groupdel deletes a group, not a user.",
+    "passwd -d deletes the password; the account stays."
+   ]
   },
   {
    "id": "5.2-09",
@@ -4122,7 +5192,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "passwd has an option that locks an account."
+   "hint": "passwd has an option that locks an account.",
+   "why": [
+    null,
+    "-d removes the password, which can allow login without one.",
+    "-e forces a password change at next login.",
+    "-S shows the account's password status."
+   ]
   },
   {
    "id": "5.2-10",
@@ -4141,7 +5217,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "useradd creates the account, but what about the password?"
+   "hint": "useradd creates the account, but what about the password?",
+   "why": [
+    null,
+    "-m does create the home directory.",
+    "The default shell is /bin/sh, set in /etc/default/useradd.",
+    "sudo membership is for admin rights, not for logging in."
+   ]
   },
   {
    "id": "5.2-11",
@@ -4160,7 +5242,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Regular users start just above the system account range."
+   "hint": "Regular users start just above the system account range.",
+   "why": [
+    null,
+    "UID 0 is root.",
+    "Low numbers like 100 are system accounts or groups (users is GID 100).",
+    "500 was the starting UID on older Red Hat systems; modern ones use 1000."
+   ]
   },
   {
    "id": "5.2-12",
@@ -4179,7 +5267,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "A leading ! makes the hash impossible to match."
+   "hint": "A leading ! makes the hash impossible to match.",
+   "why": [
+    null,
+    "An empty field means no password.",
+    "Expiry is set in the later aging fields.",
+    "! has nothing to do with root."
+   ]
   },
   {
    "id": "5.3-01",
@@ -4198,7 +5292,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Add up r=4, w=2 and x=1 for each digit."
+   "hint": "Add up r=4, w=2 and x=1 for each digit.",
+   "why": [
+    null,
+    "That's 755; the last digit 4 is r-- only.",
+    "That's 764; 5 is r-x, not rw-.",
+    "That's 654; the first digit 7 is rwx."
+   ]
   },
   {
    "id": "5.3-02",
@@ -4232,7 +5332,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "g+w adds write for the group, and o-r removes read from others."
+   "hint": "g+w adds write for the group, and o-r removes read from others.",
+   "why": [
+    null,
+    "o-r removes read for others as well.",
+    "g+w adds write for the group too.",
+    "Nothing adds execute for the owner."
+   ]
   },
   {
    "id": "5.3-04",
@@ -4251,7 +5357,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "On directories, x means you can enter them."
+   "hint": "On directories, x means you can enter them.",
+   "why": [
+    null,
+    "Read lets you list names but not enter.",
+    "Write lets you create and delete entries (with x).",
+    "The sticky bit limits deletion; it doesn't grant entry."
+   ]
   },
   {
    "id": "5.3-05",
@@ -4284,7 +5396,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Use user:group in a single chown."
+   "hint": "Use user:group in a single chown.",
+   "why": [
+    null,
+    "The order is user:group, so this sets user devs.",
+    "chgrp changes only the group and takes just a group name.",
+    "chmod changes permissions, not ownership."
+   ]
   },
   {
    "id": "5.3-07",
@@ -4318,7 +5436,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "In ls -l output, the owner comes first and the group second."
+   "hint": "In ls -l output, the owner comes first and the group second.",
+   "why": [
+    null,
+    "carol is the owner; the group comes next.",
+    "rw- is the owner's permission set.",
+    "1 is the link count."
+   ]
   },
   {
    "id": "5.3-09",
@@ -4337,7 +5461,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Creating, deleting and renaming entries all change the directory."
+   "hint": "Creating, deleting and renaming entries all change the directory.",
+   "why": [
+    null,
+    "r allows listing.",
+    "x allows entering.",
+    "x lets you reach files, and the file's own r lets you read it."
+   ]
   },
   {
    "id": "5.3-10",
@@ -4356,7 +5486,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "a means all. = sets the permissions exactly."
+   "hint": "a means all. = sets the permissions exactly.",
+   "why": [
+    null,
+    "a=r sets exactly read for everyone, removing the owner's write.",
+    "= replaces the bits, so no write or execute remains.",
+    "a means all three classes, not just the owner."
+   ]
   },
   {
    "id": "5.3-11",
@@ -4375,7 +5511,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Linux applies only the first matching class: owner, then group, then others."
+   "hint": "Linux applies only the first matching class: owner, then group, then others.",
+   "why": [
+    null,
+    "Only the first matching class applies, and for the owner that's ---.",
+    "Owners can change the mode with chmod, but until then --- applies.",
+    "As the owner, carol never falls through to the group bits."
+   ]
   },
   {
    "id": "5.3-12",
@@ -4394,7 +5536,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "There's a command just for changing the group."
+   "hint": "There's a command just for changing the group.",
+   "why": [
+    null,
+    "That would make a user named sales the owner.",
+    "chmod sets permission bits, not group names.",
+    "The group comes first, then the file."
+   ]
   },
   {
    "id": "5.4-01",
@@ -4414,7 +5562,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "A t in the others' execute position is a special bit on shared directories."
+   "hint": "A t in the others' execute position is a special bit on shared directories.",
+   "why": [
+    null,
+    "t is the sticky bit; cleanup is a separate system setting.",
+    "rwx for others means everyone can write there.",
+    "A symlink would start with l and show ->."
+   ]
   },
   {
    "id": "5.4-02",
@@ -4449,7 +5603,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "/tmp may be cleared at boot. There's a temp directory under /var."
+   "hint": "/tmp may be cleared at boot. There's a temp directory under /var.",
+   "why": [
+    null,
+    "/tmp may be cleared at every boot.",
+    "/run is a tmpfs for runtime data and is emptied at boot.",
+    "/dev/shm is shared memory, lost at reboot."
+   ]
   },
   {
    "id": "5.4-04",
@@ -4468,7 +5628,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "ls has an option to list the directory entry itself."
+   "hint": "ls has an option to list the directory entry itself.",
+   "why": [
+    null,
+    "That lists the files inside /etc.",
+    "That lists the contents, including hidden files.",
+    "That lists every subdirectory recursively."
+   ]
   },
   {
    "id": "5.4-05",
@@ -4487,7 +5653,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "A symlink stores a path, not the data."
+   "hint": "A symlink stores a path, not the data.",
+   "why": [
+    null,
+    "Nothing removes the link; it's left dangling.",
+    "A symlink stores only a path, not data.",
+    "It stays a symbolic link."
+   ]
   },
   {
    "id": "5.4-06",
@@ -4508,7 +5680,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Hard links share an inode, and inodes belong to one filesystem."
+   "hint": "Hard links share an inode, and inodes belong to one filesystem.",
+   "why": [
+    null,
+    null,
+    "l marks a symbolic link; a hard link looks like a normal file.",
+    "The data stays until the last name is removed.",
+    "Hard links to directories aren't allowed."
+   ]
   },
   {
    "id": "1.1-13",
@@ -4527,7 +5706,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Look for the option sold with a support subscription and certifications, not a community or hobby project."
+   "hint": "Look for the option sold with a support subscription and certifications, not a community or hobby project.",
+   "why": [
+    null,
+    "A community desktop distribution without vendor support contracts.",
+    "Made for the Raspberry Pi.",
+    "A community rolling release with no vendor support or certifications."
+   ]
   },
   {
    "id": "1.1-14",
@@ -4546,7 +5731,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Remember the two big families: Debian (.deb, dpkg, apt) and Red Hat (.rpm, rpm, yum). Find the pair that doesn't mix them."
+   "hint": "Remember the two big families: Debian (.deb, dpkg, apt) and Red Hat (.rpm, rpm, yum). Find the pair that doesn't mix them.",
+   "why": [
+    null,
+    "openSUSE uses .rpm with zypper.",
+    "CentOS uses .rpm with rpm and yum.",
+    "Debian created .deb and uses dpkg and APT."
+   ]
   },
   {
    "id": "1.1-15",
@@ -4565,7 +5756,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Which kind of release gets years of security fixes without big changes?"
+   "hint": "Which kind of release gets years of security fixes without big changes?",
+   "why": [
+    null,
+    "Interim releases get only about nine months of support.",
+    "Daily builds are unstable test images.",
+    "Betas are for testing, not production."
+   ]
   },
   {
    "id": "1.1-16",
@@ -4584,7 +5781,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Embedded Linux runs inside appliances. Two options run Apple's OSes and one runs Windows."
+   "hint": "Embedded Linux runs inside appliances. Two options run Apple's OSes and one runs Windows.",
+   "why": [
+    null,
+    "iPhones run iOS, built on Apple's Darwin.",
+    "A general-purpose PC running Windows.",
+    "macOS is Apple's OS on Darwin, and a laptop isn't a dedicated device."
+   ]
   },
   {
    "id": "1.1-17",
@@ -4605,7 +5808,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "Think about who leads the project and what Android sits on underneath. Its apps are .apk files, not .deb."
+   "hint": "Think about who leads the project and what Android sits on underneath. Its apps are .apk files, not .deb.",
+   "why": [
+    null,
+    null,
+    "Android apps are .apk packages.",
+    "Android shares only the Linux kernel with Debian.",
+    "Android has its own C library (Bionic) and runtime."
+   ]
   },
   {
    "id": "1.1-18",
@@ -4626,7 +5836,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "apt-get belongs to one family. Pick its members and skip the rpm-based distributions."
+   "hint": "apt-get belongs to one family. Pick its members and skip the rpm-based distributions.",
+   "why": [
+    null,
+    null,
+    "CentOS uses yum and .rpm.",
+    "openSUSE uses zypper and .rpm.",
+    "RHEL uses yum/dnf and .rpm."
+   ]
   },
   {
    "id": "1.2-13",
@@ -4645,7 +5862,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You have a local .rpm file. Which low-level tool installs a package file directly?"
+   "hint": "You have a local .rpm file. Which low-level tool installs a package file directly?",
+   "why": [
+    null,
+    "dpkg installs .deb files on Debian-based systems.",
+    "apt-get is the Debian/Ubuntu tool.",
+    "yum search only searches repositories; it doesn't install a file."
+   ]
   },
   {
    "id": "1.2-14",
@@ -4664,7 +5887,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "On Ubuntu, the repository tool resolves dependencies. dpkg needs a local file."
+   "hint": "On Ubuntu, the repository tool resolves dependencies. dpkg needs a local file.",
+   "why": [
+    null,
+    "dpkg needs a local .deb file and doesn't fetch dependencies.",
+    "rpm is for Red Hat systems, and there's no such local file.",
+    "yum is the Red Hat family tool, not Ubuntu's."
+   ]
   },
   {
    "id": "1.2-15",
@@ -4683,7 +5912,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "A dynamic site needs something to serve pages and something to store data."
+   "hint": "A dynamic site needs something to serve pages and something to store data.",
+   "why": [
+    null,
+    "Those share files and don't serve web pages or store app data.",
+    "Those are desktop apps for images and email.",
+    "Firefox is a browser, the client side of a website."
+   ]
   },
   {
    "id": "1.2-16",
@@ -4702,7 +5937,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Which language does the browser itself run? The others run on the server or are compiled to native code."
+   "hint": "Which language does the browser itself run? The others run on the server or are compiled to native code.",
+   "why": [
+    null,
+    "PHP runs on the server and sends finished HTML to the browser.",
+    "CGI scripts run on the web server, not in the browser.",
+    "C is compiled into native programs; browsers don't run C source."
+   ]
   },
   {
    "id": "1.2-17",
@@ -4722,7 +5963,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "dpkg -l lists packages dpkg knows about. What does the two-letter status 'ii' say?"
+   "hint": "dpkg -l lists packages dpkg knows about. What does the two-letter status 'ii' say?",
+   "why": [
+    null,
+    "ii means it is installed.",
+    "dpkg reports packages, not running services; check systemctl or ss.",
+    "dpkg manages .deb packages only."
+   ]
   },
   {
    "id": "1.2-18",
@@ -4741,7 +5988,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "On CentOS, use rpm with the query option plus the 'all' option."
+   "hint": "On CentOS, use rpm with the query option plus the 'all' option.",
+   "why": [
+    null,
+    "dpkg -l is the Debian equivalent.",
+    "rpm -i installs a package file.",
+    "yum remove uninstalls packages."
+   ]
   },
   {
    "id": "1.3-07",
@@ -4760,7 +6013,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Selling is allowed under the GPL. What must travel with the binaries you distribute?"
+   "hint": "Selling is allowed under the GPL. What must travel with the binaries you distribute?",
+   "why": [
+    null,
+    "Copyleft passes the GPL on to modified versions.",
+    "The GPL charges no royalties.",
+    "GPL code must stay under the GPL."
+   ]
   },
   {
    "id": "1.3-08",
@@ -4779,7 +6038,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You need a permissive license, one that doesn't force derived code to stay open."
+   "hint": "You need a permissive license, one that doesn't force derived code to stay open.",
+   "why": [
+    null,
+    "Shipping GPLv2 code in a product requires releasing that product's source.",
+    "GPLv3 is copyleft too, so the combined product would have to be GPL.",
+    "Creative Commons is meant for content, not code, and SA is share-alike."
+   ]
   },
   {
    "id": "1.3-09",
@@ -4798,7 +6063,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Credit means BY. Same license for adaptations means ShareAlike (SA). Commercial use must not be restricted."
+   "hint": "Credit means BY. Same license for adaptations means ShareAlike (SA). Commercial use must not be restricted.",
+   "why": [
+    null,
+    "NC forbids commercial use, and ND forbids adaptations.",
+    "ND (no derivatives) forbids adaptations.",
+    "NC forbids commercial use, and it doesn't require share-alike."
+   ]
   },
   {
    "id": "1.4-13",
@@ -4817,7 +6088,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Most search engines have an operator that limits results to one domain, and quotes match an exact phrase."
+   "hint": "Most search engines have an operator that limits results to one domain, and quotes match an exact phrase.",
+   "why": [
+    null,
+    "A minus sign excludes a term, and without site: it isn't a domain filter.",
+    "OR widens the search, and site needs a colon: site:lpi.org.",
+    "That isn't search operator syntax; the operator is site:lpi.org."
+   ]
   },
   {
    "id": "1.4-14",
@@ -4836,7 +6113,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You bring the code and the provider runs the platform underneath it."
+   "hint": "You bring the code and the provider runs the platform underneath it.",
+   "why": [
+    null,
+    "With IaaS you get VMs and patch the OS yourself.",
+    "SaaS is a finished app; here the developer brings their own code.",
+    "On-premises means you run your own servers."
+   ]
   },
   {
    "id": "1.4-15",
@@ -4855,7 +6138,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You need a whole second operating system running on the same hardware."
+   "hint": "You need a whole second operating system running on the same hardware.",
+   "why": [
+    null,
+    "A terminal window only runs another shell on the same OS.",
+    "Samba shares files; it doesn't run an OS.",
+    "A virtual console is another login to the same Linux system."
+   ]
   },
   {
    "id": "1.4-16",
@@ -4874,7 +6163,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Private mode changes what's stored on your device, not what travels over the network."
+   "hint": "Private mode changes what's stored on your device, not what travels over the network.",
+   "why": [
+    null,
+    "Private mode does keep history off the local computer.",
+    "Private mode deletes its cookies when the window closes.",
+    "Private mode doesn't save form entries."
+   ]
   },
   {
    "id": "1.4-17",
@@ -4893,7 +6188,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "A second factor is something you have, not another thing you know."
+   "hint": "A second factor is something you have, not another thing you know.",
+   "why": [
+    null,
+    "That's still one factor, something you know.",
+    "That's another thing you know, so it's the same factor.",
+    "That only stores the same password; it adds no factor."
+   ]
   },
   {
    "id": "1.4-18",
@@ -4912,7 +6213,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "HTTPS protects the connection, not the file once it's stored. Protect the file itself."
+   "hint": "HTTPS protects the connection, not the file once it's stored. Protect the file itself.",
+   "why": [
+    null,
+    "HTTPS protects the trip to the server, but servers still store the file readable.",
+    "A reminder encrypts nothing and gives away a clue.",
+    "gzip compresses but doesn't encrypt; anyone can gunzip it."
+   ]
   },
   {
    "id": "2.1-19",
@@ -4932,7 +6239,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Braces end the variable name, single quotes stop expansion, and plain $name expands. Work through the three words one by one."
+   "hint": "Braces end the variable name, single quotes stop expansion, and plain $name expands. Work through the three words one by one.",
+   "why": [
+    null,
+    "Single quotes stop expansion, so '$name' prints literally.",
+    "${name} marks where the variable name ends, so it expands to Linux.",
+    "Double quotes still expand ${name}."
+   ]
   },
   {
    "id": "2.1-20",
@@ -4952,7 +6265,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "type reports how Bash will interpret a name. The word 'aliased' tells you a shortcut is involved."
+   "hint": "type reports how Bash will interpret a name. The word 'aliased' tells you a shortcut is involved.",
+   "why": [
+    null,
+    "type would say 'is a shell builtin' for that.",
+    "An alias isn't a function, and ls is installed.",
+    "The alias exists so you don't have to type it."
+   ]
   },
   {
    "id": "2.1-21",
@@ -4973,7 +6292,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "$9 is a positional parameter, and here it's empty. Which quoting stops $ from expanding?"
+   "hint": "$9 is a positional parameter, and here it's empty. Which quoting stops $ from expanding?",
+   "why": [
+    null,
+    null,
+    "Inside double quotes $9 expands to the empty ninth parameter.",
+    "Unquoted, $9 still expands to nothing.",
+    "${9} is the ninth positional parameter, which is empty."
+   ]
   },
   {
    "id": "2.1-22",
@@ -4993,7 +6319,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "PATH is searched from left to right, and the first match wins."
+   "hint": "PATH is searched from left to right, and the first match wins.",
+   "why": [
+    null,
+    "/usr/local/bin comes first in PATH, so it wins.",
+    "The shell runs only the first match it finds.",
+    "./ is only needed for directories not in PATH."
+   ]
   },
   {
    "id": "2.1-23",
@@ -5012,7 +6344,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "! followed by the start of a command searches back through history."
+   "hint": "! followed by the start of a command searches back through history.",
+   "why": [
+    null,
+    "!! reruns the last command and appends ssh to it.",
+    "history takes a count, not a search word.",
+    "!-n needs a number: it means n commands back."
+   ]
   },
   {
    "id": "2.1-24",
@@ -5032,7 +6370,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "! followed by a number reruns that history entry. What do !! and !-1 refer to?"
+   "hint": "! followed by a number reruns that history entry. What do !! and !-1 refer to?",
+   "why": [
+    null,
+    "!! reruns the previous command, history | tail -3.",
+    "!-1 is the same as !!, the previous command.",
+    "That lists the last 101 history entries."
+   ]
   },
   {
    "id": "2.1-25",
@@ -5067,7 +6411,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "-e makes echo interpret backslash escapes. What do \\t and \\n become?"
+   "hint": "-e makes echo interpret backslash escapes. What do \\t and \\n become?",
+   "why": [
+    null,
+    "-e turns on backslash escapes, so \\t and \\n are interpreted.",
+    "\\t is a tab, not a newline.",
+    "\\n is a newline, so c goes on a second line."
+   ]
   },
   {
    "id": "2.1-27",
@@ -5087,7 +6437,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Unquoted values are split into words, and echo joins words with single spaces. Quotes keep the value whole."
+   "hint": "Unquoted values are split into words, and echo joins words with single spaces. Quotes keep the value whole.",
+   "why": [
+    null,
+    "Unquoted, $msg is split into words, and echo joins them with one space.",
+    "Double quotes keep the spaces, so the second line is unchanged.",
+    "It's the reverse: quoting keeps the spaces."
+   ]
   },
   {
    "id": "2.2-13",
@@ -5107,7 +6463,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Two pages share the name crontab. Which section number is for file formats?"
+   "hint": "Two pages share the name crontab. Which section number is for file formats?",
+   "why": [
+    null,
+    "Without a section, man opens the first match, crontab(1), the command.",
+    "Section 1 documents the crontab command, not the file format.",
+    "whatis prints one-line summaries, not the documentation."
+   ]
   },
   {
    "id": "2.2-14",
@@ -5126,7 +6488,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "info's navigation keys are the first letters of next, previous and up."
+   "hint": "info's navigation keys are the first letters of next, previous and up.",
+   "why": [
+    null,
+    "p moves to the previous node.",
+    "u moves up to the parent node.",
+    "q quits info."
+   ]
   },
   {
    "id": "2.2-15",
@@ -5145,7 +6513,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "locate is case-sensitive by default. Which option ignores case?"
+   "hint": "locate is case-sensitive by default. Which option ignores case?",
+   "why": [
+    null,
+    "Without -i, locate is case-sensitive.",
+    "That looks for a path named readme in the current directory.",
+    "whatis searches man page names, not files."
+   ]
   },
   {
    "id": "2.2-16",
@@ -5165,7 +6539,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "In a SYNOPSIS, square brackets mean optional and ... means 'can repeat'."
+   "hint": "In a SYNOPSIS, square brackets mean optional and ... means 'can repeat'.",
+   "why": [
+    null,
+    "Square brackets mean optional, and ... means it can repeat.",
+    "SOURCE... means you can list several sources.",
+    "DIRECTORY isn't in brackets, so it's required."
+   ]
   },
   {
    "id": "2.2-17",
@@ -5184,7 +6564,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Packages put extra documentation under /usr/share, in a folder named after the package."
+   "hint": "Packages put extra documentation under /usr/share, in a folder named after the package.",
+   "why": [
+    null,
+    "/etc holds configuration, not documentation.",
+    "man -k searches man page descriptions, not /usr/share/doc.",
+    "/usr/local is for software installed outside the package manager."
+   ]
   },
   {
    "id": "2.2-18",
@@ -5203,7 +6589,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "When a man page lists several spellings separated by commas, they're interchangeable."
+   "hint": "When a man page lists several spellings separated by commas, they're interchangeable.",
+   "why": [
+    null,
+    "The commas list alternatives; any one works.",
+    "They're listed together because they're the same option.",
+    "No =VALUE is shown, so it takes no argument."
+   ]
   },
   {
    "id": "2.3-13",
@@ -5223,7 +6615,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Walk it step by step: two ..s go up twice, and . means stay where you are."
+   "hint": "Walk it step by step: two ..s go up twice, and . means stay where you are.",
+   "why": [
+    null,
+    "There are two ../ steps, which go up past projects.",
+    "Two ../ from projects/web lands in /home/carol, not /home.",
+    "../ goes up a level; it doesn't stay put."
+   ]
   },
   {
    "id": "2.3-14",
@@ -5242,7 +6640,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "-a shows everything, including . and .. themselves. Is there an 'almost all' option?"
+   "hint": "-a shows everything, including . and .. themselves. Is there an 'almost all' option?",
+   "why": [
+    null,
+    "-a includes . and .. too.",
+    "-l is long format and still hides dotfiles.",
+    "-d lists the directory itself, not its contents."
+   ]
   },
   {
    "id": "2.3-15",
@@ -5262,7 +6666,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Read the first character of each line, not the size column."
+   "hint": "Read the first character of each line, not the size column.",
+   "why": [
+    null,
+    "Linux doesn't use extensions to mark directories.",
+    "Right file but wrong reason; files can be 4096 bytes too.",
+    "Read permission says nothing about file type."
+   ]
   },
   {
    "id": "2.3-16",
@@ -5281,7 +6691,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Find the ls option that sorts by size. -t sorts by time."
+   "hint": "Find the ls option that sorts by size. -t sorts by time.",
+   "why": [
+    null,
+    "-t sorts by modification time, not size.",
+    "-r only reverses the order, which is by name here.",
+    "-R lists subdirectories recursively."
+   ]
   },
   {
    "id": "2.3-17",
@@ -5302,7 +6718,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "From /home/tom/music, .. is /home/tom. And what does ~ mean for tom?"
+   "hint": "From /home/tom/music, .. is /home/tom. And what does ~ mean for tom?",
+   "why": [
+    null,
+    null,
+    "That's absolute, starting from /, not from home.",
+    "That would be /home/tom/music/docs/cv.pdf.",
+    "That goes up to /home, giving /home/docs/cv.pdf."
+   ]
   },
   {
    "id": "2.3-18",
@@ -5322,7 +6745,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "ls -R prints a heading for every directory it enters. Which names get their own section?"
+   "hint": "ls -R prints a heading for every directory it enters. Which names get their own section?",
+   "why": [
+    null,
+    "README has no listing of its own, so it isn't a directory.",
+    "main.py is under projects/app; README is in projects.",
+    "Only app gets its own section, so there's one subdirectory."
+   ]
   },
   {
    "id": "2.4-13",
@@ -5342,7 +6771,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "With several sources, mv's last argument must be a directory."
+   "hint": "With several sources, mv's last argument must be a directory.",
+   "why": [
+    null,
+    "With several sources, mv moves all of them into the last argument.",
+    "mv moves the files; it doesn't copy them.",
+    "mv accepts many sources when the last one is a directory."
+   ]
   },
   {
    "id": "2.4-14",
@@ -5362,7 +6797,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "The first cp target doesn't exist yet. What does the trailing slash demand in the second command?"
+   "hint": "The first cp target doesn't exist yet. What does the trailing slash demand in the second command?",
+   "why": [
+    null,
+    "cp never creates directories; a new name becomes a file.",
+    "cp creates the destination file if it doesn't exist.",
+    "A trailing / requires backup to be a directory, so it fails."
+   ]
   },
   {
    "id": "2.4-15",
@@ -5381,7 +6822,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "The digit range covers one character right after 'data', and globs are case-sensitive."
+   "hint": "The digit range covers one character right after 'data', and globs are case-sensitive.",
+   "why": [
+    null,
+    "* after the digit matches more characters, so data10.csv matches too.",
+    "Data3.csv starts with a capital D, so it doesn't match.",
+    "Globs are case-sensitive, so Data3.csv is left out."
+   ]
   },
   {
    "id": "2.4-16",
@@ -5400,7 +6847,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Combine recursion with the option that asks before each removal."
+   "hint": "Combine recursion with the option that asks before each removal.",
+   "why": [
+    null,
+    "-f forces removal and never asks.",
+    "rmdir only removes empty directories and has no -i.",
+    "Without -r, rm refuses to remove a directory."
+   ]
   },
   {
    "id": "2.4-17",
@@ -5420,7 +6873,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Without -p, mkdir creates only the last directory in the path."
+   "hint": "Without -p, mkdir creates only the last directory in the path.",
+   "why": [
+    null,
+    "That needs mkdir -p.",
+    "mkdir never changes the path you gave it.",
+    "mkdir fails without creating anything."
+   ]
   },
   {
    "id": "2.4-18",
@@ -5439,7 +6898,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Does * match names that start with a dot?"
+   "hint": "Does * match names that start with a dot?",
+   "why": [
+    null,
+    "* doesn't match names starting with a dot.",
+    "* matches app.conf too.",
+    "-r is only needed for directories."
+   ]
   },
   {
    "id": "3.1-13",
@@ -5458,7 +6923,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Use the same compression letter as when it was created, but extract instead of create."
+   "hint": "Use the same compression letter as when it was created, but extract instead of create.",
+   "why": [
+    null,
+    "-c creates an archive and would overwrite the backup.",
+    "gunzip only decompresses; it leaves a .tar and doesn't extract.",
+    "-J is xz; this archive is gzip, so use -z."
+   ]
   },
   {
    "id": "3.1-14",
@@ -5479,7 +6950,14 @@
    ],
    "type": "multi",
    "level": 2,
-   "hint": "One answer uses tar with a compression letter, and the other uses a format that archives and compresses in one step."
+   "hint": "One answer uses tar with a compression letter, and the other uses a format that archives and compresses in one step.",
+   "why": [
+    null,
+    null,
+    "That compresses each file separately; it makes no single archive.",
+    "-t lists an archive; it doesn't create one.",
+    "gzip can't compress a directory."
+   ]
   },
   {
    "id": "3.1-15",
@@ -5499,7 +6977,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "The paths are stored as relative paths. Where does tar extract them?"
+   "hint": "The paths are stored as relative paths. Where does tar extract them?",
+   "why": [
+    null,
+    "tar strips the leading /, so paths are relative to where you run it.",
+    "tar keeps the directory path stored in the archive.",
+    "tar doesn't make a directory named after the archive."
+   ]
   },
   {
    "id": "3.1-16",
@@ -5535,7 +7019,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "For .tar.xz you need tar's extract option plus the xz letter, which is uppercase."
+   "hint": "For .tar.xz you need tar's extract option plus the xz letter, which is uppercase.",
+   "why": [
+    null,
+    "Lowercase -j is bzip2; xz is uppercase -J.",
+    "unxz only decompresses to a .tar; it doesn't extract the files.",
+    "-c creates an archive instead of extracting."
+   ]
   },
   {
    "id": "3.1-18",
@@ -5554,7 +7044,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "unzip has a 'list' option. Be careful: zip -l does something else."
+   "hint": "unzip has a 'list' option. Be careful: zip -l does something else.",
+   "why": [
+    null,
+    "zip -l converts line endings; it doesn't list contents.",
+    "tar doesn't read zip archives.",
+    "-x excludes files while extracting."
+   ]
   },
   {
    "id": "3.2-19",
@@ -5574,7 +7070,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "-f1,7 keeps two fields. What does cut put between them?"
+   "hint": "-f1,7 keeps two fields. What does cut put between them?",
+   "why": [
+    null,
+    "cut keeps the delimiter between the fields it prints.",
+    "That would be -f1,2.",
+    "Field 7 is the shell, and field 1 is the username."
+   ]
   },
   {
    "id": "3.2-20",
@@ -5593,7 +7095,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Combine grep's ignore-case option with its count option."
+   "hint": "Combine grep's ignore-case option with its count option.",
+   "why": [
+    null,
+    "wc -w counts words, not lines.",
+    "-v counts lines that don't match, and it's case-sensitive.",
+    "wc treats error as a file name; it doesn't search."
+   ]
   },
   {
    "id": "3.2-21",
@@ -5614,7 +7122,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "The whole line, from ^ to $, must be one or more digits."
+   "hint": "The whole line, from ^ to $, must be one or more digits.",
+   "why": [
+    null,
+    null,
+    "A space isn't a digit.",
+    "$ requires the line to end after the digits.",
+    "+ needs at least one digit."
+   ]
   },
   {
    "id": "3.2-22",
@@ -5634,7 +7149,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Redirections are applied left to right. Where is stdout pointing when 2>&1 runs?"
+   "hint": "Redirections are applied left to right. Where is stdout pointing when 2>&1 runs?",
+   "why": [
+    null,
+    "2>&1 runs first, while stdout is still the terminal.",
+    "f goes to out.txt because of > out.txt.",
+    "stdout is redirected to out.txt, so f isn't shown."
+   ]
   },
   {
    "id": "3.2-23",
@@ -5653,7 +7174,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "First keep the first five lines, then take the last of those."
+   "hint": "First keep the first five lines, then take the last of those.",
+   "why": [
+    null,
+    "That's the fifth line from the end.",
+    "That prints line 1.",
+    "cut selects field 5 of every line, not line 5."
+   ]
   },
   {
    "id": "3.2-24",
@@ -5672,7 +7199,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You need a field separator, a key field and numeric comparison."
+   "hint": "You need a field separator, a key field and numeric comparison.",
+   "why": [
+    null,
+    "Without -t:, fields split on spaces, and without -n it sorts as text.",
+    "That sorts on the start of each line, the username.",
+    "That prints only the sorted UIDs, not whole lines."
+   ]
   },
   {
    "id": "3.2-25",
@@ -5694,7 +7227,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "The group allows either word, ? makes the s optional, and the anchors require the whole line to match."
+   "hint": "The group allows either word, ? makes the s optional, and the anchors require the whole line to match.",
+   "why": [
+    null,
+    null,
+    null,
+    "The pattern allows only one of the two words.",
+    "s? allows at most one s."
+   ]
   },
   {
    "id": "3.2-26",
@@ -5713,7 +7253,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "In less, lowercase and uppercase g jump to opposite ends of the file."
+   "hint": "In less, lowercase and uppercase g jump to opposite ends of the file.",
+   "why": [
+    null,
+    "Lowercase g jumps to the beginning.",
+    "q quits less.",
+    "/ starts a forward search."
+   ]
   },
   {
    "id": "3.2-27",
@@ -5733,7 +7279,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "wc's default output order is lines, words, bytes."
+   "hint": "wc's default output order is lines, words, bytes.",
+   "why": [
+    null,
+    "Lines come first: 12.",
+    "Bytes come third: 512.",
+    "That's wc -L, which isn't in the default output."
+   ]
   },
   {
    "id": "3.3-25",
@@ -5753,7 +7305,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "The shell removes the quotes but keeps 'a b' as one argument."
+   "hint": "The shell removes the quotes but keeps 'a b' as one argument.",
+   "why": [
+    null,
+    "The quotes make \"a b\" a single argument.",
+    "c is a second argument.",
+    "$# counts arguments, and there are two."
+   ]
   },
   {
    "id": "3.3-26",
@@ -5773,7 +7331,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "-f tests for a regular file and -d for a directory. Which one is /etc?"
+   "hint": "-f tests for a regular file and -d for a directory. Which one is /etc?",
+   "why": [
+    null,
+    "-f is true only for regular files, and /etc is a directory.",
+    "-d /etc is true.",
+    "if/elif runs only the first true branch."
+   ]
   },
   {
    "id": "3.3-27",
@@ -5793,7 +7357,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "ls fails here. && runs only after success, and || runs only after failure."
+   "hint": "ls fails here. && runs only after success, and || runs only after failure.",
+   "why": [
+    null,
+    "ls fails, so && skips echo found.",
+    "echo found never runs.",
+    "|| runs echo missing after the failure, and only the error message is hidden."
+   ]
   },
   {
    "id": "3.3-28",
@@ -5813,7 +7383,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "$? always holds the status of the most recent command, and that includes echo."
+   "hint": "$? always holds the status of the most recent command, and that includes echo.",
+   "why": [
+    null,
+    "The second $? is the status of the first echo, which succeeded.",
+    "false exits with 1.",
+    "It's the other way round: 1 from false, then 0 from echo."
+   ]
   },
   {
    "id": "3.3-29",
@@ -5833,7 +7409,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "String comparison with = is exact, and case counts."
+   "hint": "String comparison with = is exact, and case counts.",
+   "why": [
+    null,
+    "= compares exactly, and Yes isn't yes.",
+    "The else branch prints stop.",
+    "The variable is quoted, so the test is valid."
+   ]
   },
   {
    "id": "3.3-30",
@@ -5853,7 +7435,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "$( ) captures a command's output. Here the output is a count from wc -l."
+   "hint": "$( ) captures a command's output. Here the output is a count from wc -l.",
+   "why": [
+    null,
+    "$( ) runs the command; it doesn't store the text.",
+    "The exit status is in $?, not in command substitution.",
+    "$( ) captures standard output."
+   ]
   },
   {
    "id": "3.3-31",
@@ -5872,7 +7460,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "u means the owner. Add only the permission you need."
+   "hint": "u means the owner. Add only the permission you need.",
+   "why": [
+    null,
+    "Without u, +x adds execute for everyone (subject to umask).",
+    "777 gives everyone everything.",
+    "o is others, not the owner."
+   ]
   },
   {
    "id": "3.3-32",
@@ -5892,7 +7486,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "$@ is all the arguments, but not the script name."
+   "hint": "$@ is all the arguments, but not the script name.",
+   "why": [
+    null,
+    "That would be $#.",
+    "$@ doesn't include $0.",
+    "That would be $1."
+   ]
   },
   {
    "id": "3.3-33",
@@ -5911,7 +7511,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "vi commands often double a letter to act on the whole line."
+   "hint": "vi commands often double a letter to act on the whole line.",
+   "why": [
+    null,
+    "x deletes the character under the cursor.",
+    "D deletes from the cursor to the end of the line.",
+    "yy copies (yanks) the line."
+   ]
   },
   {
    "id": "3.3-34",
@@ -5930,7 +7536,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Colon commands work only in command mode. How do you get out of insert mode first?"
+   "hint": "Colon commands work only in command mode. How do you get out of insert mode first?",
+   "why": [
+    null,
+    "In insert mode, that just types the characters into the file.",
+    "Ctrl+X exits nano, not vi.",
+    ":wq saves the changes."
+   ]
   },
   {
    "id": "3.3-35",
@@ -5949,7 +7561,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "When you name the interpreter yourself, does the kernel read the shebang?"
+   "hint": "When you name the interpreter yourself, does the kernel read the shebang?",
+   "why": [
+    null,
+    "The shebang only matters when the file is run directly.",
+    "That error comes from a wrong shebang path when running ./script.sh.",
+    "Only sh runs it."
+   ]
   },
   {
    "id": "3.3-36",
@@ -5969,7 +7587,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "When a glob matches nothing, Bash leaves the pattern as it is."
+   "hint": "When a glob matches nothing, Bash leaves the pattern as it is.",
+   "why": [
+    null,
+    "An unmatched glob stays as literal text, so the loop runs once.",
+    "*.txt doesn't match notes.md.",
+    "for just loops over the literal word *.txt."
+   ]
   },
   {
    "id": "4.1-07",
@@ -5988,7 +7612,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Choose an OS by the software you must run."
+   "hint": "Choose an OS by the software you must run.",
+   "why": [
+    null,
+    "Saving on licenses doesn't help if the required software won't run.",
+    "The software is Windows-only, and Unix roots don't help that.",
+    "New features don't make Windows software run."
+   ]
   },
   {
    "id": "4.1-08",
@@ -6007,7 +7637,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Fresh features suit workstations, and long support suits servers."
+   "hint": "Fresh features suit workstations, and long support suits servers.",
+   "why": [
+    null,
+    "That's backwards: betas are the least stable.",
+    "Betas in production put stability at risk.",
+    "That's backwards; servers need LTS stability."
+   ]
   },
   {
    "id": "4.1-09",
@@ -6026,7 +7662,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Servers are usually managed remotely over SSH. What would a desktop add?"
+   "hint": "Servers are usually managed remotely over SSH. What would a desktop add?",
+   "why": [
+    null,
+    "Many servers have basic graphics; it's a choice.",
+    "The GPL doesn't restrict how you use software.",
+    "Nearly every distribution offers desktops."
+   ]
   },
   {
    "id": "4.2-13",
@@ -6046,7 +7688,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "RM=1 marks removable media. Check the MOUNTPOINTS column for each partition."
+   "hint": "RM=1 marks removable media. Check the MOUNTPOINTS column for each partition.",
+   "why": [
+    null,
+    "sda1, mounted at /boot/efi, is the EFI partition.",
+    "/ is on sda2.",
+    "sda has two partitions, sda1 and sda2."
+   ]
   },
   {
    "id": "4.2-14",
@@ -6078,7 +7726,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "There's an ls-style command for each bus. Which bus does a webcam plug into?"
+   "hint": "There's an ls-style command for each bus. Which bus does a webcam plug into?",
+   "why": [
+    null,
+    "lspci lists PCI devices.",
+    "lsblk lists block devices such as disks.",
+    "lscpu shows CPU details."
+   ]
   },
   {
    "id": "4.2-16",
@@ -6097,7 +7751,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Which storage keeps its data with the power off?"
+   "hint": "Which storage keeps its data with the power off?",
+   "why": [
+    null,
+    "RAM is far faster than any disk.",
+    "RAM is volatile; the OS is stored on disk.",
+    "Swap is slow, so it's used only when RAM runs short."
+   ]
   },
   {
    "id": "4.2-17",
@@ -6116,7 +7776,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Open programs live in memory. When memory runs out, the system swaps."
+   "hint": "Open programs live in memory. When memory runs out, the system swaps.",
+   "why": [
+    null,
+    "Power doesn't limit how many programs fit in memory.",
+    "An optical drive is removable storage, not memory.",
+    "USB ports are for peripherals."
+   ]
   },
   {
    "id": "4.2-18",
@@ -6135,7 +7801,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "No interface appears until the kernel can drive the hardware."
+   "hint": "No interface appears until the kernel can drive the hardware.",
+   "why": [
+    null,
+    "Network cards work without any GUI.",
+    "DNS affects name lookups, not whether the interface exists.",
+    "/etc/hosts maps names to IPs; it doesn't list hardware."
+   ]
   },
   {
    "id": "4.3-19",
@@ -6155,7 +7827,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Read the column headings: %CPU, %MEM and TTY. Who owns PID 1?"
+   "hint": "Read the column headings: %CPU, %MEM and TTY. Who owns PID 1?",
+   "why": [
+    null,
+    "The USER column for PID 1 is root.",
+    "45.2 is %CPU; %MEM is 3.1.",
+    "init is at 0.0% CPU."
+   ]
   },
   {
    "id": "4.3-20",
@@ -6175,7 +7853,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Linux uses free RAM as cache. Which column includes memory that can be reclaimed?"
+   "hint": "Linux uses free RAM as cache. Which column includes memory that can be reclaimed?",
+   "why": [
+    null,
+    "free ignores cache that the kernel can reclaim.",
+    "That's total RAM, including what's in use.",
+    "That's swap, the thing you want to avoid."
+   ]
   },
   {
    "id": "4.3-21",
@@ -6194,7 +7878,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Look in the kernel's virtual filesystem for a file named after memory info."
+   "hint": "Look in the kernel's virtual filesystem for a file named after memory info.",
+   "why": [
+    null,
+    "/etc holds configuration, not live kernel data.",
+    "/var/log holds log files.",
+    "/boot holds the kernel and bootloader files."
+   ]
   },
   {
    "id": "4.3-22",
@@ -6213,7 +7903,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "The kernel logs new hardware to its ring buffer."
+   "hint": "The kernel logs new hardware to its ring buffer.",
+   "why": [
+    null,
+    "fstab lists boot-time mounts, not newly detected devices.",
+    "/boot holds kernel files.",
+    "free shows memory use."
+   ]
   },
   {
    "id": "4.3-23",
@@ -6232,7 +7928,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Boot-time mounts are configured under /etc, in a file named after the 'filesystem table'."
+   "hint": "Boot-time mounts are configured under /etc, in a file named after the 'filesystem table'.",
+   "why": [
+    null,
+    "/proc/mounts shows what's mounted now.",
+    "/var/log holds logs; fstab is configuration.",
+    "fstab lives in /etc, like other configuration."
+   ]
   },
   {
    "id": "4.3-24",
@@ -6251,7 +7953,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Configuration lives under /etc, in a directory named after the service."
+   "hint": "Configuration lives under /etc, in a directory named after the service.",
+   "why": [
+    null,
+    "Logs go under /var/log; configuration goes in /etc.",
+    "/proc is the kernel's virtual filesystem.",
+    "/boot holds boot files only."
+   ]
   },
   {
    "id": "4.3-25",
@@ -6271,7 +7979,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Read each line: 'Failed password for root from …'."
+   "hint": "Read each line: 'Failed password for root from …'.",
+   "why": [
+    null,
+    "Both lines say Failed password.",
+    "These are failed logins, not crashes.",
+    "A password change would be logged by passwd, not sshd."
+   ]
   },
   {
    "id": "4.3-26",
@@ -6290,7 +8004,13 @@
    ],
    "type": "single",
    "level": 1,
-   "hint": "Think of the first letter of the action you want: ending a process."
+   "hint": "Think of the first letter of the action you want: ending a process.",
+   "why": [
+    null,
+    "q quits top.",
+    "M sorts by memory use.",
+    "P sorts by CPU use."
+   ]
   },
   {
    "id": "4.3-27",
@@ -6309,7 +8029,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Which stream does a plain > redirect? Errors use a different stream."
+   "hint": "Which stream does a plain > redirect? Errors use a different stream.",
+   "why": [
+    null,
+    "That hides the errors and shows the normal output.",
+    "&> hides both output and errors.",
+    "You can't pipe into a file; it isn't a command."
+   ]
   },
   {
    "id": "4.4-13",
@@ -6329,7 +8055,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "inet is the IPv4 address with its prefix, link/ether is the MAC, and fe80:: is link-local."
+   "hint": "inet is the IPv4 address with its prefix, link/ether is the MAC, and fe80:: is link-local.",
+   "why": [
+    null,
+    "10.0.2.255 is the broadcast address; the MAC is after link/ether.",
+    "The flags show UP and state UP.",
+    "fe80:: is link-local, so it only works on the local link."
+   ]
   },
   {
    "id": "4.4-14",
@@ -6349,7 +8081,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Is 8.8.8.8 inside 192.168.1.0/24? If not, the default route applies."
+   "hint": "Is 8.8.8.8 inside 192.168.1.0/24? If not, the default route applies.",
+   "why": [
+    null,
+    "That's this host's own address.",
+    "8.8.8.8 isn't in 192.168.1.0/24, so it uses the default route.",
+    "The default route covers every other destination."
+   ]
   },
   {
    "id": "4.4-15",
@@ -6368,7 +8106,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "IP addresses work but names fail. Which layer turns names into addresses?"
+   "hint": "IP addresses work but names fail. Which layer turns names into addresses?",
+   "why": [
+    null,
+    "Pinging 8.8.8.8 works, so routing is fine.",
+    "The IP ping works, so the link is up.",
+    "8.8.8.8 answers pings; the failure is the name lookup."
+   ]
   },
   {
    "id": "4.4-16",
@@ -6388,7 +8132,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "/etc/hosts is usually checked before DNS, and every name on a line maps to that line's address."
+   "hint": "/etc/hosts is usually checked before DNS, and every name on a line maps to that line's address.",
+   "why": [
+    null,
+    "The usual order checks /etc/hosts first.",
+    "intranet maps to 10.0.0.5; only localhost maps to 127.0.0.1.",
+    "intranet is listed as an alias, so it resolves."
+   ]
   },
   {
    "id": "4.4-17",
@@ -6407,7 +8157,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "You need TCP, listening sockets, numeric ports and the owning process."
+   "hint": "You need TCP, listening sockets, numeric ports and the owning process.",
+   "why": [
+    null,
+    "That shows the routing table, not listening ports.",
+    "host does DNS lookups.",
+    "ping uses ICMP, which has no ports; -p sets a padding pattern."
+   ]
   },
   {
    "id": "4.4-18",
@@ -6428,7 +8184,14 @@
    ],
    "type": "multi",
    "level": 3,
-   "hint": "In a /24, the first address is the network, the last is broadcast, and each octet tops out at 255."
+   "hint": "In a /24, the first address is the network, the last is broadcast, and each octet tops out at 255.",
+   "why": [
+    null,
+    null,
+    "That's the broadcast address of the /24.",
+    "An octet can't be larger than 255.",
+    "That's on a different /24 network."
+   ]
   },
   {
    "id": "5.1-13",
@@ -6448,7 +8211,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Look at the UID range and the shell field."
+   "hint": "Look at the UID range and the shell field.",
+   "why": [
+    null,
+    "The shell is nologin, and UID 33 is in the system range.",
+    "Only UID 0 is root.",
+    "The x means the hash is in /etc/shadow."
+   ]
   },
   {
    "id": "5.1-14",
@@ -6468,7 +8237,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "gid= is the primary group. On Ubuntu, which group grants sudo?"
+   "hint": "gid= is the primary group. On Ubuntu, which group grants sudo?",
+   "why": [
+    null,
+    "root has UID 0; carol has 1001.",
+    "gid= shows the primary group, carol.",
+    "27 is the GID of the sudo group."
+   ]
   },
   {
    "id": "5.1-15",
@@ -6488,7 +8263,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "tty means a local console, pts means a pseudo-terminal, and a host in parentheses means a remote login."
+   "hint": "tty means a local console, pts means a pseudo-terminal, and a host in parentheses means a remote login.",
+   "why": [
+    null,
+    "tom is on pts/0 with a remote IP.",
+    "It's the reverse: tty2 is a local console.",
+    "who lists only current sessions."
+   ]
   },
   {
    "id": "5.1-16",
@@ -6507,7 +8288,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Which sudo option opens root's login shell? The others list rights, run one command, or repeat history."
+   "hint": "Which sudo option opens root's login shell? The others list rights, run one command, or repeat history.",
+   "why": [
+    null,
+    "-l lists what you're allowed to run.",
+    "su asks for root's password and runs one command.",
+    "That reruns your last command with sudo."
+   ]
   },
   {
    "id": "5.1-17",
@@ -6526,7 +8313,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "who and w show only current sessions. You need the login history."
+   "hint": "who and w show only current sessions. You need the login history.",
+   "why": [
+    null,
+    "who shows only current sessions.",
+    "w shows only users logged in now.",
+    "id shows UID and groups, not logins."
+   ]
   },
   {
    "id": "5.1-18",
@@ -6545,7 +8338,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Think about least privilege and accountability."
+   "hint": "Think about least privilege and accountability.",
+   "why": [
+    null,
+    "root can run GUI programs; it's just risky.",
+    "sudo adds no speed.",
+    "root's home is /root."
+   ]
   },
   {
    "id": "5.2-13",
@@ -6564,7 +8363,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "-G alone replaces the whole list of supplementary groups. Which option appends instead?"
+   "hint": "-G alone replaces the whole list of supplementary groups. Which option appends instead?",
+   "why": [
+    null,
+    "Without -a, -G replaces all her supplementary groups.",
+    "groupadd creates groups; it doesn't add members.",
+    "useradd creates new users, and carol already exists."
+   ]
   },
   {
    "id": "5.2-14",
@@ -6584,7 +8389,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Count the fields after the hash: last change, minimum, maximum, warning…"
+   "hint": "Count the fields after the hash: last change, minimum, maximum, warning…",
+   "why": [
+    null,
+    "The UID is in /etc/passwd, not shadow.",
+    "shadow has no failed-attempt field.",
+    "Field 3 (20000) is the last password change date."
+   ]
   },
   {
    "id": "5.2-15",
@@ -6604,7 +8415,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "x means the hash is stored in another file that only root can read."
+   "hint": "x means the hash is stored in another file that only root can read.",
+   "why": [
+    null,
+    "x is a placeholder pointing to /etc/shadow.",
+    "/etc/group lists groups and members.",
+    "An empty field would mean no password."
+   ]
   },
   {
    "id": "5.2-16",
@@ -6638,7 +8455,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "-c is the comment, -G the supplementary groups and -m the home directory, with the username last."
+   "hint": "-c is the comment, -G the supplementary groups and -m the home directory, with the username last.",
+   "why": [
+    null,
+    "-g sets the primary group, and -c sets the comment.",
+    "-s sets the login shell.",
+    "The username is missing."
+   ]
   },
   {
    "id": "5.2-18",
@@ -6657,7 +8480,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "/etc/skel is copied only when a home directory is created."
+   "hint": "/etc/skel is copied only when a home directory is created.",
+   "why": [
+    null,
+    "/etc/skel is copied only when a home is created.",
+    "root's home was created long before.",
+    "-M means no home directory, so nothing is copied."
+   ]
   },
   {
    "id": "5.3-13",
@@ -6676,7 +8505,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Change only what's named: add w for the group and add r for others."
+   "hint": "Change only what's named: add w for the group and add r for others.",
+   "why": [
+    null,
+    "g+w adds write for the group.",
+    "o+r adds read for others.",
+    "The owner's x isn't touched."
+   ]
   },
   {
    "id": "5.3-14",
@@ -6695,7 +8530,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "rwx = 7, r-x = 5 and --- = 0, in owner, group, others order."
+   "hint": "rwx = 7, r-x = 5 and --- = 0, in owner, group, others order.",
+   "why": [
+    null,
+    "That gives the group nothing and others r-x.",
+    "That gives the owner r-x and the group rwx.",
+    "That gives others r-x."
+   ]
   },
   {
    "id": "5.3-15",
@@ -6715,7 +8556,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "tom gets the group's permissions on the directory. Which bit allows creating files?"
+   "hint": "tom gets the group's permissions on the directory. Which bit allows creating files?",
+   "why": [
+    null,
+    "The group bits are r-x, with no w.",
+    "w on a directory is what allows creating files.",
+    "Any new entry needs write on the directory."
+   ]
   },
   {
    "id": "5.3-16",
@@ -6735,7 +8582,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "An s in the owner's execute position is a special bit. What does it let the program run as?"
+   "hint": "An s in the owner's execute position is a special bit. What does it let the program run as?",
+   "why": [
+    null,
+    "The sticky bit shows as t in the others position.",
+    "A link starts with l.",
+    "A socket starts with s in the first position, not the owner's x."
+   ]
   },
   {
    "id": "5.3-17",
@@ -6770,7 +8623,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "Use symbolic mode to remove only w, and only from group and others."
+   "hint": "Use symbolic mode to remove only w, and only from group and others.",
+   "why": [
+    null,
+    "That also removes all execute bits.",
+    "= sets exactly w, removing r and x.",
+    "u is the owner, not group and others."
+   ]
   },
   {
    "id": "5.4-07",
@@ -6790,7 +8649,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "Compare the inode numbers and the link count."
+   "hint": "Compare the inode numbers and the link count.",
+   "why": [
+    null,
+    "A copy would have its own inode; both show 1311.",
+    "A symlink starts with l and has its own inode.",
+    "The data stays until the last link is removed."
+   ]
   },
   {
    "id": "5.4-08",
@@ -6809,7 +8674,13 @@
    ],
    "type": "single",
    "level": 2,
-   "hint": "chmod's letter for the sticky bit is t."
+   "hint": "chmod's letter for the sticky bit is t.",
+   "why": [
+    null,
+    "+s sets SUID/SGID.",
+    "That adds execute for the owner.",
+    "chown changes ownership, not mode bits."
+   ]
   },
   {
    "id": "5.4-09",
@@ -6829,7 +8700,13 @@
    ],
    "type": "single",
    "level": 3,
-   "hint": "A relative symlink target is resolved from the directory where the link is."
+   "hint": "A relative symlink target is resolved from the directory where the link is.",
+   "why": [
+    null,
+    "Relative targets are resolved from the link's new location.",
+    "mv moves the link as it is.",
+    "Symlinks can be moved like any file."
+   ]
   }
  ]
 }

@@ -249,6 +249,8 @@ def build_web():
     dump("cards.js", "LE_CARDS", deck_cards)
     import sheets
     dump("sheets.js", "LE_SHEETS", sheets.SHEETS)
+    import labs
+    dump("labs.js", "LE_LABS", labs.LABS)
     print("wrote docs/data/bank.js (%d questions) and docs/data/cards.js (%d cards)" % (len(bank["questions"]), len(deck_cards)))
 
 

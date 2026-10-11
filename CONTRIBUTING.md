@@ -31,6 +31,14 @@ F("2.3", "Type the command that prints the current working directory.",
 - Every question needs a hint in `tools/hints.py`, keyed by its ID (for example `"3.2-07"`). A hint points to the
   right idea without giving the answer away. The build fails without one.
 
+## Labs
+
+Labs live in `tools/labs.py`. Each task has `text`, `hint`, `solution` (one command per line) and a `check` that
+looks at the machine's state, such as a file's mode, a user's groups or the working directory, rather than at
+what was typed. `node tools/test_shell.js` runs every solution and fails if a task is already complete at the
+start or isn't complete afterwards. If a command is missing from the simulated shell (`docs/js/shell.js`), add it
+there with a test case in `tools/test_shell.js` that compares it with real Bash.
+
 ## Flashcards
 
 Cards live in `tools/cards.py`. `C(...)` adds a card to the Concepts deck and `K(...)` to the Commands & files deck.
@@ -48,6 +56,7 @@ cd tools
 python3 build.py          # writes ../bank.json and ../docs/data/*.js and checks blueprint counts
 sudo python3 verify.py    # runs every shell check (creates test users, so use a throwaway VM or container)
 cd .. && node tools/test_core.js
+node tools/test_shell.js   # lab terminal vs real Bash, and every lab's solutions
 ```
 
 ## Contributor license grant

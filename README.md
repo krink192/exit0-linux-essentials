@@ -100,6 +100,8 @@ with the terminal output.
 | Help | None, as on test day | A hint for every question, plus links to the LPI lesson and matching flashcards |
 | Readiness score | Counts | Doesn't count |
 
+![A lab: tasks on the left, a terminal on the right](docs/screenshots/lab.png)
+
 | Build a study session | Hint when you're stuck | What to read next |
 |---|---|---|
 | ![](docs/screenshots/study.png) | ![](docs/screenshots/study-hint.png) | ![](docs/screenshots/study-feedback.png) |
@@ -108,6 +110,10 @@ with the terminal output.
 
 - **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
   *Apply* or *Analyze* (129, 152 and 79 of them) and each with a written explanation and a hint.
+- **Labs.** 12 hands-on labs in a terminal built into the app: variables and history, navigation, files and
+  globs, archives, grep/sort/cut and redirection, shell scripts (with a nano/vi editor panel), logs, networking,
+  users and groups, permissions, and links. Each task is checked as you type and has a hint and a solution.
+  The Linux system is simulated, so it works offline and on phones, and nothing can break.
 - **Daily review.** Every question you answer comes back on a schedule: a miss returns tomorrow, and each right
   answer pushes it further out (1, 2, 4, 8, then 16 days). Due flashcards are included, so a few minutes a day
   keeps everything fresh.
@@ -143,6 +149,8 @@ with the terminal output.
 - The build checks blueprint counts, duplicates, that every question has a hint, and whether the correct
   answer tends to be the longest option (it is the longest in 14% of single-answer questions, below the 25%
   you'd expect by chance).
+- The lab terminal is tested against real Bash: `node tools/test_shell.js` runs 106 command sequences in both and
+  requires identical output, then runs every lab's solutions to prove each task can be completed.
 - `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams that are
   each checked against the blueprint, and checks that no hint gives away a typed answer.
 - Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing them, checks the
@@ -163,7 +171,9 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
                       docker.yml (container image)
 Dockerfile, docker/   Container image: nginx serving docs/ (compose.yaml for docker compose)
 bank.json             The question bank
-tools/                Questions t1.py–t6.py, hints.py, cards.py, sheets.py, build.py, verify.py, test_core.js
+  js/shell.js         the simulated Linux system used by the labs
+tools/                Questions t1.py–t6.py, hints.py, cards.py, sheets.py, labs.py, build.py, verify.py,
+                      test_core.js, test_shell.js
 ```
 
 ### Releasing

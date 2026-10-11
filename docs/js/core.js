@@ -232,10 +232,11 @@
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
-  function xpInfo(state) {          // 1 XP per answer, +1 when right, 1 per flashcard review
+  function xpInfo(state) {          // 1 XP per answer, +1 when right, 1 per flashcard review, 5 per lab task
     let total = 0;
     for (const id in state.qstats) total += (state.qstats[id].seen || 0) + (state.qstats[id].right || 0);
     for (const id in state.cards) total += state.cards[id].seen || 0;
+    for (const id in state.labs || {}) total += 5 * ((state.labs[id].done || []).length);
     let lv = 0; while (lv + 1 < LEVEL_XP.length && total >= LEVEL_XP[lv + 1]) lv++;
     return { xp: total, level: lv + 1, name: LEVEL_NAMES[lv], floor: LEVEL_XP[lv], next: lv + 1 < LEVEL_XP.length ? LEVEL_XP[lv + 1] : null };
   }
@@ -262,9 +263,11 @@
     ["obj-all", "Full coverage", "Master all 19 objectives.", "weak"],
     ["cards100", "Card shark", "Review 100 flashcards.", "cards"],
     ["cards-all", "Total recall", "Master every flashcard.", "cards"],
+    ["lab1", "Hands on", "Complete a lab in the terminal.", "terminal"],
+    ["lab-all", "Lab graduate", "Complete every lab.", "terminal"],
   ];
   /** Every badge with done/progress. progress = [current, goal] where that makes sense. */
-  function badgeStatus(state, bank, cards) {
+  function badgeStatus(state, bank, cards, labCount) {
     const exams = state.tests.filter(t => t.mode === "test");
     let run = 0, bestRun = 0; exams.forEach(t => { run = t.pct >= TARGET ? run + 1 : 0; bestRun = Math.max(bestRun, run); });
     const streak = longestStreak(state.days, state.settings.goal);
@@ -275,6 +278,7 @@
     let cardSeen = 0; for (const id in state.cards) cardSeen += state.cards[id].seen || 0;
     const cardsMastered = cards.filter(c => state.cards[c.id] && state.cards[c.id].box >= 4).length;
     const reviews = state.tests.filter(t => t.mode === "review").length;
+    const labsDone = Object.values(state.labs || {}).filter(l => l.completedAt).length;
     const p = (n, goal) => ({ done: n >= goal, progress: [Math.min(n, goal), goal] });
     const flag = done => ({ done: !!done });
     const res = {
@@ -284,13 +288,14 @@
       "no-hints": flag(state.tests.some(t => t.mode !== "test" && t.total >= 10 && t.pct >= TARGET && Array.isArray(t.hints) && !t.hints.length)),
       "analyst": p(analyze, 50), "seen-all": p(seen, bank.questions.length), "obj-1": p(mastered, 1), "obj-all": p(mastered, nObj),
       "cards100": p(cardSeen, 100), "cards-all": p(cardsMastered, cards.length),
+      "lab1": p(labsDone, 1), "lab-all": p(labsDone, labCount || 12),
     };
     return BADGES.map(([id, name, desc, icon]) => Object.assign({ id, name, desc, icon, at: (state.badges || {})[id] || null }, res[id]));
   }
   /** Record newly earned badges in state.badges and return them. */
-  function awardBadges(state, bank, cards, now) {
+  function awardBadges(state, bank, cards, now, labCount) {
     state.badges = state.badges || {}; const fresh = [];
-    for (const b of badgeStatus(state, bank, cards)) if (b.done && !state.badges[b.id]) { state.badges[b.id] = now || Date.now(); fresh.push(b); }
+    for (const b of badgeStatus(state, bank, cards, labCount)) if (b.done && !state.badges[b.id]) { state.badges[b.id] = now || Date.now(); fresh.push(b); }
     return fresh;
   }
 
@@ -360,7 +365,7 @@
   // ------------------------------------------------------------- state
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 20, study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
-             tests: [], qstats: {}, cards: {}, days: {}, badges: {}, current: null };
+             tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {

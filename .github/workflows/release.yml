@@ -30,6 +30,8 @@ jobs:
           node-version: "20"
       - name: Test exam logic and question bank
         run: node tools/test_core.js
+      - name: Test the lab shell and labs
+        run: node tools/test_shell.js
 
   windows:
     needs: test

@@ -10,3 +10,5 @@ jobs:
         with:
           node-version: "20"
       - run: node tools/test_core.js
+      - name: Lab shell matches real Bash, and every lab can be completed
+        run: node tools/test_shell.js

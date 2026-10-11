@@ -4,7 +4,7 @@
    the exam runs full-screen without the sidebar. */
 :root {
   --bg: #F6F7F5; --side: #EEF1EE; --surface: #FFFFFF; --sunk: #F0F2EF; --hover: #E7EBE8;
-  --ink: #1A1F1D; --ink-2: #3B4440; --muted: #6A746F; --line: #E0E5E1; --line-2: #CFD6D2;
+  --ink: #1A1F1D; --ink-2: #353D3A; --muted: #5E6863; --line: #E0E5E1; --line-2: #CFD6D2;
   --accent: #0F7B67; --accent-2: #0B6656; --accent-ink: #FFFFFF; --accent-soft: #DDF0EA;
   --warm: #D9711F; --warm-soft: #FCEBDA;
   --good: #1E7A42; --good-soft: #E1F3E7; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #A8620A; --flag-soft: #FBEEDB;
@@ -16,7 +16,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #111413; --side: #151918; --surface: #1A1F1D; --sunk: #202624; --hover: #252C2A;
-    --ink: #E8EDEA; --ink-2: #C4CCC8; --muted: #8E9A95; --line: #29302D; --line-2: #36403C;
+    --ink: #E8EDEA; --ink-2: #CDD5D1; --muted: #A8B3AE; --line: #2F3734; --line-2: #45504B;
     --accent: #3CC4A2; --accent-2: #5BD6B6; --accent-ink: #062018; --accent-soft: #17352E;
     --warm: #F19A4C; --warm-soft: #3A2716;
     --good: #5DCB8A; --good-soft: #15301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
@@ -26,7 +26,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #111413; --side: #151918; --surface: #1A1F1D; --sunk: #202624; --hover: #252C2A;
-  --ink: #E8EDEA; --ink-2: #C4CCC8; --muted: #8E9A95; --line: #29302D; --line-2: #36403C;
+  --ink: #E8EDEA; --ink-2: #CDD5D1; --muted: #A8B3AE; --line: #2F3734; --line-2: #45504B;
   --accent: #3CC4A2; --accent-2: #5BD6B6; --accent-ink: #062018; --accent-soft: #17352E;
   --warm: #F19A4C; --warm-soft: #3A2716;
   --good: #5DCB8A; --good-soft: #15301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
@@ -387,9 +387,10 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .lvl-badge { width: 54px; height: 54px; border-radius: 14px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
   font: 800 1.5rem var(--mono); flex: none; }
 .badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-.badge { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 10px; background: var(--sunk); opacity: .6; }
-.badge svg.i { width: 22px; height: 22px; color: var(--muted); margin-top: 2px; }
-.badge b { display: block; font-size: .9rem; }
+.badge { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 10px; background: var(--sunk); }
+.badge svg.i { width: 22px; height: 22px; color: var(--line-2); margin-top: 2px; }
+.badge b { display: block; font-size: .9rem; color: var(--ink-2); }
+.badge.got b { color: var(--ink); }
 .badge span { font-size: .78rem; color: var(--muted); line-height: 1.35; display: block; }
 .badge.got { opacity: 1; background: var(--accent-soft); }
 .badge.got svg.i { color: var(--accent); }

@@ -317,6 +317,136 @@
     return full.length ? Math.round(full.reduce((n, t) => n + t.pct, 0) / full.length) : null;
   }
 
+  // ------------------------------------------------------------- pass predictor
+  // For each objective, the latest answer to every question you've seen gives a Beta(1 + right, 1 + wrong) posterior for
+  // your accuracy there, so an objective you haven't practised counts as a coin flip until you do. The number you'd get right out of that objective's exam
+  // questions is then beta-binomial, and convolving the 19 objectives gives the exact score distribution for a fresh
+  // 40-question exam. Pass chance = P(score >= PASS_PCT). LPI doesn't publish the raw cutoff (500 on a 200-800 scale),
+  // so 70% is a deliberately cautious stand-in.
+  const PASS_PCT = 70, PASS_MIN_SEEN = 30;
+  function lgamma(x) {                        // Lanczos approximation, |error| < 1e-10 for x > 0
+    const g = 7, c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
+      12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
+    if (x < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * x)) - lgamma(1 - x);
+    x -= 1; let a = c[0]; const t = x + g + 0.5;
+    for (let i = 1; i < g + 2; i++) a += c[i] / (x + i);
+    return 0.5 * Math.log(2 * Math.PI) + (x + 0.5) * Math.log(t) - t + Math.log(a);
+  }
+  const lbeta = (a, b) => lgamma(a) + lgamma(b) - lgamma(a + b);
+  function betaBinomial(n, a, b) {
+    const out = [];
+    for (let k = 0; k <= n; k++) out.push(Math.exp(lgamma(n + 1) - lgamma(k + 1) - lgamma(n - k + 1) + lbeta(k + a, n - k + b) - lbeta(a, b)));
+    return out;
+  }
+  function convolve(p, q) {
+    const out = new Array(p.length + q.length - 1).fill(0);
+    for (let i = 0; i < p.length; i++) for (let j = 0; j < q.length; j++) out[i + j] += p[i] * q[j];
+    return out;
+  }
+  /** Per-objective evidence: right/wrong counts from the latest answer to each question seen. */
+  function passEvidence(bank, qstats) {
+    const ev = {}; let n = 0;
+    for (const o of Object.keys(bank.objectives)) {
+      ev[o] = { right: 0, wrong: 0 };
+      for (const id of bank.byObj[o]) {
+        const s = qstats[id]; if (!s || !s.seen) continue;
+        const ok = s.last == null ? s.right * 2 >= s.seen : s.last;
+        if (ok) ev[o].right++; else ev[o].wrong++;
+      }
+      n += ev[o].right + ev[o].wrong;
+    }
+    return { ev, seen: n };
+  }
+  function scoreDist(bank, ev) {
+    let dist = [1];
+    for (const o of Object.keys(bank.objectives)) {
+      dist = convolve(dist, betaBinomial(bank.objectives[o].weight, 1 + ev[o].right, 1 + ev[o].wrong));
+    }
+    return dist;
+  }
+  function distStats(dist) {
+    const total = dist.length - 1, need = Math.ceil(total * PASS_PCT / 100);
+    let chance = 0, mean = 0, cum = 0, low = null, high = null;
+    dist.forEach((p, k) => {
+      if (k >= need) chance += p; mean += k * p; cum += p;
+      if (low == null && cum >= 0.1) low = k;
+      if (high == null && cum >= 0.9) high = k;
+    });
+    return { chance: Math.max(0, Math.min(1, chance)), mean, low, high, total, need };
+  }
+  /** Estimated chance of passing a fresh exam. chance is null until PASS_MIN_SEEN questions have been answered. */
+  function passPrediction(bank, qstats) {
+    const { ev, seen } = passEvidence(bank, qstats);
+    const base = { seen, minSeen: PASS_MIN_SEEN, passPct: PASS_PCT };
+    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen });
+    const d = distStats(scoreDist(bank, ev));
+    // Where 3 more right answers would raise the pass chance most.
+    const focus = Object.keys(bank.objectives).map(o => {
+      const ev2 = Object.assign({}, ev, { [o]: { right: ev[o].right + 3, wrong: ev[o].wrong } });
+      return { obj: o, gain: distStats(scoreDist(bank, ev2)).chance - d.chance };
+    }).filter(f => f.gain >= 0.005).sort((x, y) => y.gain - x.gain || (x.obj < y.obj ? -1 : 1)).slice(0, 3);
+    return Object.assign(base, d, { focus });
+  }
+
+  // ------------------------------------------------------------- exam-date plan
+  function parseDate(str) {                  // "YYYY-MM-DD" -> local Date, or null
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str || ""); if (!m) return null;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return d.getMonth() === +m[2] - 1 ? d : null;
+  }
+  /** Countdown, daily target and milestones for the exam date in state.settings.examDate. */
+  function examPlan(state, bank, now) {
+    now = now || Date.now();
+    const date = parseDate(state.settings.examDate); if (!date) return null;
+    const today = dayNum(now), days = dayNum(date) - today;
+    const seen = Object.keys(state.qstats).filter(id => bank.byId[id] && state.qstats[id].seen).length;
+    const unseen = bank.questions.length - seen;
+    const due = dueIds(bank, state.qstats, today).length;
+    const studyDays = days - 2;               // keep the last two days for full exams and review
+    const newPerDay = days < 0 || studyDays < 1 ? 0 : Math.ceil(unseen / studyDays);
+    const phase = days < 0 ? "past" : days === 0 ? "today" : studyDays < 1 ? "final" : "learn";
+    const full = state.tests.filter(t => t.mode === "test" && t.total === 40 && !t.study);
+    let run = 0; for (let i = full.length - 1; i >= 0 && full[i].pct >= TARGET; i--) run++;
+    const pred = passPrediction(bank, state.qstats);
+    return { date: state.settings.examDate, days, phase, seen, unseen, due, newPerDay, target: newPerDay + due,
+             doneToday: state.days[dayKey(now)] || 0,
+             milestones: [
+               { id: "seen", label: "See every question", done: unseen === 0, progress: [seen, bank.questions.length] },
+               { id: "ready", label: "Score " + TARGET + "%+ on three exams in a row", done: run >= 3, progress: [Math.min(run, 3), 3] },
+               { id: "pass", label: "Pass chance of 90% or more", done: pred.chance != null && pred.chance >= 0.9, progress: null },
+               { id: "due", label: "Clear today's reviews", done: due === 0, progress: null }] };
+  }
+  /** iCalendar file: the exam as an all-day event, plus a daily study reminder until the day before. */
+  function examIcs(dateStr, opts) {
+    opts = opts || {};
+    const date = parseDate(dateStr); if (!date) return null;
+    const now = opts.now ? new Date(opts.now) : new Date();
+    const ymd = d => d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+    const esc = t => String(t).replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
+    const fold = line => { const out = []; while (line.length > 74) { out.push(line.slice(0, 74)); line = " " + line.slice(74); } out.push(line); return out.join("\r\n"); };
+    const stamp = now.toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+    const next = new Date(date); next.setDate(next.getDate() + 1);
+    const url = opts.url ? "\n" + opts.url : "";
+    const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//exit 0//Linux Essentials 010-160//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+      "BEGIN:VEVENT", "UID:exam-" + ymd(date) + "@exit0", "DTSTAMP:" + stamp, "DTSTART;VALUE=DATE:" + ymd(date), "DTEND;VALUE=DATE:" + ymd(next),
+      "SUMMARY:" + esc("LPI Linux Essentials (010-160) exam"),
+      "DESCRIPTION:" + esc("Bring your ID. Read every question twice, flag the hard ones and come back to them." + url),
+      "TRANSP:TRANSPARENT",
+      "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + esc("Linux Essentials exam tomorrow"), "TRIGGER:-PT15H", "END:VALARM", "END:VEVENT"];
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const last = new Date(date); last.setDate(last.getDate() - 1);
+    if (opts.time !== null && last >= start) {
+      const [hh, mm] = /^\d{1,2}:\d{2}$/.test(opts.time || "") ? opts.time.split(":") : ["19", "00"];
+      const hm = String(+hh).padStart(2, "0") + mm + "00";
+      L.push("BEGIN:VEVENT", "UID:study-" + ymd(date) + "@exit0", "DTSTAMP:" + stamp, "DTSTART:" + ymd(start) + "T" + hm, "DURATION:PT20M",
+        "RRULE:FREQ=DAILY;UNTIL=" + ymd(last) + "T235959", "SUMMARY:" + esc("exit 0: daily study"),
+        "DESCRIPTION:" + esc("Clear your daily review, then answer today's new questions." + url),
+        "BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + esc("Time to study for Linux Essentials"), "TRIGGER:PT0M", "END:VALARM", "END:VEVENT");
+    }
+    L.push("END:VCALENDAR");
+    return L.map(fold).join("\r\n") + "\r\n";
+  }
+
   // ------------------------------------------------------------- flashcards (Leitner)
   function cardQueue(cards, cstate, filter, today, limit) {
     today = today == null ? dayNum() : today; limit = limit || 20;
@@ -364,7 +494,7 @@
 
   // ------------------------------------------------------------- state
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 20, study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
+    return { v: 3, settings: { theme: "system", goal: 20, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
              tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
@@ -390,5 +520,5 @@
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
            xpInfo, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
-           recordResult, readiness, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
+           recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate };
 });

@@ -165,4 +165,65 @@ t("v2 history migrates", () => {
   const st = C.migrate(null, { history: [{ mode: "random", label: "Random exam", date: 1, score: 30, total: 40, pct: 75, secs: 100 }], qstats: { "1.1-01": { seen: 1, right: 1, last: true } } });
   assert.strictEqual(st.tests[0].label, "Practice test"); assert.strictEqual(st.qstats["1.1-01"].seen, 1);
 });
+// ------------------------------------------------------------- pass predictor + exam plan
+const answerAll = (frac, acc, seed) => { const q = {}, r = C.rng(seed || 1);
+  for (const x of bank.questions) if (r() < frac) { const ok = r() < acc; q[x.id] = { seen: 1, right: ok ? 1 : 0, last: ok }; } return q; };
+t("beta-binomial is a probability distribution", () => {
+  for (const [n, a, b] of [[1, 1, 1], [3, 2, 5], [7, 10.5, 0.5], [40, 1, 1]]) {
+    const d = C.betaBinomial(n, a, b); assert.strictEqual(d.length, n + 1);
+    assert(Math.abs(d.reduce((x, y) => x + y, 0) - 1) < 1e-9);
+    const mean = d.reduce((m, p, k) => m + k * p, 0); assert(Math.abs(mean - n * a / (a + b)) < 1e-9);
+  }
+});
+t("pass chance needs enough answers, then rises with accuracy", () => {
+  const none = C.passPrediction(bank, {}); assert.strictEqual(none.chance, null); assert.strictEqual(none.more, 30);
+  let prev = -1;
+  for (const acc of [0.5, 0.65, 0.75, 0.85, 0.95]) {
+    const p = C.passPrediction(bank, answerAll(0.8, acc));
+    assert(p.chance > prev, acc + " should beat the lower accuracy"); prev = p.chance;
+    assert(p.low <= p.mean && p.mean <= p.high && p.total === 40 && p.need === 28);
+  }
+  assert(C.passPrediction(bank, answerAll(0.8, 0.5)).chance < 0.05);
+  assert(C.passPrediction(bank, answerAll(0.9, 0.95)).chance > 0.95);
+});
+t("pass chance stays low when whole topics are unpractised, and points at them", () => {
+  const q = {}; bank.questions.filter(x => x.obj < "2").forEach(x => q[x.id] = { seen: 1, right: 1, last: true });
+  const p = C.passPrediction(bank, q);
+  assert(p.chance < 0.5, "perfect on topic 1 alone gave " + p.chance);
+  assert(p.focus.length === 3 && p.focus.every(f => f.obj >= "2" && f.gain > 0));
+});
+t("the latest answer counts, not the lifetime average", () => {
+  const ids = bank.questions.map(x => x.id);
+  const fixed = {}, broke = {}; ids.forEach(id => { fixed[id] = { seen: 3, right: 1, last: true }; broke[id] = { seen: 3, right: 2, last: false }; });
+  assert(C.passPrediction(bank, fixed).chance > 0.99 && C.passPrediction(bank, broke).chance < 0.01);
+});
+t("exam plan: countdown, daily target and phases", () => {
+  const now = new Date(2026, 9, 10, 12).getTime();
+  const st = C.freshState(); assert.strictEqual(C.examPlan(st, bank, now), null);
+  st.settings.examDate = "2026-10-32"; assert.strictEqual(C.examPlan(st, bank, now), null);
+  st.settings.examDate = "2026-10-22";
+  let p = C.examPlan(st, bank, now);
+  assert.strictEqual(p.days, 12); assert.strictEqual(p.phase, "learn");
+  assert.strictEqual(p.newPerDay, 36); assert.strictEqual(p.target, 36); assert.strictEqual(p.milestones.length, 4);
+  st.qstats = answerAll(1, 0.9); p = C.examPlan(st, bank, now);
+  assert.strictEqual(p.unseen, 0); assert.strictEqual(p.newPerDay, 0); assert(p.milestones.find(m => m.id === "seen").done);
+  st.settings.examDate = "2026-10-12"; assert.strictEqual(C.examPlan(st, bank, now).phase, "final");
+  st.settings.examDate = "2026-10-10"; assert.strictEqual(C.examPlan(st, bank, now).phase, "today");
+  st.settings.examDate = "2026-10-01"; assert.strictEqual(C.examPlan(st, bank, now).phase, "past");
+});
+t("calendar file is valid iCalendar", () => {
+  const now = new Date(2026, 9, 10, 12).getTime();
+  const ics = C.examIcs("2026-11-14", { time: "7:30", url: "https://example.org/exit0/", now });
+  const lines = ics.split("\r\n"); assert.strictEqual(lines.pop(), "");
+  assert.strictEqual(lines[0], "BEGIN:VCALENDAR"); assert.strictEqual(lines[lines.length - 1], "END:VCALENDAR");
+  assert(!/[^\r]\n/.test(ics), "bare LF"); assert(lines.every(l => l.length <= 75), "unfolded line");
+  for (const k of ["DTSTART;VALUE=DATE:20261114", "DTEND;VALUE=DATE:20261115", "DTSTART:20261010T073000", "RRULE:FREQ=DAILY;UNTIL=20261113T235959"])
+    assert(lines.includes(k), "missing " + k);
+  assert.strictEqual(lines.filter(l => l === "BEGIN:VEVENT").length, 2);
+  assert(lines.some(l => l.startsWith("SUMMARY:LPI Linux Essentials (010-160) exam")));
+  const noReminder = C.examIcs("2026-11-14", { time: null, now });
+  assert.strictEqual(noReminder.split("BEGIN:VEVENT").length - 1, 1);
+  assert.strictEqual(C.examIcs("2026-10-10", { now }).split("BEGIN:VEVENT").length - 1, 1, "no daily reminder on exam day");
+  assert.strictEqual(C.examIcs("nope"), null);
+});
 console.log(`\n${n} tests passed`);

@@ -125,6 +125,18 @@ select { max-width: 100%; min-width: 0; font: 500 .9rem var(--ui); padding: .5re
 .tip span { color: var(--muted); font-size: .92rem; }
 .hero { display: flex; flex-direction: column; gap: 18px; }
 .hero .cta { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+.passcard details summary { cursor: pointer; }
+.passcard details p { margin-top: 6px; }
+.focusrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); }
+.focusrow .gain { font: 600 .78rem var(--mono); color: var(--good); white-space: nowrap; }
+.countdown { font-size: 1.05rem; color: var(--muted); }
+.countdown b { font-size: 2.2rem; font-weight: 800; letter-spacing: -.02em; color: var(--ink); margin-right: 4px; font-variant-numeric: tabular-nums; }
+.milestones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.milestones li { display: flex; gap: 10px; align-items: center; font-size: .93rem; }
+.milestones li .i { width: 18px; height: 18px; flex: none; color: var(--line-2); }
+.milestones li.done .i { color: var(--good); }
+.milestones li.done > span { color: var(--muted); }
+.plancard input[type=date], .plancard input[type=time] { font: inherit; padding: .5rem .65rem; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); color: var(--ink); }
 .banner { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
 
 /* rings */

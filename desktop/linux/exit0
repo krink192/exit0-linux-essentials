@@ -51,6 +51,34 @@ def start_server():
     return server.server_address[1]
 
 
+def on_download(_context, download):
+    """Save downloads (the exam calendar file) to ~/Downloads, then open them with the default app."""
+    from gi.repository import Gio, GLib
+
+    def decide(dl, suggested):
+        folder = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD) or os.path.expanduser("~")
+        name = os.path.basename(suggested or "") or "exit0-download"
+        stem, ext = os.path.splitext(name)
+        path, n = os.path.join(folder, name), 1
+        while os.path.exists(path):
+            path, n = os.path.join(folder, "%s (%d)%s" % (stem, n, ext)), n + 1
+        dl.set_allow_overwrite(False)
+        dl.set_destination(GLib.filename_to_uri(path, None))
+        return True
+
+    def finished(dl):
+        dest = dl.get_destination()
+        if dest and os.path.exists(GLib.filename_from_uri(dest)[0]):
+            try:
+                Gio.AppInfo.launch_default_for_uri(dest, None)
+            except GLib.Error as exc:
+                print("exit0: saved %s (%s)" % (GLib.filename_from_uri(dest)[0], exc.message), file=sys.stderr)
+
+    download.connect("decide-destination", decide)
+    download.connect("finished", finished)
+    download.connect("failed", lambda _dl, err: print("exit0: download failed: %s" % err.message, file=sys.stderr))
+
+
 def safe_rendering():
     """Avoid WebKitGTK's DMA-BUF renderer, which crashes on many Wayland setups
     (NVIDIA especially) with "Error 71 (Protocol error) dispatching to Wayland display".
@@ -119,15 +147,27 @@ def main(argv):
 
     def on_decide_policy(_view, decision, kind):
         types = WebKit2.PolicyDecisionType
+        if kind == types.RESPONSE:
+            try:
+                uri = decision.get_request().get_uri() or ""
+                response = decision.get_response()
+                mime = (response.get_mime_type() if response else "") or ""
+            except Exception:                 # never let this break normal page loads
+                return False
+            if uri.startswith("blob:") or mime == "text/calendar":
+                decision.download()           # "Add to calendar" (.ics)
+                return True
+            return False
         if kind in (types.NAVIGATION_ACTION, types.NEW_WINDOW_ACTION):
             uri = decision.get_navigation_action().get_request().get_uri()
-            if uri and not uri.startswith(origin) and not uri.startswith("about:"):
+            if uri and not uri.startswith((origin, "about:", "blob:", "data:")):
                 webbrowser.open(uri)          # LPI lessons, GitHub etc. open in the browser
                 decision.ignore()
                 return True
         return False
 
     view.connect("decide-policy", on_decide_policy)
+    context.connect("download-started", on_download)
 
     win = Gtk.Window(title=APP_TITLE)
     win.set_default_size(1240, 840)

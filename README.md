@@ -106,6 +106,8 @@ with the terminal output.
 |---|---|---|
 | ![](docs/screenshots/study.png) | ![](docs/screenshots/study-hint.png) | ![](docs/screenshots/study-feedback.png) |
 
+![Pass chance and exam-day plan](docs/screenshots/plan.png)
+
 ## What's inside
 
 - **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
@@ -126,6 +128,10 @@ with the terminal output.
   questions). Flag questions, review them, then submit and see every answer explained.
 - **Study mode.** Pick objectives, difficulty and question count, or start with one click from *Review my misses*,
   *Weak objectives* or *New questions*.
+- **Pass chance and exam plan.** An estimate of your chance of passing a fresh exam, worked out per objective
+  from your latest answers and weighted like the real blueprint, plus the three objectives that would raise it
+  most. Set your exam date for a countdown, a daily target that gets you through every question two days early,
+  milestones, and a calendar file with the exam and a daily study reminder.
 - **Progress.** A readiness score (the average of your last three exams), score trend, troubled sections,
   mastery of each objective, accuracy by difficulty, and a full history you can review.
 - **Flashcards.** 250 cards in two decks, *Concepts* and *Commands & files*, with spaced repetition, so cards

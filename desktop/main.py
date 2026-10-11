@@ -54,6 +54,10 @@ def main():
     root = resource_root()
     index = os.path.join(root, "docs", "index.html")
     icon = os.path.join(root, "icon.ico") if sys.platform.startswith("win") else None
+    try:
+        webview.settings["ALLOW_DOWNLOADS"] = True   # "Add to calendar" saves an .ics file
+    except (AttributeError, TypeError):
+        pass
     webview.create_window(APP_NAME, index, width=1240, height=840, min_size=(720, 560),
                           background_color="#F6F7F5", text_select=True)
     webview.start(http_server=True, http_port=free_port(), private_mode=False,

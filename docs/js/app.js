@@ -69,6 +69,9 @@
     sheet: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>',
     print: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
     download: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+    dot: '<circle cx="12" cy="12" r="7"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
     repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
@@ -280,7 +283,13 @@
     const nudge = !st.current && (fq.due || dueCards) ? `<div class="card banner"><div class="row grow" style="gap:12px;flex-wrap:nowrap">${icon("repeat")}<div><b>Daily review is ready</b>
         <div class="small muted">${[fq.due ? plural(fq.due, "question") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" and ")} due today. A few minutes keeps what you've learned fresh.</div></div></div>
         <button data-go="review">Open daily review</button></div>` : "";
-    shell("test", `${resumeBanner()}${nudge}
+    const plan = C.examPlan(st, BANK), pp = plan && plan.phase !== "past" ? C.passPrediction(BANK, st.qstats) : null;
+    const planBanner = pp ? `<div class="card banner"><div class="row grow" style="gap:12px;flex-wrap:nowrap">${icon("calendar")}<div>
+        <b>${plan.phase === "today" ? "Exam day. Good luck!" : `Exam in ${plural(plan.days, "day")}`}${pp.chance != null ? ` · ${Math.round(pp.chance * 100)}% pass chance` : ""}</b>
+        <div class="small muted">${plan.phase === "learn" ? `Today's target: ${plan.doneToday}/${plan.target} (${plural(plan.newPerDay, "new question")}${plan.due ? " + " + plural(plan.due, "review") : ""}).`
+          : plan.phase === "final" ? "Final stretch: full exams and flashcards, no new material." : "Skip new material today. A light flashcard review is plenty."}</div></div></div>
+        <button data-go="progress">See plan</button></div>` : "";
+    shell("test", `${resumeBanner()}${planBanner}${nudge}
       <section class="hero">
         <div class="page-head"><span class="eyebrow">Exam mode · as close to test day as possible</span><h1>Exam</h1>
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
@@ -388,11 +397,89 @@
       <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
           <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div></div>`;
   }
+  // ================================================================== PASS CHANCE + EXAM PLAN
+  const SITE = "https://krink192.github.io/exit0-linux-essentials/";
+  let planEdit = false;
+  function downloadFile(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1500);
+  }
+  const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+
+  function passCard() {
+    const p = C.passPrediction(BANK, st.qstats);
+    const pct = p.chance == null ? null : Math.round(p.chance * 100);
+    const why = `Estimated from your latest answer to each question, weighted like the real exam. Objectives you haven't practised count as a coin flip.
+      LPI doesn't publish the raw pass mark, so this assumes ${p.passPct}% to stay on the safe side. Questions you've seen before get easier, so treat it as a guide, not a promise.`;
+    if (pct == null) return `<div class="card stack passcard"><div class="row" style="gap:10px">${icon("target")}<span class="eyebrow">Pass chance</span></div>
+      <div class="row" style="gap:20px;align-items:center">${ring(Math.round(100 * p.seen / p.minSeen), 104, 10, "—", "", "var(--line-2)")}
+        <div class="stack grow" style="gap:6px"><b>Answer ${plural(p.more, "more question")} to unlock it</b>
+        <span class="small muted">${p.seen} of ${p.minSeen} so far. Exams, study sessions and daily review all count.</span></div></div>
+      <p class="small muted">${why}</p></div>`;
+    const verdict = pct >= 90 ? "Strong. Keep it there and book the exam." : pct >= 70 ? "Good odds, but not safe yet. Work the objectives below."
+      : pct >= 40 ? "Coin-flip territory. The objectives below move it most." : "Not yet. Cover every objective, then focus on the ones below.";
+    return `<div class="card stack passcard"><div class="row" style="gap:10px">${icon("target")}<span class="eyebrow">Pass chance</span></div>
+      <div class="row" style="gap:20px;align-items:center">${ring(pct, 104, 10, pct + "%", "", col(pct >= 90 ? 80 : pct >= 60 ? 65 : 0))}
+        <div class="stack grow" style="gap:6px"><b>${verdict}</b>
+          <span class="small muted">Expected score on a fresh exam: <b>${Math.round(p.mean)}/${p.total}</b> (${Math.round(100 * p.mean / p.total)}%), most likely between ${p.low} and ${p.high}. Passing here means ${p.need} or more.</span></div></div>
+      ${p.focus.length ? `<div class="stack" style="gap:8px"><span class="small muted">Where 3 more right answers help most</span>
+        ${p.focus.map(f => `<div class="focusrow"><span><span class="mono muted">${f.obj}</span> ${esc(OBJ[f.obj].name)}</span>
+          <span class="small gain">+${Math.max(1, Math.round(f.gain * 100))} pts</span><button class="ghost small" data-study="${f.obj}">Study</button></div>`).join("")}</div>` : ""}
+      <details class="small muted"><summary>How is this worked out?</summary><p>${why}</p></details></div>`;
+  }
+
+  function planCard() {
+    const s = st.settings, plan = C.examPlan(st, BANK);
+    if (!plan || planEdit) return `<div class="card stack plancard"><div class="row" style="gap:10px">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
+      <p>${plan ? "Change your exam date." : "Booked your exam, or picking a date? Set it here for a countdown, a daily target and calendar reminders."}</p>
+      <div class="row" style="gap:10px;flex-wrap:wrap"><input type="date" id="examDate" min="${todayStr()}" value="${esc(s.examDate || "")}" aria-label="Exam date">
+        <button class="primary" id="setDate">Save date</button>${plan ? `<button class="ghost" id="cancelDate">Cancel</button>` : ""}</div>
+      <p class="small muted">Book the real exam through LPI with Pearson VUE, at a test centre or online.</p></div>`;
+    const head = plan.phase === "past" ? `<b>Your exam date has passed.</b> How did it go? Set a new date if you're retaking it.`
+      : plan.phase === "today" ? `<b>Exam day. Good luck!</b> Skip new material. A light flashcard review is plenty.`
+      : `<span class="countdown"><b>${plan.days}</b> ${plan.days === 1 ? "day" : "days"} to go</span>`;
+    const when = `<div class="small muted">${esc(longDate(plan.date))}</div>`;
+    const today = plan.phase === "learn" ? `<div class="stack" style="gap:6px"><div class="row spread"><span>Today's target</span><b>${plan.doneToday}/${plan.target}</b></div>
+        <div class="track2"><i style="width:${plan.target ? Math.min(100, Math.round(100 * plan.doneToday / plan.target)) : 100}%;background:var(--accent)"></i></div>
+        <span class="small muted">${[plan.newPerDay ? plural(plan.newPerDay, "new question") + " a day sees the whole bank by " + (plan.days - 2 === 1 ? "tomorrow" : "two days out") : "You've seen every question",
+          plan.due ? plural(plan.due, "review") + " due today" : ""].filter(Boolean).join(", plus ")}.${plan.newPerDay > 60 ? " That's a lot per day: focus on the objectives under Pass chance first." : ""}</span></div>`
+      : plan.phase === "final" ? `<p class="small">Final stretch: take a full exam, review flashcards and your misses, and skip new material.</p>` : "";
+    return `<div class="card stack plancard"><div class="row spread"><div class="row" style="gap:10px">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
+        <button class="ghost small" id="editDate">Change date</button></div>
+      <div>${head}${when}</div>${today}
+      ${plan.phase === "past" ? "" : `<ul class="milestones">${plan.milestones.map(m => `<li class="${m.done ? "done" : ""}">${icon(m.done ? "check" : "dot")}<span>${esc(m.label)}${m.progress && !m.done ? ` <span class="muted">(${m.progress[0]}/${m.progress[1]})</span>` : ""}</span></li>`).join("")}</ul>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><button id="ics">${icon("download")}Add to calendar</button>
+        <label class="small muted row" style="gap:6px">Daily reminder at <input type="time" id="remindAt" value="${esc(s.remindAt || "19:00")}"></label></div>
+      <p class="small muted">Downloads an .ics file with the exam day and a daily study reminder until the day before. It opens in Google Calendar, Outlook, Apple Calendar and GNOME Calendar.</p>`}</div>`;
+  }
+
+  function wirePlan(rerender) {
+    if ($("#setDate")) $("#setDate").onclick = () => {
+      const v = $("#examDate").value;
+      if (!C.parseDate(v)) return toast("Pick a date first");
+      if (v < todayStr()) return toast("Pick today or a later date");
+      st.settings.examDate = v; planEdit = false; save(); toast("Exam date saved"); rerender();
+    };
+    if ($("#cancelDate")) $("#cancelDate").onclick = () => { planEdit = false; rerender(); };
+    if ($("#editDate")) $("#editDate").onclick = () => { planEdit = true; rerender(); };
+    if ($("#remindAt")) $("#remindAt").onchange = e => { st.settings.remindAt = e.target.value || "19:00"; save(); };
+    if ($("#ics")) $("#ics").onclick = () => {
+      const url = DESKTOP() || !/^https?:$/.test(location.protocol) ? SITE : location.origin + location.pathname;
+      const ics = C.examIcs(st.settings.examDate, { time: st.settings.remindAt, url });
+      downloadFile("linux-essentials-exam.ics", ics, "text/calendar");
+      toast("Calendar file downloaded. Open it to add the events.");
+    };
+  }
+
   function renderProgress() {
     const tests = st.tests.filter(t => t.mode === "test");
     if (!st.tests.length) {
       shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">Your scores, readiness and weak sections show up here after your first exam or study session.</p></div>
-        <div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam to see where you stand.</p><button class="primary" data-start="test">Start exam</button></div>`);
+        <div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam to see where you stand.</p><button class="primary" data-start="test">Start exam</button></div>
+        <div class="grid2">${passCard()}${planCard()}</div>`);
+      wirePlan(renderProgress);
       return wireStarts($("#page"));
     }
     const ready = C.readiness(st.tests);
@@ -416,6 +503,7 @@
             <div class="stat"><b>${tests.length ? Math.max(...tests.map(t => t.pct)) + "%" : "—"}</b><span>Best</span></div>
             <div class="stat"><b>${seen}<span class="muted" style="font-size:.9rem">/${BANK.questions.length}</span></b><span>Questions seen</span></div>
             <div class="stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/19</span></b><span>Objectives mastered</span></div></div></div></div>
+      <div class="grid2" id="plan">${passCard()}${planCard()}</div>
       ${achievementsCard()}
       ${tests.length >= 2 ? `<div class="card stack"><div class="row spread"><h2>Score trend</h2><span class="small muted">Last ${Math.min(15, tests.length)} exams</span></div>${trendChart(tests)}</div>` : ""}
       <div class="grid2">
@@ -433,6 +521,7 @@
           <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
           <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${t.id}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div></div>`);
+    wirePlan(renderProgress);
     wireStarts($("#page"));
     $$("[data-review]").forEach(b => b.onclick = () => { lastRec = st.tests.find(t => t.id === b.dataset.review); reviewFilter = "all"; go("results"); });
   }
@@ -666,7 +755,7 @@
   // ================================================================== SETTINGS
   function renderSettings() {
     const s = st.settings;
-    const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, days: st.days, settings: st.settings }) : "";
+    const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, days: st.days, labs: st.labs, badges: st.badges, settings: st.settings }) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
@@ -706,7 +795,7 @@
       try {
         const d = JSON.parse($("#impData").value);
         if (d.app !== "le010" || !Array.isArray(d.tests)) throw new Error("bad");
-        Object.assign(st, { tests: d.tests, qstats: d.qstats || {}, cards: d.cards || {}, days: d.days || {} });
+        Object.assign(st, { tests: d.tests, qstats: d.qstats || {}, cards: d.cards || {}, days: d.days || {}, labs: d.labs || st.labs || {}, badges: d.badges || st.badges || {} });
         if (d.settings) st.settings = Object.assign(st.settings, d.settings);
         save(); applyTheme(); toast("Progress imported"); renderSettings();
       } catch (e) { toast("That code isn't valid. Copy the whole export code and try again."); }

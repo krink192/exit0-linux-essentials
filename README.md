@@ -191,8 +191,13 @@ To try the image locally: `docker build -t exit0 . && docker run --rm -p 8080:80
 Corrections and new questions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
-Copyright (C) 2026 krink192 and contributors. Free software under the **GNU General Public License v3.0
-or later**. See [LICENSE](LICENSE). It comes with no warranty.
+Copyright (C) 2026 krink192 and contributors. The app and the Linux Essentials content are free software under
+the **GNU General Public License v3.0 or later**. See [LICENSE](LICENSE). It comes with no warranty.
+
+**Linux Essentials stays free.** Practice packs for other certifications may be offered later as a separate,
+paid product under different terms. Contributions to this repository come with a license grant that makes that
+possible; see [CONTRIBUTING.md](CONTRIBUTING.md#contributor-license-grant). The name *exit 0* and the `$?` logo
+identify this project. If you fork it, please use a different name.
 
 Linux Essentials and LPI are trademarks of the Linux Professional Institute. This project is not affiliated
 with or endorsed by LPI. Linux is a registered trademark of Linus Torvalds.

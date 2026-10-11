@@ -50,4 +50,23 @@ sudo python3 verify.py    # runs every shell check (creates test users, so use a
 cd .. && node tools/test_core.js
 ```
 
-By contributing, you agree that your contributions are licensed under GPL-3.0-or-later.
+## Contributor license grant
+
+exit 0 is free software, and the maintainer may also build paid products on the same code, such as exam packs
+for other certifications. To keep that possible, every contribution comes with the following grant. Please read
+it before you open a pull request.
+
+By submitting a contribution (code, questions, hints, flashcards, documentation or anything else) to this
+repository, you agree that:
+
+1. **You have the right to contribute it.** It is your own work, or you have permission to submit it under these
+   terms. It does not copy real exam questions or other material you aren't allowed to share.
+2. **Everyone gets it under the GPL.** Your contribution is licensed to the public under the GNU General Public
+   License v3.0 or later, the same as the rest of the project.
+3. **The maintainer gets extra rights.** You also grant krink192, the project maintainer, a perpetual, worldwide,
+   non-exclusive, royalty-free, irrevocable license to use, copy, modify, distribute, sublicense and relicense
+   your contribution under any terms, including in closed-source or commercial versions of exit 0.
+4. **You keep your copyright.** This grant doesn't transfer ownership. You can still use your own work however
+   you like.
+
+Pull requests include a checkbox to confirm this. A pull request without it can't be merged.

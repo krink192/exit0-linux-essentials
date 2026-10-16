@@ -144,9 +144,17 @@ t("finished old labs carry over to their new parts once, without double XP or ba
   assert.strictEqual(C.xpInfo(st).xp, 10 + 15, "the new part's tasks count instead");
   assert.strictEqual(C.badgeStatus(st, bank, cards, 3).find(b => b.id === "lab-all").progress[0], 1, "the old lab no longer counts as a lab");
   st.labs["2.1.2-b"] = { done: [] }; assert.strictEqual(C.migrateLabs(st, labs), 0, "a part you restarted isn't credited again");
-  global.window = global.window || {}; require(require("path").join(__dirname, "../docs/data/labs.js"));
-  for (const l of window.LE_LABS) for (const id of l.from || []) assert.ok(C.LEGACY_LABS.includes(id), l.id + " lists unknown old lab " + id);
-  assert.strictEqual(new Set([].concat(...window.LE_LABS.map(l => l.from || []))).size, C.LEGACY_LABS.length, "every old lab maps to a part");
+  global.window = global.window || {}; require(require("path").join(__dirname, "../docs/data/labindex.js"));
+  for (const l of window.LE_LABINDEX.parts) for (const id of l.from || []) assert.ok(C.LEGACY_LABS.includes(id), l.id + " lists unknown old lab " + id);
+  assert.strictEqual(new Set([].concat(...window.LE_LABINDEX.parts.map(l => l.from || []))).size, C.LEGACY_LABS.length, "every old lab maps to a part");
+  const idx = { id: "p", n: 4, from: ["help"] }; const s2 = C.freshState(); s2.labs = { help: { done: [0], completedAt: t0 } };
+  C.migrateLabs(s2, [idx]); assert.deepStrictEqual(s2.labs.p.done, [0, 1, 2, 3], "the light lab index (n instead of tasks) works too");
+});
+t("question-to-lab links point at real parts of the same objective", () => {
+  const X = window.LE_LABINDEX, ids = new Set(X.parts.map(p => p.id));
+  assert.ok(Object.keys(X.q).length > 150, "most command questions link to a lab");
+  for (const qid in X.q) { const q = bank.byId[qid]; assert.ok(q, "link for unknown question " + qid); assert.ok(X.q[qid].length >= 1 && X.q[qid].length <= 2);
+    for (const pid of X.q[qid]) { assert.ok(ids.has(pid), qid + " links to unknown part " + pid); assert.strictEqual(X.parts.find(p => p.id === pid).obj, q.obj); } }
 });
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(new Set(cards.map(c => c.id)).size, cards.length);

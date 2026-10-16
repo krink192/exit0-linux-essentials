@@ -6,6 +6,16 @@
   const BANK = C.indexBank(window.LE_BANK);
   const CARDS = window.LE_CARDS;
   const OBJ = BANK.objectives, TOP = BANK.topics;
+  // Lab titles and progress info load with the page; the full labs, the shell and its man pages load when Labs opens.
+  const LABX = window.LE_LABINDEX || { parts: [], lessons: [], q: {} };
+  const LABS = LABX.parts, LESSONS = LABX.lessons;
+  const QBYPART = {}; for (const qid in LABX.q) for (const pid of LABX.q[qid]) (QBYPART[pid] = QBYPART[pid] || []).push(qid);
+  let labsLoading = null;
+  function loadLabs() {
+    if (window.LEShell && window.LE_LABS) return Promise.resolve();
+    const add = src => new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = () => rej(new Error(src)); document.head.appendChild(el); });
+    return labsLoading = labsLoading || Promise.all(["data/labs.js", "js/man.js", "js/shell.js"].map(add)).catch(e => { labsLoading = null; throw e; });
+  }
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";
   // Opens a GitHub issue form with the question ID filled in.
@@ -84,9 +94,12 @@
         style="stroke:${color || "var(--accent)"}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
       <div class="lbl" style="font-size:${Math.round(size / 4.2)}px">${label}${sub ? `<small>${sub}</small>` : ""}</div></div>`;
   }
+  const toastQueue = [];          // one toast at a time, so several at once don't pile up on top of each other
   function toast(msg) {
-    const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2200);
+    toastQueue.push(msg); if (toastQueue.length > 1) return;
+    const show = () => { const t = document.createElement("div"); t.className = "toast"; t.textContent = toastQueue[0]; t.setAttribute("role", "status"); document.body.appendChild(t);
+      setTimeout(() => { t.remove(); toastQueue.shift(); if (toastQueue.length) setTimeout(show, 150); }, 2200); };
+    show();
   }
 
   // ------------------------------------------------------------------ state
@@ -115,7 +128,7 @@
     fetch: (url, o) => fetch(url, o),
     getState: () => st,
     resetProgress: () => { const keep = st.settings; st = C.freshState(); st.settings = keep; save(true); },
-    onChange: () => { C.migrateLabs(st, window.LE_LABS || []); save(true); C.awardBadges(st, BANK, CARDS, null, (window.LE_LABS || []).length); save(true); rerenderIfIdle(); },
+    onChange: () => { C.migrateLabs(st, LABS); save(true); C.awardBadges(st, BANK, CARDS, null, LABS.length); save(true); rerenderIfIdle(); },
   }) : null;
   let syncTimer = null;
   function scheduleSync(delay) {
@@ -140,7 +153,6 @@
   if (SYNC && /^https?:$/.test(location.protocol) && !DESKTOP()) {
     SYNC.probe(location.origin).then(h => { originServer = { url: location.origin, signup: h.signup }; if ((location.hash || "").slice(1) === "settings") rerenderIfIdle(); }, () => {});
   }
-  const LABS = window.LE_LABS || [];
   st.labs = st.labs || {};
   const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
   if (labsCarried) setTimeout(() => toast(`Labs are now one per lesson: ${labsCarried} part${labsCarried > 1 ? "s" : ""} marked complete from labs you'd finished`), 900);
@@ -167,10 +179,13 @@
   let exportOpen = false, resetOpen = false;
 
   // ------------------------------------------------------------------ shell
-  const NAV = [
-    ["Practice", [["review", "Daily review", "repeat"], ["test", "Exam", "test"], ["study", "Study", "drill"], ["labs", "Labs", "terminal"], ["cards", "Flashcards", "cards"]]],
-    ["You", [["progress", "Progress", "progress"], ["guide", "Exam guide", "guide"], ["sheets", "Cheat sheets", "sheet"], ["settings", "Settings", "settings"]]],
-  ];
+  // Four places to go, plus reference material and settings. Practice and Learn pages share a tab bar.
+  const NAV = [["today", "Today", "target"], ["practice", "Practice", "test"], ["labs", "Labs", "terminal"], ["progress", "Progress", "progress"]];
+  const NAV2 = [["learn", "Learn", "guide"], ["settings", "Settings", "settings"]];
+  const SECTION = { review: "practice", test: "practice", study: "practice", cards: "practice", guide: "learn", sheets: "learn" };
+  const TABS = { practice: [["review", "Daily review"], ["test", "Exam"], ["study", "Study"], ["cards", "Flashcards"]], learn: [["guide", "Exam guide"], ["sheets", "Cheat sheets"]] };
+  let lastPractice = null;
+  const navCount = id => { if (id !== "practice") return 0; return C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due; };
   function sidebarHTML(active) {
     const qdue = C.reviewForecast(BANK, st.qstats).due;
     const due = C.deckStats(CARDS, st.cards).due;
@@ -179,9 +194,9 @@
     const t = st.settings.theme;
     return `<aside class="side" id="side">
       <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span><small>Linux Essentials 010-160</small></div></div>
-      ${NAV.map(([label, items]) => `<div class="nav-label">${label}</div><nav class="nav">${items.map(([id, name, ic]) => {
-        const badge = id === "review" && qdue ? `<span class="count">${qdue}</span>` : id === "cards" && due ? `<span class="count">${due}</span>` : "";
-        return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${name}</span>${badge}</a>`;
+      ${[NAV, NAV2].map((items, k) => `${k ? `<div class="nav-label">More</div>` : `<div class="nav-label">Study</div>`}<nav class="nav">${items.map(([id, name, ic]) => {
+        const n = id === "practice" ? qdue + due : 0;
+        return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${name}</span>${n ? `<span class="count">${n}</span>` : ""}</a>`;
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <div class="today" title="Daily goal: ${st.settings.goal} questions or cards">
@@ -198,11 +213,18 @@
   function shell(active, body) {
     clearInterval(timerId);
     const sk = C.streak(st.days, st.settings.goal);
-    app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(active)}
+    const section = SECTION[active] || active;
+    if (section === "practice") lastPractice = active;
+    const tabs = TABS[section] ? `<nav class="tabs" aria-label="${section === "practice" ? "Practice" : "Learn"}">${TABS[section].map(([id, name]) => {
+      const n = id === "review" ? C.reviewForecast(BANK, st.qstats).due : id === "cards" ? C.deckStats(CARDS, st.cards).due : 0;
+      return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${name}${n ? ` <span class="count">${n}</span>` : ""}</a>`; }).join("")}</nav>` : "";
+    app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
         <div class="streakmini">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count}</div></header>
-      <main class="page" id="page">${body}</main></div></div>`;
+      <main class="page" id="page">${tabs}${body}</main>
+      <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
+        return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;
     $("#menuBtn").onclick = () => $("#shell").classList.toggle("open");
     $("#shell").addEventListener("click", e => { if (e.target.id === "shell") $("#shell").classList.remove("open"); });
     $$("[data-theme-set]").forEach(b => b.onclick = () => { st.settings.theme = b.dataset.themeSet; save(); applyTheme(); render(); });
@@ -213,15 +235,17 @@
   // ------------------------------------------------------------------ router
   function go(h) { if (location.hash === "#" + h) render(); else location.hash = h; }
   function render() {
-    const h = (location.hash || "#test").slice(1);
+    const h = (location.hash || "#today").slice(1);
+    if (h === "practice") return go(lastPractice || (C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due ? "review" : "test"));
+    if (h === "learn") return go("guide");
     if (h === "exam" && st.current) return renderExam();
     if (h === "exam") return go("test");
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
-    const pages = { labs: renderLabs, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
+    const pages = { today: renderToday, labs: renderLabs, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings };
-    (pages[h] || renderTest)();
+    (pages[h] || renderToday)();
   }
   window.addEventListener("hashchange", render);
 
@@ -268,6 +292,47 @@
     if (!$("#resume")) return;
     $("#resume").onclick = () => go("exam");
     $("#discard").onclick = () => { st.current = null; save(); render(); };
+  }
+
+  // ================================================================== TODAY: one "do this next", then the other good options
+  function nextLabPart() {
+    const started = LABS.find(l => !labState(l.id).completedAt && labState(l.id).done.length);
+    if (started) return started;
+    const lessonGoing = LABS.find(l => !labState(l.id).completedAt && LABS.some(o => o.lesson === l.lesson && labState(o.id).completedAt));
+    return lessonGoing || LABS.find(l => !labState(l.id).completedAt);
+  }
+  const labName = p => `Lab ${p.obj}${LESSONS.filter(x => x.obj === p.obj).length > 1 ? "." + p.lesson.split(".").pop() : ""}, part ${p.part}`;
+  function renderToday() {
+    const f = C.reviewForecast(BANK, st.qstats), cardsDue = C.deckStats(CARDS, st.cards).due;
+    const tests = st.tests.filter(t => t.mode === "test");
+    const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
+    const lab = nextLabPart();
+    const steps = [];
+    if (f.due || cardsDue) steps.push({ ic: "repeat", eyebrow: "Daily review", title: [f.due ? plural(f.due, "question") : "", cardsDue ? plural(cardsDue, "flashcard") : ""].filter(Boolean).join(" and ") + " due",
+      desc: "Questions and cards come back on a schedule. A few minutes now keeps them from slipping.", btn: f.due ? `<button class="primary" data-start="review">Start review</button>` : `<button class="primary" data-start="duecards">Review flashcards</button>` });
+    if (lab) steps.push({ ic: "terminal", eyebrow: labName(lab), title: lab.title, desc: `${esc(lab.lessonTitle)} · ${plural(lab.n, "task")}, checked as you type.`,
+      btn: `<a class="btn primary" href="#lab/${lab.id}">${labState(lab.id).done.length ? "Continue lab" : "Start lab"}</a>` });
+    if (!tests.length) steps.push({ ic: "test", eyebrow: "Exam", title: "Take a baseline exam", desc: "40 questions in 60 minutes, weighted like the real exam. It shows where to focus.", btn: `<button class="primary" data-start="test">Start exam</button>` });
+    else if (weak) steps.push({ ic: "weak", eyebrow: "Weakest objective", title: `Study ${weak} ${OBJ[weak].name}`, desc: `You're at ${C.objectiveStats(BANK, st.qstats)[weak].pct}% there. Ten questions with hints and answers.`, btn: `<button class="primary" data-study="${weak}">Study it</button>` });
+    else steps.push({ ic: "test", eyebrow: "Exam", title: "Take a practice exam", desc: "Three exams in a row at 80% or more is the signal to book the real one.", btn: `<button class="primary" data-start="test">Start exam</button>` });
+    const [main, ...rest] = steps;
+    const sk = C.streak(st.days, st.settings.goal), ready = C.readiness(st.tests), pp = C.passPrediction(BANK, st.qstats), plan = C.examPlan(st, BANK);
+    const labsDone = LABS.filter(l => labState(l.id).completedAt).length;
+    const hour = new Date().getHours(), hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    shell("today", `${resumeBanner()}
+      <div class="page-head"><span class="eyebrow">${new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</span><h1>${hello}</h1>
+        <p class="lead">${sk.metToday ? `Today's goal is done${sk.count > 1 ? ` and your streak is ${sk.count} days` : ""}. Anything more is a bonus.` : `${Math.max(0, st.settings.goal - sk.today)} more answers or cards reach today's goal.`}</p></div>
+      ${st.current ? "" : `<div class="card next-card"><div class="row" style="gap:14px;align-items:flex-start;flex-wrap:nowrap"><div class="ic">${icon(main.ic)}</div>
+        <div class="stack grow" style="gap:6px"><span class="eyebrow">Do this next · ${esc(main.eyebrow)}</span><h2>${esc(main.title)}</h2><p class="muted">${main.desc}</p><div class="row">${main.btn}</div></div></div></div>`}
+      ${rest.length ? `<div class="stack" style="gap:8px"><span class="small muted">Also good today</span>${rest.map(x => `<div class="card later row spread"><div class="row" style="gap:12px;flex-wrap:nowrap">${icon(x.ic)}
+        <div><span class="eyebrow">${esc(x.eyebrow)}</span><div><b>${esc(x.title)}</b></div></div></div>${x.btn.replace(/class="(btn )?primary"/, 'class="$1"')}</div>`).join("")}</div>` : ""}
+      <div class="grid4 todaystats">
+        <a class="card stat" href="#progress"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></a>
+        <a class="card stat" href="#progress"><b>${pp.chance == null ? "—" : Math.round(pp.chance * 100) + "%"}</b><span>Pass chance</span></a>
+        <a class="card stat" href="#labs"><b>${labsDone}<span class="muted" style="font-size:.9rem">/${LABS.length}</span></b><span>Lab parts done</span></a>
+        <a class="card stat" href="#progress"><b>${plan && plan.phase !== "past" ? (plan.phase === "today" ? "Today" : plan.days + "d") : "—"}</b><span>${plan && plan.phase !== "past" ? "Until exam day" : "No exam date set"}</span></a></div>`);
+    wireResume();
+    wireStarts($("#page"));
   }
 
   // ================================================================== DAILY REVIEW
@@ -325,17 +390,7 @@
         <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
         <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
         <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
-    const fq = C.reviewForecast(BANK, st.qstats), dueCards = C.deckStats(CARDS, st.cards).due;
-    const nudge = !st.current && (fq.due || dueCards) ? `<div class="card banner"><div class="row grow" style="gap:12px;flex-wrap:nowrap">${icon("repeat")}<div><b>Daily review is ready</b>
-        <div class="small muted">${[fq.due ? plural(fq.due, "question") : "", dueCards ? plural(dueCards, "flashcard") : ""].filter(Boolean).join(" and ")} due today. A few minutes keeps what you've learned fresh.</div></div></div>
-        <button data-go="review">Open daily review</button></div>` : "";
-    const plan = C.examPlan(st, BANK), pp = plan && plan.phase !== "past" ? C.passPrediction(BANK, st.qstats) : null;
-    const planBanner = pp ? `<div class="card banner"><div class="row grow" style="gap:12px;flex-wrap:nowrap">${icon("calendar")}<div>
-        <b>${plan.phase === "today" ? "Exam day. Good luck!" : `Exam in ${plural(plan.days, "day")}`}${pp.chance != null ? ` · ${Math.round(pp.chance * 100)}% pass chance` : ""}</b>
-        <div class="small muted">${plan.phase === "learn" ? `Today's target: ${plan.doneToday}/${plan.target} (${plural(plan.newPerDay, "new question")}${plan.due ? " + " + plural(plan.due, "review") : ""}).`
-          : plan.phase === "final" ? "Final stretch: full exams and flashcards, no new material." : "Skip new material today. A light flashcard review is plenty."}</div></div></div>
-        <button data-go="progress">See plan</button></div>` : "";
-    shell("test", `${resumeBanner()}${planBanner}${nudge}
+    shell("test", `${resumeBanner()}
       <section class="hero">
         <div class="page-head"><span class="eyebrow">Exam mode · as close to test day as possible</span><h1>Exam</h1>
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
@@ -690,7 +745,6 @@
 
   // ================================================================== LABS (simulated terminal)
   // One lab per LPI lesson, split into parts; progress is stored per part (st.labs[partId]).
-  const LESSONS = window.LE_LESSONS || [];
   const machines = {};          // one live machine per part for this visit; reloading the page starts fresh
   const hintLevel = {};         // partId -> [hints shown per task]
   const coachTip = {};          // partId -> { task, say } from the last command
@@ -707,12 +761,12 @@
       <div class="card row spread"><span><b>${doneParts}</b> <span class="muted">of ${LABS.length} parts</span> · <b>${doneLessons}</b> <span class="muted">of ${LESSONS.length} lessons complete</span></span>
         ${next ? `<a class="btn primary" href="#lab/${next.id}">${doneParts ? "Continue" : "Start"}: ${esc(next.lesson)} part ${next.part}</a>` : `<span class="chip lv-mastered">All labs complete</span>`}</div>
       ${Object.keys(byTopic).sort().map(t => `<div class="stack" style="gap:10px"><div class="eyebrow">${t}. ${esc(TOP[t])}</div><div class="lessongrid">${byTopic[t].map(L => {
-        const parts = partsOf(L.lesson); const total = parts.reduce((a, p) => a + p.tasks.length, 0), got = parts.reduce((a, p) => a + labState(p.id).done.length, 0);
+        const parts = partsOf(L.lesson); const total = parts.reduce((a, p) => a + p.n, 0), got = parts.reduce((a, p) => a + labState(p.id).done.length, 0);
         const all = parts.every(p => labState(p.id).completedAt);
         return `<div class="card lessoncard ${all ? "done" : ""}"><div class="row spread"><span class="mono small muted">${esc(lessonName(L))}</span>${all ? `<span class="chip lv-mastered">Complete</span>` : got ? `<span class="chip lv-learning">${got}/${total}</span>` : `<span class="small muted">${parts.length} parts</span>`}</div>
           <b>${esc(L.title)}</b><div class="track2"><i style="width:${total ? 100 * got / total : 0}%;background:${all ? "var(--good)" : "var(--accent)"}"></i></div>
           <ol class="partlist">${parts.map(p => { const ls = labState(p.id);
-            return `<li><a href="#lab/${p.id}" class="${ls.completedAt ? "done" : ""}"><span class="pn">${ls.completedAt ? icon("check") : p.part}</span><span class="grow">${esc(p.title)}</span><span class="small muted mono">${ls.done.length}/${p.tasks.length}</span></a></li>`; }).join("")}</ol></div>`; }).join("")}</div></div>`).join("")}`);
+            return `<li><a href="#lab/${p.id}" class="${ls.completedAt ? "done" : ""}"><span class="pn">${ls.completedAt ? icon("check") : p.part}</span><span class="grow">${esc(p.title)}</span><span class="small muted mono">${ls.done.length}/${p.n}</span></a></li>`; }).join("")}</ol></div>`; }).join("")}</div></div>`).join("")}`);
   }
   // A light "did you mean" for typos, like command-not-found on real systems.
   function closestCommand(sh, word) {
@@ -722,32 +776,51 @@
     for (const c of cands) { const x = dist(word, c); if (x < bd) { bd = x; best = c; } }
     return best && best !== word ? best : null;
   }
+  const focusTask = {};         // partId -> task shown on phones (one task at a time above the terminal)
   function renderLab(id) {
-    const lab = LABS.find(l => l.id === id); if (!lab) return go("labs");
-    const ls = labState(id); const parts = partsOf(lab.lesson); const next = parts[lab.part] || LABS[LABS.indexOf(lab) + 1];
+    const meta = LABS.find(l => l.id === id); if (!meta) return go("labs");
+    if (!window.LEShell || !window.LE_LABS) {
+      shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><h1>${esc(meta.title)}</h1><p class="lead muted">Starting the lab system…</p></div>`);
+      loadLabs().then(() => { if ((location.hash || "").slice(1) === "lab/" + id) renderLab(id); },
+        () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the lab files. Check your connection and <a href="#lab/${esc(id)}" onclick="location.reload()">try again</a>.</div>`); });
+      return;
+    }
+    const lab = window.LE_LABS.find(l => l.id === id);
+    const ls = labState(id); const parts = partsOf(lab.lesson); const next = parts[lab.part] || LABS[LABS.indexOf(meta) + 1];
+    const related = (QBYPART[id] || []).filter(q => BANK.byId[q]);
     const sh = machines[id] = machines[id] || window.LEShell.createMachine({ setup: lab.setup });
     if (!sh.log) sh.log = `exit 0 lab: ${lab.title}. A simulated Linux system: type commands below. 'help' lists commands, 'man NAME' explains one.\n`;
     const hl = hintLevel[id] = hintLevel[id] || lab.tasks.map(() => 0);
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
     const tip = coachTip[id];
+    const fi = typeof focusTask[id] === "number" ? focusTask[id] : (tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
     shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><span class="eyebrow" style="margin-top:8px">Lesson ${esc(lab.obj)}${LESSONS.filter(x => x.obj === lab.obj).length > 1 ? "." + lab.lesson.split(".").pop() : ""} · ${esc(lab.lessonTitle)}</span>
         <h1>${esc(lab.title)}</h1><p class="lead">${rich(lab.intro)}</p>
         <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
-      ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<b>Part complete.</b> <span class="muted">Keep experimenting, or restart it for another run.</span></div>${next ? `<a class="btn primary" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : "Next lesson: " + esc(next.lesson)} →</a>` : `<a class="btn" href="#labs">All labs</a>`}</div>` : ""}
-      <div class="labwrap">
-        <div class="stack tasks">${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
-          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
+      ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<div><b>Part complete.</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
+        <div class="row">${related.length ? `<button class="primary" id="labQs">${icon("drill")}Answer ${plural(Math.min(10, related.length), "related question")}</button>` : ""}
+        ${next ? `<a class="btn ${related.length ? "" : "primary"}" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : "Next lesson: " + esc(next.lesson)} →</a>` : `<a class="btn" href="#labs">All labs</a>`}</div></div>` : ""}
+      <div class="labwrap ${focusTask[id] === "all" ? "" : "one"}">
+        <div class="stack tasks">
+          <div class="taskpager"><button class="ghost small" data-tp="-1" ${fi <= 0 ? "disabled" : ""} aria-label="Previous task">‹</button>
+            <span class="small"><b>Task ${fi + 1}</b> <span class="muted">of ${lab.tasks.length} · ${ls.done.length} done</span></span>
+            <button class="ghost small" data-tp="1" ${fi >= lab.tasks.length - 1 ? "disabled" : ""} aria-label="Next task">›</button><span class="grow"></span>
+            <button class="linkbtn" id="allTasks">${focusTask[id] === "all" ? "One at a time" : "All tasks"}</button></div>
+          ${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
+          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
             ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>` : `
             ${tip && tip.task === i ? `<div class="coach" role="status"><b>Coach:</b> ${rich(tip.say)}</div>` : ""}
             ${t.hints.slice(0, shown).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
             <div class="row small" style="gap:12px;margin-top:6px">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
             <pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
-          <div class="row small" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span><button class="ghost small" id="labReset">Restart part</button></div>
-          <div class="cmdrow small"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
-          <a class="small" href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a></div>
+          <div class="row small hide-one" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span><button class="ghost small" id="labReset">Restart part</button></div></div>
         <div class="term" id="term"><div class="term-out" id="termOut"></div>
           <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>
       </div>
+      <div class="labfoot stack small">
+        <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
+        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a>
+          ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
       <p class="small muted hide-sm"><span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line</p>`);
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
@@ -761,6 +834,7 @@
       if (!fresh.length) return false;
       ls.done.sort((a, b) => a - b); C.addActivity(st, fresh.length);
       if (coachTip[id] && fresh.includes(coachTip[id].task)) delete coachTip[id];
+      if (typeof focusTask[id] === "number") delete focusTask[id];        // follow the next unfinished task
       fresh.forEach((i, k) => setTimeout(() => toast(`Task ${i + 1} complete`), k * 900));
       if (ls.done.length === lab.tasks.length && !ls.completedAt) { ls.completedAt = Date.now(); setTimeout(() => toast(parts.every(p => labState(p.id).completedAt) ? "Lesson complete!" : "Part complete!"), fresh.length * 900); }
       save(); celebrate(); return true;
@@ -809,10 +883,15 @@
       else if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); sh.log += promptText() + inp.value + "^C\n"; sh.pending = null; inp.value = ""; paint(); }
     };
     $("#term").onclick = () => { if (!getSelection().toString()) inp.focus(); };
+    inp.onfocus = () => { if (matchMedia("(max-width: 900px)").matches) setTimeout(() => $("#term") && $("#term").scrollIntoView({ block: "end", behavior: "smooth" }), 250); };   // keep the prompt above the phone keyboard
     $$("[data-hint]").forEach(b => b.onclick = () => { const i = +b.dataset.hint; hl[i] = Math.min(lab.tasks[i].hints.length, hl[i] + 1); const y = scrollY; renderLab(id); scrollTo(0, y); });
     $$("[data-sol]").forEach(b => b.onclick = () => { const el = $("#sol" + b.dataset.sol); el.hidden = !el.hidden; b.textContent = el.hidden ? "Show solution" : "Hide solution"; });
     $$("[data-man]").forEach(b => b.onclick = () => { inp.value = "man " + b.dataset.man; inp.focus(); });
-    $("#labReset").onclick = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
+    const reset = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; delete focusTask[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
+    $("#labReset").onclick = reset; $("#labReset2").onclick = reset;
+    $$("[data-tp]").forEach(b => b.onclick = () => { focusTask[id] = Math.max(0, Math.min(lab.tasks.length - 1, fi + +b.dataset.tp)); const y = scrollY; renderLab(id); scrollTo(0, y); });
+    $("#allTasks").onclick = () => { if (focusTask[id] === "all") delete focusTask[id]; else focusTask[id] = "all"; const y = scrollY; renderLab(id); scrollTo(0, y); };
+    if ($("#labQs")) $("#labQs").onclick = () => begin(C.newSession(BANK, "drill", "Lab follow-up · " + lab.title, C.shuffle(related.slice(), C.rng()).slice(0, 10), { study: true }));
     if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
   }
   function openLabEditor(sh, req, after) {
@@ -1047,6 +1126,7 @@
     $("#exit").onclick = () => { save(); go(isTest ? "test" : S.mode === "review" ? "review" : "study"); };
     if ($("#hintBtn")) $("#hintBtn").onclick = () => showHint(S, id);
     $$("[data-cards-obj]").forEach(b => b.onclick = e => { e.preventDefault(); save(); startObjCards(b.dataset.cardsObj); });
+    $$("[data-labgo]").forEach(b => b.onclick = () => save());
     if (confirming) { $("#keep").onclick = () => { confirming = false; renderExam(); }; $("#doSubmit").onclick = finish; }
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
@@ -1084,6 +1164,7 @@
     return `<div class="studyref"><span class="eyebrow">Study this</span>
       <a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener">${icon("guide")}LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}</a>
       ${nc ? `<a href="#cards" data-cards-obj="${q.obj}">${icon("cards")}${nc} flashcards for ${q.obj}</a>` : ""}
+      ${(LABX.q[q.id] || []).map(pid => { const p = LABS.find(x => x.id === pid); return p ? `<a href="#lab/${p.id}" data-labgo="${p.id}" class="lablink">${icon("terminal")}Practise it: Lab ${esc(p.obj)}${LESSONS.filter(x => x.obj === p.obj).length > 1 ? "." + p.lesson.split(".").pop() : ""}, part ${p.part}: ${esc(p.title)}</a>` : ""; }).join("")}
       <span class="grow"></span>${reportLink(q)}</div>`;
   }
   function pickByNumber(pos) {
@@ -1171,7 +1252,7 @@
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const tag = (e.target.tagName || "").toLowerCase();
     const typing = tag === "input" && e.target.type !== "checkbox" && e.target.type !== "radio" || tag === "textarea" || tag === "select";
-    const h = (location.hash || "#test").slice(1);
+    const h = (location.hash || "#today").slice(1);
     if (h === "exam" && st.current && !typing) {
       const S = st.current;
       if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }

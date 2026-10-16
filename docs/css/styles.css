@@ -467,3 +467,51 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .editor { width: min(820px, 100%); display: flex; flex-direction: column; gap: 10px; }
 .editor textarea { width: 100%; min-height: 50vh; font: 13.5px/1.5 var(--mono); background: #0f1412; color: #d6e2dc; border-radius: 10px; padding: 12px; border: 1px solid #22302a; resize: vertical; }
 @media (max-width: 900px) { .labwrap { grid-template-columns: 1fr; } .term { position: static; height: 60vh; } }
+
+/* ---------- navigation: tabs inside Practice and Learn, bottom bar on phones */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: -8px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs a { padding: 9px 14px 11px; color: var(--muted); text-decoration: none; font: 600 .9rem var(--ui); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
+.tabs a:hover { color: var(--ink); }
+.tabs a.on { color: var(--accent); border-bottom-color: var(--accent); }
+.tabs .count { font: 600 .7rem var(--mono); background: var(--warm-soft); color: var(--warm); padding: 1px 6px; border-radius: 999px; }
+.bottomnav { display: none; }
+@media (max-width: 900px) {
+  .bottomnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--side);
+    border-top: 1px solid var(--line); padding: 4px 6px calc(4px + env(safe-area-inset-bottom)); }
+  .bottomnav a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; color: var(--muted); text-decoration: none; font: 600 .7rem var(--ui); position: relative; border-radius: 10px; }
+  .bottomnav a svg.i { width: 22px; height: 22px; }
+  .bottomnav a.on { color: var(--accent); }
+  .bottomnav .dot-count { position: absolute; top: 2px; left: calc(50% + 6px); font: 700 .62rem var(--mono); font-style: normal; background: var(--warm); color: #fff; padding: 1px 5px; border-radius: 999px; }
+  .page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
+}
+@media print { .bottomnav, .tabs { display: none !important; } }
+
+/* ---------- Today */
+.next-card { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.next-card .ic { width: 44px; height: 44px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.next-card h2 { margin: 0; }
+.card.later { padding: 14px 18px; gap: 12px; }
+.card.later svg.i { color: var(--muted); flex: none; }
+.todaystats .stat { text-decoration: none; color: inherit; }
+.todaystats .stat:hover { border-color: var(--accent); }
+.studyref .lablink { color: var(--accent); }
+
+/* ---------- labs on phones: one task at a time above the terminal */
+.taskpager { display: none; }
+.labfoot { margin-top: -8px; }
+.show-one { display: none; }
+@media (max-width: 900px) {
+  .labwrap.one .taskpager { display: flex; align-items: center; gap: 8px; }
+  .labwrap.one .task:not(.focus) { display: none; }
+  .labwrap.one .task.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .labwrap.one .hide-one { display: none; }
+  .labwrap .term { height: min(52vh, 460px); min-height: 280px; }
+  .show-one { display: inline-flex; }
+  .taskpager button { padding: .35rem .7rem; font-size: 1.05rem; }
+}
+.exam-bar .in { flex-wrap: nowrap; }
+.exam-bar .title { flex: 0 1 auto; max-width: none; }
+@media (max-width: 900px) { .startbar { bottom: calc(76px + env(safe-area-inset-bottom)); } }
+.exam-bar .in > :not(.title):not(.grow) { flex: none; white-space: nowrap; }

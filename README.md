@@ -131,6 +131,11 @@ with the terminal output.
   coach explains common mistakes as you make them, and every finished task says why it worked. The Linux
   system is simulated, so it works offline and on phones, and nothing can break. Its manual pages
   (`man`, `info`, `--help`) are written for the labs.
+- **Today.** One "do this next" card (due reviews, then your next lab part, then an exam or your weakest
+  objective) with the other good options underneath. Four places to go: Today, Practice, Labs and Progress,
+  with a bottom bar on phones.
+- **Questions and labs are linked.** After a question, "Practise it" opens the lab part that uses the same
+  commands, and finishing a lab part offers the exam questions on what you just practised.
 - **Daily review.** Every question you answer comes back on a schedule: a miss returns tomorrow, and each right
   answer pushes it further out (1, 2, 4, 8, then 16 days). Due flashcards are included, so a few minutes a day
   keeps everything fresh.
@@ -189,6 +194,8 @@ These are **original practice questions, not real exam questions**. LPI scores t
 docs/                 The web app (published by GitHub Pages)
   index.html, css/, js/core.js (logic), js/app.js (interface)
   data/bank.js, data/cards.js   generated, do not edit by hand
+  data/labindex.js    generated: lab titles/progress info and question-to-lab links (loaded with every page)
+  data/labs.js        generated: the full labs, loaded with js/shell.js and js/man.js only when Labs opens
 desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
 .github/workflows/    tests.yml (every push), release.yml (desktop builds), pages.yml (website + package repo),
                       docker.yml (container image)

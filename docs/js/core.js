@@ -244,7 +244,8 @@
       if (!lab.from || !lab.from.length || state.labs[lab.id]) continue;
       const olds = lab.from.map(id => state.labs[id]);
       if (!olds.every(o => o && o.completedAt)) continue;
-      state.labs[lab.id] = { done: lab.tasks.map((_, i) => i), completedAt: Math.max.apply(null, olds.map(o => o.completedAt)) }; n++;
+      const tasks = lab.n != null ? lab.n : lab.tasks.length;
+      state.labs[lab.id] = { done: Array.from({ length: tasks }, (_, i) => i), completedAt: Math.max.apply(null, olds.map(o => o.completedAt)) }; n++;
     }
     return n;
   }

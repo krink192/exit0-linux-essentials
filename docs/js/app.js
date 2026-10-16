@@ -14,7 +14,8 @@
   function loadLabs() {
     if (window.LEShell && window.LE_LABS) return Promise.resolve();
     const add = src => new Promise((res, rej) => { const el = document.createElement("script"); el.src = src; el.onload = res; el.onerror = () => rej(new Error(src)); document.head.appendChild(el); });
-    return labsLoading = labsLoading || Promise.all(["data/labs.js", "js/man.js", "js/shell.js"].map(add)).catch(e => { labsLoading = null; throw e; });
+    const v = LABX.assets || {};          // content hashes, so an updated app never runs an old cached copy
+    return labsLoading = labsLoading || Promise.all(["data/labs.js", "js/man.js", "js/shell.js"].map(f => add(f + (v[f] ? "?v=" + v[f] : "")))).catch(e => { labsLoading = null; throw e; });
   }
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";

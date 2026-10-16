@@ -35,6 +35,11 @@ class QuietHandler(SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass
 
+    def end_headers(self):
+        # Revalidate every file on each load, so an upgraded package never shows the old app from WebKit's cache.
+        self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
 
 def start_server():
     handler = functools.partial(QuietHandler, directory=WEB_ROOT)

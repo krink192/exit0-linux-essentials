@@ -422,6 +422,23 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 
 /* ---------- Labs */
 .labgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.lessongrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.lessoncard { display: flex; flex-direction: column; gap: 8px; }
+.lessoncard.done { border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
+.partlist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.partlist a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; color: inherit; text-decoration: none; font-size: .9rem; }
+.partlist a:hover { background: var(--sunk); }
+.partlist .pn { width: 22px; height: 22px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; font: 700 .72rem var(--mono); flex: none; }
+.partlist a.done .pn { background: var(--good); color: #fff; } .partlist a.done .pn svg.i { width: 13px; height: 13px; stroke-width: 3; }
+.partnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.partnav a { display: inline-flex; align-items: center; gap: 5px; font: 600 .8rem var(--ui); padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); text-decoration: none; background: var(--surface); }
+.partnav a.on { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.partnav a.done { background: var(--good-soft); border-color: transparent; color: var(--good); } .partnav a svg.i { width: 13px; height: 13px; stroke-width: 3; }
+.explain { margin-top: 8px; font-size: .86rem; color: var(--ink-2); }
+.coach { margin-top: 8px; background: var(--flag-soft); border-left: 3px solid var(--flag); border-radius: 8px; padding: 8px 10px; font-size: .86rem; }
+.cmdrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cmdchip { font: 600 .74rem var(--mono); padding: 4px 8px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--ink-2); }
+.cmdchip:hover { border-color: var(--accent); color: var(--accent); }
 .labcard { display: flex; flex-direction: column; gap: 8px; color: inherit; text-decoration: none; min-height: 170px; transition: border-color .15s; }
 .labcard:hover { border-color: var(--accent); }
 .labcard.done { border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }

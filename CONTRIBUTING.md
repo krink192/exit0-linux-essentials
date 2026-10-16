@@ -33,11 +33,18 @@ F("2.3", "Type the command that prints the current working directory.",
 
 ## Labs
 
-Labs live in `tools/labs.py`. Each task has `text`, `hint`, `solution` (one command per line) and a `check` that
-looks at the machine's state, such as a file's mode, a user's groups or the working directory, rather than at
-what was typed. `node tools/test_shell.js` runs every solution and fails if a task is already complete at the
-start or isn't complete afterwards. If a command is missing from the simulated shell (`docs/js/shell.js`), add it
-there with a test case in `tools/test_shell.js` that compares it with real Bash.
+Labs live in `tools/labs.py`: one lab per LPI Learning Materials lesson, split into parts. Each part has its own
+`setup` (files, users, groups, processes, environment, or commands to `run`) and a `commands` list. Each task has
+`text`, `hints` (vague to specific), `solution` (one command per line, as a learner would type it), an `explain`
+shown once it's done, optional `mistakes` (coaching that fires on a typed line and/or its output, each with a
+`try` example), and a `check` that looks at the machine's state, such as a file's mode, a user's groups or the
+working directory, rather than only at what was typed. Write tasks in your own words; don't copy the LPI
+exercises (their licence doesn't allow it).
+
+`node tools/test_shell.js` types every solution line by line and fails if a task is already complete at the
+start or isn't complete afterwards, if a mistake's example doesn't trigger it, or if a command listed for a part
+or lesson is never used. If a command is missing from the simulated shell (`docs/js/shell.js`), add it there with
+a test case in `tools/test_shell.js` that compares it with real Bash, and give it a page in `docs/js/man.js`.
 
 ## Flashcards
 

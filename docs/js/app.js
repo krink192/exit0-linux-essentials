@@ -115,7 +115,7 @@
     fetch: (url, o) => fetch(url, o),
     getState: () => st,
     resetProgress: () => { const keep = st.settings; st = C.freshState(); st.settings = keep; save(true); },
-    onChange: () => { save(true); C.awardBadges(st, BANK, CARDS, null, (window.LE_LABS || []).length); save(true); rerenderIfIdle(); },
+    onChange: () => { C.migrateLabs(st, window.LE_LABS || []); save(true); C.awardBadges(st, BANK, CARDS, null, (window.LE_LABS || []).length); save(true); rerenderIfIdle(); },
   }) : null;
   let syncTimer = null;
   function scheduleSync(delay) {
@@ -142,6 +142,8 @@
   }
   const LABS = window.LE_LABS || [];
   st.labs = st.labs || {};
+  const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
+  if (labsCarried) setTimeout(() => toast(`Labs are now one per lesson: ${labsCarried} part${labsCarried > 1 ? "s" : ""} marked complete from labs you'd finished`), 900);
   C.awardBadges(st, BANK, CARDS, null, LABS.length); save();         // credit for progress made before badges existed, without toasts
   function celebrate() {
     const lvBefore = celebrate.lv;

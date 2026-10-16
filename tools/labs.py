@@ -1584,6 +1584,19 @@ LESSONS.append(lesson("5.4.1", "Temporary directories and links", ["ls", "touch"
 ]))
 
 # ===================================================================================================== (more lessons above)
+# Old labs (before the per-lesson split) and the parts that replace them. Finishing an old lab marks these parts
+# complete (core.js migrateLabs), so nobody loses credit. Unfinished old labs aren't carried over.
+LEGACY = {"basics": ["2.1.1-b", "2.1.1-c", "2.1.2-b", "2.1.2-d"], "help": ["2.2.1-b"], "navigate": ["2.3.1-a"], "files": ["2.4.1-a"],
+          "archives": ["3.1.1-b", "3.1.1-d"], "text": ["3.2.1-a"], "scripts": ["3.3.1-a", "3.3.1-c"], "system": ["4.3.1-b"],
+          "network": ["4.4.1-c"], "users": ["5.2.1-c"], "perms": ["5.3.1-b", "5.3.1-c"], "special": ["5.4.1-a", "5.4.1-b"]}
+_FROM = {}
+for _old, _parts in LEGACY.items():
+    for _p in _parts: _FROM.setdefault(_p, []).append(_old)
+for L in LESSONS:
+    for p in L["parts"]:
+        if p["id"] in _FROM: p["from"] = _FROM[p["id"]]
+assert all(p in [q["id"] for L in LESSONS for q in L["parts"]] for ps in LEGACY.values() for p in ps), "LEGACY names a part that doesn't exist"
+
 # Flatten: the app keeps progress per part, so each part is a lab entry carrying its lesson's details.
 LABS = []
 for L in LESSONS:

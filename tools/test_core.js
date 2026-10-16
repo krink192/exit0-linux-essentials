@@ -132,6 +132,22 @@ t("xp, levels, streaks and badges come from saved progress", () => {
   st.days = days; assert(C.awardBadges(st, bank, cards, now).some(b => b.id === "streak3"));
   assert.deepStrictEqual(C.badgeStatus(st, bank, cards).find(b => b.id === "streak7").progress, [5, 7]);
 });
+t("finished old labs carry over to their new parts once, without double XP or badges", () => {
+  const st = C.freshState(); const t0 = new Date(2026, 9, 1).getTime();
+  st.labs = { basics: { done: [0, 1, 2, 3, 4, 5], completedAt: t0 }, files: { done: [0, 1], completedAt: null } };
+  const labs = [{ id: "2.1.2-b", from: ["basics"], tasks: [{}, {}, {}] }, { id: "2.4.1-a", from: ["files"], tasks: [{}, {}] }, { id: "x", tasks: [{}] }];
+  const xpBefore = C.xpInfo(st).xp;
+  assert.strictEqual(C.migrateLabs(st, labs), 1);
+  assert.deepStrictEqual(st.labs["2.1.2-b"], { done: [0, 1, 2], completedAt: t0 });
+  assert.strictEqual(st.labs["2.4.1-a"], undefined, "unfinished old labs aren't carried over");
+  assert.strictEqual(xpBefore, 10, "a finished old lab doesn't count itself; an unfinished one does");
+  assert.strictEqual(C.xpInfo(st).xp, 10 + 15, "the new part's tasks count instead");
+  assert.strictEqual(C.badgeStatus(st, bank, cards, 3).find(b => b.id === "lab-all").progress[0], 1, "the old lab no longer counts as a lab");
+  st.labs["2.1.2-b"] = { done: [] }; assert.strictEqual(C.migrateLabs(st, labs), 0, "a part you restarted isn't credited again");
+  global.window = global.window || {}; require(require("path").join(__dirname, "../docs/data/labs.js"));
+  for (const l of window.LE_LABS) for (const id of l.from || []) assert.ok(C.LEGACY_LABS.includes(id), l.id + " lists unknown old lab " + id);
+  assert.strictEqual(new Set([].concat(...window.LE_LABS.map(l => l.from || []))).size, C.LEGACY_LABS.length, "every old lab maps to a part");
+});
 t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(new Set(cards.map(c => c.id)).size, cards.length);
   assert(cards.some(c => c.deck === "concepts") && cards.some(c => c.deck === "commands"));

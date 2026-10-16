@@ -232,11 +232,27 @@
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
+  // The 12 labs before labs were split per lesson (Oct 2026). A completed one is credited to its new parts by
+  // migrateLabs, so it no longer counts for XP or badges itself; unfinished ones still count.
+  const LEGACY_LABS = ["basics", "help", "navigate", "files", "archives", "text", "scripts", "system", "network", "users", "perms", "special"];
+  const countedLab = (state, id) => !(LEGACY_LABS.indexOf(id) >= 0 && state.labs[id].completedAt);
+  /** Mark new lab parts complete when every old lab they replace was completed. Parts already started are left alone.
+   *  Deterministic, so every device computes the same result. Returns the number of parts credited. */
+  function migrateLabs(state, labs) {
+    state.labs = state.labs || {}; let n = 0;
+    for (const lab of labs || []) {
+      if (!lab.from || !lab.from.length || state.labs[lab.id]) continue;
+      const olds = lab.from.map(id => state.labs[id]);
+      if (!olds.every(o => o && o.completedAt)) continue;
+      state.labs[lab.id] = { done: lab.tasks.map((_, i) => i), completedAt: Math.max.apply(null, olds.map(o => o.completedAt)) }; n++;
+    }
+    return n;
+  }
   function xpInfo(state) {          // 1 XP per answer, +1 when right, 1 per flashcard review, 5 per lab task
     let total = 0;
     for (const id in state.qstats) total += (state.qstats[id].seen || 0) + (state.qstats[id].right || 0);
     for (const id in state.cards) total += state.cards[id].seen || 0;
-    for (const id in state.labs || {}) total += 5 * ((state.labs[id].done || []).length);
+    for (const id in state.labs || {}) if (countedLab(state, id)) total += 5 * ((state.labs[id].done || []).length);
     let lv = 0; while (lv + 1 < LEVEL_XP.length && total >= LEVEL_XP[lv + 1]) lv++;
     return { xp: total, level: lv + 1, name: LEVEL_NAMES[lv], floor: LEVEL_XP[lv], next: lv + 1 < LEVEL_XP.length ? LEVEL_XP[lv + 1] : null };
   }
@@ -278,7 +294,7 @@
     let cardSeen = 0; for (const id in state.cards) cardSeen += state.cards[id].seen || 0;
     const cardsMastered = cards.filter(c => state.cards[c.id] && state.cards[c.id].box >= 4).length;
     const reviews = state.tests.filter(t => t.mode === "review").length;
-    const labsDone = Object.values(state.labs || {}).filter(l => l.completedAt).length;
+    const labsDone = Object.keys(state.labs || {}).filter(id => state.labs[id].completedAt && countedLab(state, id)).length;
     const p = (n, goal) => ({ done: n >= goal, progress: [Math.min(n, goal), goal] });
     const flag = done => ({ done: !!done });
     const res = {
@@ -620,7 +636,7 @@
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
-           xpInfo, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
+           xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

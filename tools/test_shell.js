@@ -212,6 +212,17 @@ u("account details: passwd -S, chage, chsh, /etc/shadow fields", () => {
   sh.exec("chsh -s /bin/sh"); assert.strictEqual(sh.user("student").shell, "/bin/sh");
   assert.match(sh.exec("chsh -s /bin/fish").out, /invalid shell/);
 });
+u("name lookups need a nameserver in /etc/resolv.conf; /etc/hosts works without DNS", () => {
+  const sh = S.createMachine();
+  sh.exec("echo '# empty' | sudo tee /etc/resolv.conf");
+  assert.match(sh.exec("ping -c1 example.com").out, /Temporary failure in name resolution/);
+  assert.match(sh.exec("host example.com").out, /no servers could be reached/); assert.strictEqual(sh.exec("dig example.com").code, 9);
+  assert.match(sh.exec("ping -c1 localhost").out, /1 received/); assert.match(sh.exec("ping -c1 intranet").out, /10\.0\.0\.5/);
+  sh.exec("echo 'nameserver 192.168.1.1' | sudo tee /etc/resolv.conf"); sh.exec("sudo ip route del default");
+  assert.match(sh.exec("host example.com").out, /has address 93\.184\.215\.14/);    // names resolve again...
+  assert.match(sh.exec("ping -c1 example.com").out, /Network is unreachable/);       // ...but nothing leaves without a default route
+  sh.exec("sudo ip route add default via 192.168.1.1"); assert.match(sh.exec("ping -c1 example.com").out, /1 received/);
+});
 console.log(`units: ${units} passed`);
 
 // ---- every lab: tasks start incomplete, each solution completes its task (typed line by line, like a learner),

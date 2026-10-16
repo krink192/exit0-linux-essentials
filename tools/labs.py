@@ -1583,6 +1583,11 @@ LESSONS.append(lesson("5.4.1", "Temporary directories and links", ["ls", "touch"
     ], ["ln", "ls", "rm", "cat", "echo"], {"files": [F("~/Documents/document.txt", "doc\n"), F("~/notes.txt", "first\n")]}),
 ]))
 
+# ===================================================================================================== troubleshooting scenarios
+# Broken systems to diagnose and fix, using only 010-160 commands (tools/trouble_labs.py). They come after the per-lesson labs.
+from trouble_labs import TROUBLE  # noqa: E402  (needs the helpers above)
+LESSONS.extend(TROUBLE)
+
 # ===================================================================================================== (more lessons above)
 # Old labs (before the per-lesson split) and the parts that replace them. Finishing an old lab marks these parts
 # complete (core.js migrateLabs), so nobody loses credit. Unfinished old labs aren't carried over.
@@ -1601,5 +1606,5 @@ assert all(p in [q["id"] for L in LESSONS for q in L["parts"]] for ps in LEGACY.
 LABS = []
 for L in LESSONS:
     for i, p in enumerate(L["parts"]):
-        LABS.append(dict(p, obj=L["obj"], lesson=L["lesson"], lessonTitle=L["title"], url=L["url"], part=i + 1, parts=len(L["parts"])))
-LESSON_INDEX = [{k: L[k] for k in ("lesson", "obj", "num", "title", "url", "covers")} for L in LESSONS]
+        LABS.append(dict(p, obj=L["obj"], lesson=L["lesson"], lessonTitle=L["title"], url=L["url"], part=i + 1, parts=len(L["parts"]), **({"track": L["track"]} if L.get("track") else {})))
+LESSON_INDEX = [{k: L[k] for k in ("lesson", "obj", "num", "title", "url", "covers", "track") if k in L} for L in LESSONS]

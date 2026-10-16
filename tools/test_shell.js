@@ -58,6 +58,15 @@ const CASES = [
   `printf 'echo hi\\n' > s.sh; ./s.sh; echo $?; bash s.sh; sh s.sh`, `printf '#!/bin/bash\\nif [ $# -eq 0 ]; then\\n  echo usage\\n  exit 1\\nfi\\necho ok\\n' > u.sh; bash u.sh; echo $?; bash u.sh x`,
   `printf '#!/bin/bash\\nfor x in "$@"; do\\n  echo "[$x]"\\ndone\\n' > l.sh; bash l.sh a b c`, `printf '#!/bin/bash\\nx=2\\ny=3\\necho $x+$y\\n' > a.sh; bash a.sh`,
   `printf '#!/bin/bash\\necho "$2 $1"\\n' > w.sh; bash w.sh red blue`, `printf 'cd /\\npwd\\n' > c.sh; bash c.sh; pwd | grep -c /`,
+  // brace expansion, heredocs, printf, tr, sed -i, basename/dirname, rmdir -p, shift, ls -X, grep context, tar -r
+  `touch game{1..5}; ls; rm game?; ls | wc -l`, `echo {a,b}{1,2} pre{x,y}post {01..03} {c..a} {1..10..3} x{,y}`, `echo '{a,b}' "{a,b}" \\{a,b\\} \${HOME:+set}`,
+  `x=5; cat <<EOF\nx is $x\nEOF\ncat <<'EOF'\nx is $x\nEOF`, `cat <<-END\n\tindented\n\tEND\nwc -l <<X\na\nb\nX`,
+  `printf '%-6s|%4d|%.1f|%05d|%x\\n' ab 7 3.14159 42 255`, `printf 'a  b   c\\n' | tr -s ' '; echo hello | tr -d l; echo hello | tr 'a-y' 'b-z'`,
+  `printf 'x\\ny\\n' > f; sed -i 's/x/z/' f; cat f; sed -n '2p' f`, `basename /a/b/c.txt .txt; dirname /a/b/c.txt; dirname c.txt; basename /a/b/; dirname /x`,
+  `mkdir -p a/b/c; rmdir -p a/b/c; ls | wc -l`, `printf '#!/bin/bash\\necho $1; shift; echo $1 $#\\nshift 2\\necho "[$*]"\\n' > s.sh; bash s.sh a b c`,
+  `touch b.txt a.sh c.txt d; ls -X; ls -r`, `printf 'a\\nb\\nc\\nd\\ne\\n' > f; grep -A1 b f; grep -B1 d f; grep -n -C1 c f`,
+  `touch a b; tar -cf t.tar a; tar -rf t.tar b; tar -tf t.tar`, `mkdir x y; touch z; ls -d */`, `type -t cd; type -t if`, `printf abcdef | head -c 3; echo`,
+  `echo "a b" > f; cat -n f; cat -A f`, `mkdir d; cd d; cd ..; cd ~; pwd | grep -c work`,
   // misc builtins
   `type cd; type ls 2>/dev/null | grep -c ls; type nosuch; echo $?`, `GREETING=hi; export GREETING; bash -c 'echo $GREETING'`, `export A=1; unset A; echo "[$A]"`,
 ];
@@ -144,20 +153,100 @@ u("editor saves through permissions; checks", () => {
   assert.strictEqual(sh.check({ type: "script", path: "./hello.sh", args: "Ada", output: "Hello, Ada\n" }), true);
   assert.strictEqual(sh.check({ type: "perms", path: "hello.sh", perms: "-rwxr--r--" }), true);
 });
+u("PATH lookup: a broken PATH breaks ls, scripts in PATH run by name", () => {
+  const sh = S.createMachine();
+  assert.match(sh.exec("which passwd").out, /^\/usr\/bin\/passwd$/m);
+  sh.exec("PATH=~/scripts"); assert.match(sh.exec("ls").out, /ls: command not found/);
+  sh.exec("PATH=/usr/bin:/bin:~/scripts"); sh.exec("mkdir ~/scripts; printf '#!/bin/bash\\necho hi from $0\\n' > ~/scripts/hello; chmod +x ~/scripts/hello");
+  assert.match(sh.exec("hello").out, /hi from/);
+  assert.match(sh.exec("ls -l /usr/bin/passwd").out, /^-rwsr-xr-x/);
+});
+u("locate uses a database that updatedb refreshes", () => {
+  const sh = S.createMachine();
+  sh.exec("touch ~/fresh.txt"); assert.strictEqual(sh.exec("locate fresh.txt").out, "");
+  assert.match(sh.exec("updatedb").out, /can not open/); sh.exec("sudo updatedb");
+  assert.strictEqual(sh.exec("locate fresh.txt").out, "/home/student/fresh.txt\n");
+  assert.strictEqual(sh.exec("locate -l 1 README").out.split("\n").length, 2);
+});
+u("processes: ps, kill permissions, /proc", () => {
+  const sh = S.createMachine({ setup: { procs: [{ user: "student", cmd: "yes", cpu: 99.5, stat: "R", tty: "pts/1" }] } });
+  const pid = /student\s+(\d+)\s+99\.5/.exec(sh.exec("ps aux").out)[1];
+  assert.match(sh.exec("kill 780").out, /Operation not permitted/);
+  assert.match(sh.exec("cat /proc/" + pid + "/cmdline").out, /^yes/);
+  sh.exec("kill " + pid); assert.doesNotMatch(sh.exec("ps aux").out, /\byes\b/); assert.strictEqual(sh.stat("/proc/" + pid), null);
+  assert.strictEqual(sh.check({ type: "noproc", cmd: "yes" }), true);
+});
+u("child shells only inherit exported variables; exec keeps the PID", () => {
+  const sh = S.createMachine();
+  sh.exec("a=1; export b=2"); sh.exec("bash");
+  assert.strictEqual(sh.exec("echo [$a][$b] $SHLVL").out, "[][2] 2\n");
+  assert.notStrictEqual(sh.exec("echo $$").out, "2301\n"); assert.strictEqual(sh.exec("exit").out, "exit\n");
+  assert.strictEqual(sh.exec("echo [$a] $$").out, "[1] 2301\n");
+  sh.exec("exec bash"); assert.strictEqual(sh.exec("echo [$a] $$").out, "[] 2301\n");
+});
+u("ip changes stick; ping needs a route", () => {
+  const sh = S.createMachine();
+  assert.match(sh.exec("ip addr add 10.9.9.9/24 dev enp0s3").out, /Operation not permitted/);
+  sh.exec("sudo ip addr add 10.9.9.9/24 dev enp0s3"); assert.match(sh.exec("ip a show enp0s3").out, /inet 10\.9\.9\.9\/24/);
+  sh.exec("sudo ip route del default"); assert.match(sh.exec("ping -c 1 example.com").out, /Network is unreachable/);
+  sh.exec("sudo ip route add default via 192.168.1.1"); assert.match(sh.exec("ping -c1 example.com").out, /1 packets transmitted/);
+});
+u("unfinished input asks for more; heredocs; sudo nano saves as root", () => {
+  const sh = S.createMachine();
+  assert.strictEqual(sh.exec("for x in 1 2").incomplete, true); assert.strictEqual(sh.exec("for x in 1 2\ndo echo $x\ndone").out, "1\n2\n");
+  assert.strictEqual(sh.exec("echo 'open").incomplete, true);
+  sh.exec("sudo nano /etc/motd"); assert.ok(sh.writeFile("/etc/motd", "hello\n").ok);
+  sh.exec("nano /etc/hosts"); assert.ok(!sh.writeFile("/etc/hosts", "x").ok);
+});
+u("man, whatis, apropos, --help come from man.js", () => {
+  const sh = S.createMachine();
+  assert.match(sh.exec("man 5 passwd").out, /PASSWD\(5\)/); assert.match(sh.exec("whatis passwd").out, /passwd \(5\)/);
+  assert.match(sh.exec("man -k archiv").out, /tar \(1\)/); assert.match(sh.exec("man cd").out, /No manual entry for cd/);
+  assert.match(sh.exec("cp --help").out, /--update/); assert.match(sh.exec("info ls").out, /Sorting the output/);
+});
+u("account details: passwd -S, chage, chsh, /etc/shadow fields", () => {
+  const sh = S.createMachine();
+  sh.exec("sudo useradd -m -e 2027-01-31 -f 7 -u 1035 carol");
+  assert.match(sh.exec("sudo passwd -S carol").out, /^carol L /); sh.exec("sudo passwd carol"); assert.match(sh.exec("sudo passwd -S carol").out, /^carol P /);
+  assert.match(sh.exec("sudo grep carol /etc/shadow").out, /:7:20849:$/m);
+  sh.exec("chsh -s /bin/sh"); assert.strictEqual(sh.user("student").shell, "/bin/sh");
+  assert.match(sh.exec("chsh -s /bin/fish").out, /invalid shell/);
+});
 console.log(`units: ${units} passed`);
 
-// ---- every lab: tasks start incomplete, and each solution completes its task
+// ---- every lab: tasks start incomplete, each solution completes its task (typed line by line, like a learner),
+// every coaching mistake fires on its example, and every command a part or lesson lists is actually used.
 global.window = global.window || {};
 require(path.join(__dirname, "../docs/data/labs.js"));
-let labTasks = 0;
+const runLines = (sh, text) => { let out = "", buf = null; for (const line of text.split("\n")) { const src = buf == null ? line : buf + "\n" + line; const r = sh.exec(src); if (r.incomplete) { buf = src; continue; } buf = null; out += r.out; } assert.strictEqual(buf, null, "solution ends mid-command: " + text); return out; };
+const mistakeHits = (mk, line, out) => (mk.cmd == null || new RegExp(mk.cmd).test(line)) && (mk.out == null || new RegExp(mk.out).test(out)) && (mk.cmd != null || mk.out != null);
+const usesCmd = (sol, cmd) => new RegExp("(^|[\\s;|&(`$]|sudo\\s+)" + cmd.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=$|[\\s;|&)])", "m").test(sol);
+let labTasks = 0, mistakes = 0; const ids = new Set();
 for (const lab of window.LE_LABS) {
+  assert.ok(!ids.has(lab.id), "duplicate lab id " + lab.id); ids.add(lab.id);
+  assert.ok(lab.title && lab.intro && lab.lesson && lab.url && Array.isArray(lab.commands) && lab.tasks.length, lab.id + ": missing title/intro/lesson/url/commands/tasks");
+  for (const c of lab.commands) assert.ok(lab.tasks.some(t => usesCmd(t.solution, c)), `${lab.id}: lists '${c}' but no solution uses it`);
   const sh = S.createMachine({ setup: lab.setup });
-  lab.tasks.forEach((t, i) => assert.strictEqual(sh.check(t.check), false, `${lab.id} task ${i + 1} is already complete before starting`));
   lab.tasks.forEach((t, i) => {
-    let out = ""; for (const line of t.solution.split("\n")) out += sh.exec(line).out;
+    assert.ok(Array.isArray(t.hints) && t.hints.length && t.explain, `${lab.id} task ${i + 1}: needs hints and an explanation`);
+    assert.strictEqual(sh.check(t.check), false, `${lab.id} task ${i + 1} is already complete before starting`);
+  });
+  lab.tasks.forEach((t, i) => {
+    for (const mk of t.mistakes || []) {        // replay the earlier tasks on a fresh machine, then try the mistake
+      const tmp = S.createMachine({ setup: lab.setup }); lab.tasks.slice(0, i).forEach(p => runLines(tmp, p.solution));
+      const out = runLines(tmp, mk.try);
+      assert.ok(mistakeHits(mk, mk.try, out), `${lab.id} task ${i + 1}: mistake doesn't fire for '${mk.try}'. Output:\n${out}`);
+      assert.strictEqual(tmp.check(t.check), false, `${lab.id} task ${i + 1}: the mistake '${mk.try}' completes the task`);
+      mistakes++;
+    }
+    const out = runLines(sh, t.solution);
     assert.strictEqual(sh.check(t.check), true, `${lab.id} task ${i + 1} not complete after its solution. Output:\n${out}`);
     labTasks++;
   });
 }
-console.log(`labs: ${window.LE_LABS.length} labs, ${labTasks} tasks verified`);
+for (const L of window.LE_LESSONS) {
+  const parts = window.LE_LABS.filter(l => l.lesson === L.lesson); assert.ok(parts.length, "lesson " + L.lesson + " has no parts");
+  for (const c of L.covers) assert.ok(parts.some(p => p.tasks.some(t => usesCmd(t.solution, c))), `lesson ${L.lesson}: '${c}' is never used`);
+}
+console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length} parts, ${labTasks} tasks and ${mistakes} coaching tips verified`);
 process.exit(fail ? 1 : 0);

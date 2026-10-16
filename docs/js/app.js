@@ -687,41 +687,69 @@
   }
 
   // ================================================================== LABS (simulated terminal)
-  const machines = {};          // one live machine per lab for this visit; reloading the page starts fresh
+  // One lab per LPI lesson, split into parts; progress is stored per part (st.labs[partId]).
+  const LESSONS = window.LE_LESSONS || [];
+  const machines = {};          // one live machine per part for this visit; reloading the page starts fresh
+  const hintLevel = {};         // partId -> [hints shown per task]
+  const coachTip = {};          // partId -> { task, say } from the last command
   const labState = id => (st.labs[id] = st.labs[id] || { done: [] });
+  const partsOf = code => LABS.filter(l => l.lesson === code);
+  const lessonName = L => L.obj + (partsOf(L.lesson).length && LESSONS.filter(x => x.obj === L.obj).length > 1 ? " · Lesson " + L.num : "");
   function renderLabs() {
-    const doneLabs = LABS.filter(l => labState(l.id).completedAt).length;
-    const byTopic = {}; LABS.forEach(l => (byTopic[C.topicOf(l.obj)] = byTopic[C.topicOf(l.obj)] || []).push(l));
+    const doneParts = LABS.filter(l => labState(l.id).completedAt).length;
+    const doneLessons = LESSONS.filter(L => partsOf(L.lesson).every(p => labState(p.id).completedAt)).length;
+    const next = LABS.find(l => !labState(l.id).completedAt);
+    const byTopic = {}; LESSONS.forEach(L => (byTopic[C.topicOf(L.obj)] = byTopic[C.topicOf(L.obj)] || []).push(L));
     shell("labs", `<div class="page-head"><span class="eyebrow">Labs · hands-on practice</span><h1>Labs</h1>
-        <p class="lead">Practice on a Linux command line right in the app. Each lab gives you tasks, checks your work as you type, and has a hint and a solution for every step. The system is simulated, so nothing you do can break anything.</p></div>
-      <div class="card row spread"><span><b>${doneLabs}</b> <span class="muted">of ${LABS.length} labs complete</span></span><span class="small muted">5 XP for every task</span></div>
-      ${Object.keys(byTopic).sort().map(t => `<div class="stack" style="gap:10px"><div class="eyebrow">${t}. ${esc(TOP[t])}</div><div class="labgrid">${byTopic[t].map(l => {
-        const ls = labState(l.id), n = ls.done.length, total = l.tasks.length;
-        return `<a class="card labcard ${ls.completedAt ? "done" : ""}" href="#lab/${l.id}"><div class="row spread"><span class="mono small muted">${l.obj}</span>${ls.completedAt ? `<span class="chip lv-mastered">Complete</span>` : n ? `<span class="chip lv-learning">${n}/${total}</span>` : ""}</div>
-          <b>${esc(l.title)}</b><span class="small muted">${esc(l.intro)}</span>
-          <div class="track2" style="margin-top:auto"><i style="width:${100 * n / total}%;background:${ls.completedAt ? "var(--good)" : "var(--accent)"}"></i></div></a>`; }).join("")}</div></div>`).join("")}`);
+        <p class="lead">A lab for every lesson of the LPI Learning Materials, split into short parts so you use every command the lesson teaches. Each task is checked as you type, with hints that get more specific, coaching when a command goes wrong, and an explanation once you've got it. The system is simulated, so nothing you do can break anything.</p></div>
+      <div class="card row spread"><span><b>${doneParts}</b> <span class="muted">of ${LABS.length} parts</span> · <b>${doneLessons}</b> <span class="muted">of ${LESSONS.length} lessons complete</span></span>
+        ${next ? `<a class="btn primary" href="#lab/${next.id}">${doneParts ? "Continue" : "Start"}: ${esc(next.lesson)} part ${next.part}</a>` : `<span class="chip lv-mastered">All labs complete</span>`}</div>
+      ${Object.keys(byTopic).sort().map(t => `<div class="stack" style="gap:10px"><div class="eyebrow">${t}. ${esc(TOP[t])}</div><div class="lessongrid">${byTopic[t].map(L => {
+        const parts = partsOf(L.lesson); const total = parts.reduce((a, p) => a + p.tasks.length, 0), got = parts.reduce((a, p) => a + labState(p.id).done.length, 0);
+        const all = parts.every(p => labState(p.id).completedAt);
+        return `<div class="card lessoncard ${all ? "done" : ""}"><div class="row spread"><span class="mono small muted">${esc(lessonName(L))}</span>${all ? `<span class="chip lv-mastered">Complete</span>` : got ? `<span class="chip lv-learning">${got}/${total}</span>` : `<span class="small muted">${parts.length} parts</span>`}</div>
+          <b>${esc(L.title)}</b><div class="track2"><i style="width:${total ? 100 * got / total : 0}%;background:${all ? "var(--good)" : "var(--accent)"}"></i></div>
+          <ol class="partlist">${parts.map(p => { const ls = labState(p.id);
+            return `<li><a href="#lab/${p.id}" class="${ls.completedAt ? "done" : ""}"><span class="pn">${ls.completedAt ? icon("check") : p.part}</span><span class="grow">${esc(p.title)}</span><span class="small muted mono">${ls.done.length}/${p.tasks.length}</span></a></li>`; }).join("")}</ol></div>`; }).join("")}</div></div>`).join("")}`);
+  }
+  // A light "did you mean" for typos, like command-not-found on real systems.
+  function closestCommand(sh, word) {
+    const cands = sh.complete(""); let best = null, bd = 3;
+    const dist = (a, b) => { const d = Array.from({ length: a.length + 1 }, (_, i) => [i]); for (let j = 1; j <= b.length; j++) d[0][j] = j;
+      for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[a.length][b.length]; };
+    for (const c of cands) { const x = dist(word, c); if (x < bd) { bd = x; best = c; } }
+    return best && best !== word ? best : null;
   }
   function renderLab(id) {
     const lab = LABS.find(l => l.id === id); if (!lab) return go("labs");
-    const ls = labState(id);
+    const ls = labState(id); const parts = partsOf(lab.lesson); const next = parts[lab.part] || LABS[LABS.indexOf(lab) + 1];
     const sh = machines[id] = machines[id] || window.LEShell.createMachine({ setup: lab.setup });
-    if (!sh.log) sh.log = `exit 0 lab: ${lab.title}. This is a simulated Linux system. Type commands below; try 'help' for the list.\n`;
+    if (!sh.log) sh.log = `exit 0 lab: ${lab.title}. A simulated Linux system: type commands below. 'help' lists commands, 'man NAME' explains one.\n`;
+    const hl = hintLevel[id] = hintLevel[id] || lab.tasks.map(() => 0);
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
-    shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><span class="eyebrow" style="margin-top:8px">Lab · ${lab.obj} ${esc(OBJ[lab.obj].name)}</span><h1>${esc(lab.title)}</h1><p class="lead">${rich(lab.intro)}</p></div>
-      ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<b>Lab complete.</b> <span class="muted">Keep experimenting, or restart it for another run.</span></div><a class="btn" href="#labs">More labs</a></div>` : ""}
+    const tip = coachTip[id];
+    shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><span class="eyebrow" style="margin-top:8px">Lesson ${esc(lab.obj)}${LESSONS.filter(x => x.obj === lab.obj).length > 1 ? "." + lab.lesson.split(".").pop() : ""} · ${esc(lab.lessonTitle)}</span>
+        <h1>${esc(lab.title)}</h1><p class="lead">${rich(lab.intro)}</p>
+        <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
+      ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<b>Part complete.</b> <span class="muted">Keep experimenting, or restart it for another run.</span></div>${next ? `<a class="btn primary" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : "Next lesson: " + esc(next.lesson)} →</a>` : `<a class="btn" href="#labs">All labs</a>`}</div>` : ""}
       <div class="labwrap">
-        <div class="stack tasks">${lab.tasks.map((t, i) => { const done = ls.done.includes(i);
+        <div class="stack tasks">${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
           return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
-            <div class="row small" style="gap:12px;margin-top:6px"><button class="linkbtn" data-hint="${i}">${icon("bulb")}Hint</button><button class="linkbtn" data-sol="${i}">Show solution</button></div>
-            <div class="tip-box" id="hint${i}" hidden>${rich(t.hint)}</div><pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
-          <div class="row small" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span><button class="ghost small" id="labReset">Restart lab</button></div>
-          <a class="small" href="${OBJ[lab.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${lab.obj}: ${esc(OBJ[lab.obj].name)}</a></div>
+            ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>` : `
+            ${tip && tip.task === i ? `<div class="coach" role="status"><b>Coach:</b> ${rich(tip.say)}</div>` : ""}
+            ${t.hints.slice(0, shown).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
+            <div class="row small" style="gap:12px;margin-top:6px">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
+            <pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
+          <div class="row small" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span><button class="ghost small" id="labReset">Restart part</button></div>
+          <div class="cmdrow small"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
+          <a class="small" href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a></div>
         <div class="term" id="term"><div class="term-out" id="termOut"></div>
           <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>
       </div>
       <p class="small muted hide-sm"><span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line</p>`);
     const out = $("#termOut"), inp = $("#termIn");
-    const promptHTML = () => { const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
+    const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
+    const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
     const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
@@ -730,37 +758,59 @@
       lab.tasks.forEach((t, i) => { if (!ls.done.includes(i) && sh.check(t.check)) { ls.done.push(i); fresh.push(i); } });
       if (!fresh.length) return false;
       ls.done.sort((a, b) => a - b); C.addActivity(st, fresh.length);
+      if (coachTip[id] && fresh.includes(coachTip[id].task)) delete coachTip[id];
       fresh.forEach((i, k) => setTimeout(() => toast(`Task ${i + 1} complete`), k * 900));
-      if (ls.done.length === lab.tasks.length && !ls.completedAt) { ls.completedAt = Date.now(); setTimeout(() => toast("Lab complete!"), fresh.length * 900); }
+      if (ls.done.length === lab.tasks.length && !ls.completedAt) { ls.completedAt = Date.now(); setTimeout(() => toast(parts.every(p => labState(p.id).completedAt) ? "Lesson complete!" : "Part complete!"), fresh.length * 900); }
       save(); celebrate(); return true;
     };
+    // Coaching: the first unfinished task whose known mistakes match what was typed and printed.
+    const coach = (line, output, code) => {
+      const before = coachTip[id]; delete coachTip[id];
+      for (let i = 0; i < lab.tasks.length; i++) { if (ls.done.includes(i)) continue;
+        for (const mk of lab.tasks[i].mistakes || []) {
+          if ((mk.cmd == null || new RegExp(mk.cmd).test(line)) && (mk.out == null || new RegExp(mk.out).test(output)) && (mk.cmd != null || mk.out != null)) { coachTip[id] = { task: i, say: mk.say }; return true; }
+        } }
+      // general advice for the current task when a command fails in a common way
+      const cur = lab.tasks.findIndex((_, i) => !ls.done.includes(i)), cmd0 = (line.trim().split(/\s+/)[0] || "");
+      const general = /are you root|superuser|Permission denied\.$|cannot lock \/etc|RTNETLINK answers: Operation not permitted|must be run as root/m.test(output) && cmd0 !== "sudo" ? "That command changes the system, so it needs root. Run it again with `sudo` in front."
+        : /Permission denied|Operation not permitted/.test(output) ? "You don't have the rights for that. `ls -l` shows a file's owner and permissions; system changes need `sudo`."
+        : /No such file or directory/.test(output) && !/command not found/.test(output) ? "Check the name and where you are: `pwd` shows your directory, `ls` lists what's here, and Tab completes names."
+        : /(invalid|unrecognized) option|missing operand|Usage:|usage:/.test(output) ? "Check the syntax with `" + cmd0 + " --help` or `man " + cmd0 + "`." : null;
+      if (general && cur >= 0 && code !== 0) { coachTip[id] = { task: cur, say: general }; return true; }
+      return !!before;
+    };
     const run = line => {
-      const p = sh.prompt();
-      sh.log += `${p.user}@${p.host}:${p.path}${p.sym} ${line}\n`;
-      const r = sh.exec(line);
+      sh.log += promptText() + line + "\n";
+      const src = sh.pending != null ? sh.pending + "\n" + line : line;
+      const r = sh.exec(src);
+      if (r.incomplete) { sh.pending = src; hi = null; paint(); return; }       // unfinished (open quote, heredoc, if...fi): keep reading with a "> " prompt
+      sh.pending = null;
       let text = r.out; const clr = text.lastIndexOf("\u001bc"); if (clr >= 0) { sh.log = ""; text = text.slice(clr + 2); }
+      if (r.code === 127) { const m0 = /^bash: (\S+): command not found$/m.exec(text); const guess = m0 && closestCommand(sh, m0[1]); if (guess) text += `(lab: did you mean '${guess}'?)\n`; }
       sh.log += text; hi = null;
       if (sh.log.length > 60000) sh.log = sh.log.slice(-50000);
       const rerender = () => { const y = scrollY; renderLab(id); scrollTo(0, y); const i = $("#termIn"); if (i) i.focus({ preventScroll: true }); };
+      const tipChanged = coach(src, r.out, r.code);
       if (r.edit) openLabEditor(sh, r.edit, () => { if (evaluate()) rerender(); else paint(); });
-      if (evaluate()) { rerender(); return; }
+      if (evaluate() || tipChanged) { rerender(); return; }
       paint();
     };
     inp.onkeydown = e => {
       if (e.key === "Enter") { e.preventDefault(); const line = inp.value; inp.value = ""; run(line); }
       else if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); const h = sh.m.history; if (!h.length) return;
-        hi = hi == null ? h.length : hi; hi = Math.max(0, Math.min(h.length, hi + (e.key === "ArrowUp" ? -1 : 1))); inp.value = h[hi] || ""; }
+        hi = hi == null ? h.length : hi; hi = Math.max(0, Math.min(h.length, hi + (e.key === "ArrowUp" ? -1 : 1))); inp.value = (h[hi] || "").split("\n")[0]; }
       else if (e.key === "Tab") { e.preventDefault(); const words = inp.value.split(" "); const opts = sh.complete(inp.value);
-        if (opts.length === 1) { words[words.length - 1] = opts[0] + (opts[0].endsWith("/") ? "" : " "); inp.value = words.join(" "); }
+        if (opts.length === 1) { words[words.length - 1] = opts[0].replace(/ /g, "\\ ") + (opts[0].endsWith("/") ? "" : " "); inp.value = words.join(" "); }
         else if (opts.length > 1) { let pre = opts[0]; opts.forEach(o => { while (!o.startsWith(pre)) pre = pre.slice(0, -1); }); if (pre.length > words[words.length - 1].length) { words[words.length - 1] = pre; inp.value = words.join(" "); }
-          else { const p = sh.prompt(); sh.log += `${p.user}@${p.host}:${p.path}${p.sym} ${inp.value}\n` + opts.map(o => o.split("/").filter(Boolean).pop() + (o.endsWith("/") ? "/" : "")).join("  ") + "\n"; paint(); } } }
+          else { sh.log += promptText() + inp.value + "\n" + opts.map(o => o.split("/").filter(Boolean).pop() + (o.endsWith("/") ? "/" : "")).join("  ") + "\n"; paint(); } } }
       else if (e.ctrlKey && e.key.toLowerCase() === "l") { e.preventDefault(); sh.log = ""; paint(); }
-      else if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); const p = sh.prompt(); sh.log += `${p.user}@${p.host}:${p.path}${p.sym} ${inp.value}^C\n`; inp.value = ""; paint(); }
+      else if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); sh.log += promptText() + inp.value + "^C\n"; sh.pending = null; inp.value = ""; paint(); }
     };
     $("#term").onclick = () => { if (!getSelection().toString()) inp.focus(); };
-    $$("[data-hint]").forEach(b => b.onclick = () => { const el = $("#hint" + b.dataset.hint); el.hidden = !el.hidden; });
+    $$("[data-hint]").forEach(b => b.onclick = () => { const i = +b.dataset.hint; hl[i] = Math.min(lab.tasks[i].hints.length, hl[i] + 1); const y = scrollY; renderLab(id); scrollTo(0, y); });
     $$("[data-sol]").forEach(b => b.onclick = () => { const el = $("#sol" + b.dataset.sol); el.hidden = !el.hidden; b.textContent = el.hidden ? "Show solution" : "Hide solution"; });
-    $("#labReset").onclick = () => { delete machines[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
+    $$("[data-man]").forEach(b => b.onclick = () => { inp.value = "man " + b.dataset.man; inp.focus(); });
+    $("#labReset").onclick = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
     if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
   }
   function openLabEditor(sh, req, after) {

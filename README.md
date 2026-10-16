@@ -118,9 +118,11 @@ with the terminal output.
 
 ## What's inside
 
-- **360 questions.** Single-answer, choose-two/three and type-the-command questions, each tagged *Recall*,
-  *Apply* or *Analyze* (129, 152 and 79 of them) and each with a written explanation and a hint.
-- **Why that's wrong.** Every wrong option on every multiple-choice question (923 of them) has a one-line
+- **400 questions**, ten full sets that each match the exam blueprint. Single-answer, choose-two/three and
+  type-the-command questions, each tagged *Recall*, *Apply* or *Analyze* (129, 163 and 108 of them) and each
+  with a written explanation and a hint. Some type-the-command questions are checked by running your answer
+  on the simulated system, so any command that does the job counts, not just one spelling.
+- **Why that's wrong.** Every wrong option on every multiple-choice question (1,014 of them) has a one-line
   note saying why it's wrong or what it actually does. You see them after checking an answer in Study mode
   and when reviewing a finished exam.
 - **Labs.** A hands-on lab for every lesson of the LPI Learning Materials that teaches commands (21 lessons,
@@ -131,6 +133,11 @@ with the terminal output.
   coach explains common mistakes as you make them, and every finished task says why it worked. The Linux
   system is simulated, so it works offline and on phones, and nothing can break. Its manual pages
   (`man`, `info`, `--help`) are written for the labs.
+- **Troubleshooting labs.** Six broken systems to diagnose and fix, using only commands from the exam
+  objectives: no internet (missing default route, empty `/etc/resolv.conf`), a web page the server can't read
+  (directory and file permissions), a file you can't delete in `/tmp` (sticky bit), a script that won't run
+  (execute bit, shebang, `PATH`), a new hire who can't save to a shared folder (groups, setgid) and a slow
+  server (`top`, `free`, `ps`, logs, signals). Tasks check the system itself, so any correct fix counts.
 - **Today.** One "do this next" card (due reviews, then your next lab part, then an exam or your weakest
   objective) with the other good options underneath. Four places to go: Today, Practice, Labs and Progress,
   with a bottom bar on phones.

@@ -48,8 +48,34 @@
 
   // ------------------------------------------------------------- grading
   function answered(q, a) { return q.type === "fill" ? norm(a) !== "" : Array.isArray(a) && a.length > 0; }
+  // Type-the-command questions with a `lab` block ({ setup, check }) are also graded by running the answer in the lab
+  // shell (shell.js) on a fresh simulated machine: any command that leaves the machine in the checked state counts,
+  // not only the spellings in `accept`. Without the shell loaded, grading falls back to the accepted list.
+  let shellLib = null;
+  function labShell() {
+    if (shellLib) return shellLib;
+    const g = typeof globalThis !== "undefined" ? globalThis : self;
+    if (g.LEShell) return (shellLib = g.LEShell);
+    if (typeof require === "function") { try { return (shellLib = require("./shell.js")); } catch (e) { /* not bundled here */ } }
+    return null;
+  }
+  const labCache = new Map();
+  /** Run a typed answer for a lab-checked question. Returns { ok, out, code }, or null when the shell isn't available. */
+  function runLab(q, a) {
+    if (!q || !q.lab || norm(a) === "") return null;
+    const key = q.id + "\u0000" + String(a).trim();
+    if (labCache.has(key)) return labCache.get(key);
+    const S = labShell(); if (!S) return null;
+    const sh = S.createMachine({ setup: q.lab.setup || {} });
+    let r;
+    try { r = sh.exec(String(a).trim(), { noIncomplete: true, tty: false }); } catch (e) { r = { out: "error: " + (e && e.message || e) + "\n", code: 1 }; }
+    const res = { ok: !!sh.check(q.lab.check), out: r.out || "", code: r.code };
+    if (labCache.size > 500) labCache.clear();
+    labCache.set(key, res);
+    return res;
+  }
   function isCorrect(q, a) {
-    if (q.type === "fill") return a != null && q.accept.some(x => norm(x) === norm(a));
+    if (q.type === "fill") { if (a == null) return false; if (q.accept.some(x => norm(x) === norm(a))) return true; const r = runLab(q, a); return !!(r && r.ok); }
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
   }
@@ -635,7 +661,7 @@
     return st;
   }
 
-  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect,
+  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,

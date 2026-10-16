@@ -297,7 +297,7 @@
     }
     for (const p of s.procs || []) {
       const pr = proc(p.pid || m.nextPid++, p.ppid || 1, p.user || user, p.tty || "?", p.stat || "S", p.cmd, p.comm || p.cmd.split(" ")[0].split("/").pop(), p.vsz || 9800, p.rss || 2100);
-      if (p.cpu != null) pr.cpu = p.cpu; if (p.time) pr.time = p.time; if (p.start) pr.start = p.start;
+      if (p.cpu != null) pr.cpu = p.cpu; if (p.time) pr.time = p.time; if (p.start) pr.start = p.start; if (p.ignoresTerm) pr.ignoresTerm = true;
       m.procs.push(pr); procDir(m, pr);
     }
     for (const k in s.env || {}) m.env[k] = s.env[k];
@@ -2241,7 +2241,7 @@
     const bsd = args.length && !args[0].startsWith("-");
     const flags = bsd ? args[0] : args.filter(a => a.startsWith("-")).map(a => a.slice(1)).join("");
     let sel; let fmt = "def"; let tree = /f/.test(bsd ? flags : "") || args.includes("--forest");
-    const uIdx = args.indexOf("-u"), pIdx = args.indexOf("-p"), UArg = uIdx >= 0 ? args[uIdx + 1] : null;
+    const uIdx = args.indexOf("-u"), pIdx = args.findIndex(a => /^-[A-Za-z]*p$/.test(a)), UArg = uIdx >= 0 ? args[uIdx + 1] : null;
     if (bsd) {
       if (/a/.test(flags) && /x/.test(flags)) sel = all; else if (/x/.test(flags)) sel = all.filter(p => p.user === me); else if (/a/.test(flags)) sel = all.filter(p => p.tty !== "?"); else sel = all.filter(p => p.user === me && p.tty !== "?");
       fmt = /u/.test(flags) ? "u" : "bsd";
@@ -2253,8 +2253,9 @@
       if (/H/.test(flags)) tree = true;
     }
     const rows = tree ? forest(sel) : sel.map(p => [p, 0]);
+    if (!rows.length) { io.out(fmt === "full" ? "UID          PID    PPID  C STIME TTY          TIME CMD\n" : fmt === "u" ? "USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n" : fmt === "bsd" ? "    PID TTY      STAT   TIME COMMAND\n" : "    PID TTY          TIME CMD\n"); return 1; }   // e.g. ps -p with a PID that's gone
     const cmdOf = (p, d, full) => (d ? "  ".repeat(d - 1) + " \\_ " : "") + (full ? p.cmd : p.comm);
-    const time8 = p => "00:00:" + (p.time === "0:02" ? "02" : "00");
+    const time8 = p => { const [mm, ss] = String(p.time || "0:00").split(":").map(Number); return [Math.floor(mm / 60), mm % 60, ss || 0].map(x => String(x).padStart(2, "0")).join(":"); };
     if (fmt === "u") { io.out("USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND\n" + rows.map(([p, d]) => pad(p.user.length > 8 ? p.user.slice(0, 7) + "+" : p.user, 8, true) + pad(p.pid, 8) + pad(p.cpu.toFixed(1), 5) + pad(p.mem.toFixed(1), 5) + pad(p.vsz, 7) + pad(p.rss, 6) + " " + pad(p.tty, 8, true) + " " + pad(p.stat, 4, true) + " " + pad(p.start, 5, true) + pad(p.time, 7) + " " + cmdOf(p, d, true)).join("\n") + "\n"); return 0; }
     if (fmt === "bsd") { io.out("    PID TTY      STAT   TIME COMMAND\n" + rows.map(([p, d]) => pad(p.pid, 7) + " " + pad(p.tty, 8, true) + " " + pad(p.stat, 6, true) + pad(p.time, 5) + " " + cmdOf(p, d, true)).join("\n") + "\n"); return 0; }
     if (fmt === "full") { io.out("UID          PID    PPID  C STIME TTY          TIME CMD\n" + rows.map(([p, d]) => pad(p.user, 8, true) + pad(p.pid, 8) + pad(p.ppid, 8) + pad(Math.min(99, Math.round(p.cpu)), 3) + " " + pad(p.start, 5, true) + " " + pad(p.tty, 8, true) + " " + time8(p) + " " + cmdOf(p, d, true)).join("\n") + "\n"); return 0; }
@@ -2334,26 +2335,38 @@
   };
   const DNS = { "example.com": { A: "93.184.215.14", AAAA: "2606:2800:21f:cb07:6820:80da:af6b:8b2c", MX: "0 .", TXT: "\"v=spf1 -all\"" }, "www.example.com": { CNAME: "example.com." },
     "lpi.org": { A: "65.39.134.165", MX: "10 mail.lpi.org." }, "learning.lpi.org": { A: "65.39.134.168" }, "github.com": { A: "140.82.112.4", MX: "1 aspmx.l.google.com." }, "mail.lpi.org": { A: "65.39.134.170" } };
-  function lookup(m, name) { const hr = asRoot(m, () => tryResolve(m, "/etc/hosts")); const hosts = hr.ino != null ? node(m, hr.ino).data : ""; for (const l of lines(hosts)) { const p = l.trim().split(/\s+/); if (!l.trim().startsWith("#") && p.slice(1).includes(name)) return p[0]; }
-    if (name === "localhost") return "127.0.0.1"; const rec = DNS[name.replace(/\.$/, "")]; return rec ? rec.A || (rec.CNAME ? lookup(m, rec.CNAME.replace(/\.$/, "")) : null) : null; }
+  function hostsLookup(m, name) { const hr = asRoot(m, () => tryResolve(m, "/etc/hosts")); const hosts = hr.ino != null ? node(m, hr.ino).data : ""; for (const l of lines(hosts)) { const p = l.trim().split(/\s+/); if (!l.trim().startsWith("#") && p.slice(1).includes(name)) return p[0]; }
+    return name === "localhost" ? "127.0.0.1" : null; }
+  // Names not in /etc/hosts need a nameserver line in /etc/resolv.conf. (Reaching that server is not modelled, so a missing default
+  // route still shows up as "Network is unreachable" when the packets are sent, as the 4.4 lab teaches.)
+  function resolverState(m) {
+    const r = asRoot(m, () => tryResolve(m, "/etc/resolv.conf")); const txt = r.ino != null ? node(m, r.ino).data || "" : "";
+    const ns = lines(txt).map(l => /^\s*nameserver\s+(\S+)/.exec(l)).filter(Boolean).map(x => x[1]);
+    return ns.length ? "ok" : "none";
+  }
+  function lookup(m, name) { const h = hostsLookup(m, name); if (h) return h; if (resolverState(m) !== "ok") return null;
+    const rec = DNS[name.replace(/\.$/, "")]; return rec ? rec.A || (rec.CNAME ? lookup(m, rec.CNAME.replace(/\.$/, "")) : null) : null; }
   function pingCmd(v6) { return (m, args, io) => {
     const { flags: f, rest } = parseOpts(args, { name: "ping", flags: "c:i:W:w:q46n", long: {} });
     const host = rest[0]; if (!host) { io.err("ping: usage error: Destination address required\n"); return 1; }
     const six = v6 || f[6];
     let ip = six ? (host === "localhost" || host === "::1" ? "::1" : /:/.test(host) ? host : (DNS[host] || {}).AAAA) : /^\d+\.\d+\.\d+\.\d+$/.test(host) ? host : lookup(m, host);
+    if (!ip && !six && !hostsLookup(m, host) && resolverState(m) !== "ok") { io.err("ping: " + host + ": Temporary failure in name resolution\n"); return 2; }
     if (!ip) { io.err("ping: " + host + ": " + (six ? "Address family for hostname not supported" : "Name or service not known") + "\n"); return 2; }
     const n = f.c != null ? +f.c : 4; if (!(n > 0)) { io.err("ping: invalid argument: '" + f.c + "': out of range: 1 <= value <= 9223372036854775807\n"); return 1; }
     const local = ip.startsWith("127.") || ip === "::1" || m.net.links.some(l => l.addrs.some(a => a.split("/")[0] === ip));
-    const reach = local || m.net.routes.some(r => r.dst === "default") || /^192\.168\.1\./.test(ip);
+    const lan = /^192\.168\.1\./.test(ip);            // on our own subnet: reached directly, without the gateway
+    const reach = local || m.net.routes.some(r => r.dst === "default") || lan;
     if (!reach) { io.err("ping: connect: Network is unreachable\n"); return 2; }
     io.out("PING " + host + (host !== ip ? " (" + ip + ")" : "") + " " + (six ? "56 data bytes" : "56(84) bytes of data.") + "\n");
-    if (!f.q) for (let i = 1; i <= n; i++) io.out("64 bytes from " + (host !== ip ? (local ? host : host) + " (" + ip + ")" : ip) + ": icmp_seq=" + i + " ttl=" + (local ? 64 : 56) + " time=" + (local ? "0.0" + (3 + i) : "1" + i + ".2") + " ms\n");
+    if (!f.q) for (let i = 1; i <= n; i++) io.out("64 bytes from " + (host !== ip ? (local ? host : host) + " (" + ip + ")" : ip) + ": icmp_seq=" + i + " ttl=" + (local ? 64 : lan ? 64 : 56) + " time=" + (local ? "0.0" + (3 + i) : lan ? "0." + (3 + i) + "1" : "1" + i + ".2") + " ms\n");
     io.out("\n--- " + host + " ping statistics ---\n" + n + " packets transmitted, " + n + " received, 0% packet loss, time " + (n - 1) * 1001 + "ms\n");
   }; }
   CMDS.ping = pingCmd(false); CMDS.ping6 = pingCmd(true);
   CMDS.host = (m, args, io) => {
     const { flags: f, rest } = parseOpts(args, { name: "host", flags: "t:a46v", long: {} });
     const name = rest[0]; if (!name) { io.err("Usage: host [-aCdilrTvVw] [-c class] [-N ndots] [-t type] [-W time]\n            [-R number] [-m flag] [-p port] hostname [server]\n"); return 1; }
+    if (resolverState(m) !== "ok") { io.out(";; connection timed out; no servers could be reached\n"); return 1; }
     if (/^\d+\.\d+\.\d+\.\d+$/.test(name)) { const hit = Object.keys(DNS).find(k => DNS[k].A === name); if (!hit) { io.out("Host " + name.split(".").reverse().join(".") + ".in-addr.arpa. not found: 3(NXDOMAIN)\n"); return 1; } io.out(name.split(".").reverse().join(".") + ".in-addr.arpa domain name pointer " + hit + ".\n"); return 0; }
     const rec = DNS[name.replace(/\.$/, "")]; if (!rec) { io.out("Host " + name + " not found: 3(NXDOMAIN)\n"); return 1; }
     const t = (f.t || "").toUpperCase();
@@ -2368,6 +2381,7 @@
   CMDS.dig = (m, args, io) => {
     const short = args.includes("+short"); const rest = args.filter(a => !a.startsWith("+") && !a.startsWith("@") && a !== "-x");
     const rev = args.includes("-x");
+    if (resolverState(m) !== "ok") { io.out("\n; <<>> DiG 9.18.28 <<>> " + args.join(" ") + "\n;; global options: +cmd\n;; no servers could be reached\n"); return 9; }
     let name = rest.find(a => !/^(A|AAAA|MX|TXT|CNAME|NS|PTR|ANY)$/i.test(a)) || "."; const type = (rest.find(a => /^(A|AAAA|MX|TXT|CNAME|NS|PTR|ANY)$/i.test(a)) || (rev ? "PTR" : "A")).toUpperCase();
     let answers = [];
     if (rev) { const hit = Object.keys(DNS).find(k => DNS[k].A === name); name = name.split(".").reverse().join(".") + ".in-addr.arpa"; if (hit) answers.push([name + ".", "PTR", hit + "."]); }
@@ -2563,7 +2577,8 @@
       case "equals": { const n = st(c.path); return !!n && n.type === "file" && n.data === c.text; }
       case "lines": { const n = st(c.path); return !!n && n.type === "file" && lines(n.data).length === c.count; }
       case "link": { const r = tryResolve(m, c.path, { follow: false }); if (r.ino == null) return false; const n = node(m, r.ino); return n.type === "link" && (!c.target || n.target === c.target); }
-      case "hardlink": { const a = st(c.path), b = st(c.other); return !!a && !!b && a === b; }
+      case "hardlink": { const a = st(c.path), b = st(c.other); const own = tryResolve(m, c.path, { follow: false });   // a symlink to the file isn't a hard link
+        return !!a && !!b && a === b && own.ino != null && node(m, own.ino).type !== "link"; }
       case "archive": { const n = st(c.path); if (!n || !n.blob) return false; const { layers, blob } = unwrap(n.blob); if (c.compression && layers[0] !== c.compression) return false; if (c.compression === null && layers.length) return false;
         if (c.format && blob.kind !== c.format) return false; return (c.has || []).every(p => blob.entries.some(e => e.path.replace(/\/$/, "") === p)); }
       case "compressed": { const n = st(c.path); return !!n && !!n.blob && n.blob.kind === c.kind; }

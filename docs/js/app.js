@@ -52,7 +52,9 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const rich = s => esc(s).replace(/`([^`]+)`/g, "<code>$1</code>");
+  // `code` and **bold** (bold only outside code spans)
+  const rich = s => esc(s).split(/(`[^`]+`)/).map(p => p.length > 1 && p[0] === "`" && p.endsWith("`") ? "<code>" + p.slice(1, -1) + "</code>" : p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")).join("");
+  const LPI_PDF = "https://learning.lpi.org/pdfstore/LPI-Learning-Material-010-160-en.pdf";     // the whole 010-160 book, CC BY-NC-ND (link only)
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const fmtDate = ms => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
@@ -731,7 +733,7 @@
         <li><b>Single answer:</b> pick the one best option.</li>
         <li><b>Multiple answer:</b> the question tells you how many to pick, as in "Choose TWO".</li>
         <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li></ul></div>
-      <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table.</p>
+      <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table. Each Lesson link opens LPI's free online lesson; <a href="${LPI_PDF}" target="_blank" rel="noopener">the whole book is also a PDF</a>.</p>
         <div class="tablewrap"><table class="table"><thead><tr><th>Obj.</th><th>Objective</th><th style="text-align:right">Questions</th><th>Study</th></tr></thead><tbody>${bp}
         <tr class="topic"><td colspan="2">Total</td><td class="n">40</td><td></td></tr></tbody></table></div></div>
       <div class="card stack guide" id="difficulty"><h2>How hard is the real exam?</h2>
@@ -750,7 +752,8 @@
         <li><a href="https://www.lpi.org/our-certifications/linux-essentials-overview/" target="_blank" rel="noopener">Linux Essentials overview</a></li>
         <li><a href="https://www.lpi.org/our-certifications/exam-010-objectives/" target="_blank" rel="noopener">Exam 010 objectives (v1.6)</a></li>
         <li><a href="https://www.lpi.org/about-lpi/frequently-asked-questions/" target="_blank" rel="noopener">LPI FAQ: scoring, delivery and results</a></li>
-        <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a></li></ul></div>`);
+        <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a> (online, one page per lesson)</li>
+        <li><a href="${LPI_PDF}" target="_blank" rel="noopener">The same learning materials as one PDF book</a> (download, print or read offline)</li></ul></div>`);
   }
 
   // ================================================================== LABS (simulated terminal)
@@ -758,6 +761,8 @@
   const machines = {};          // one live machine per part for this visit; reloading the page starts fresh
   const hintLevel = {};         // partId -> [hints shown per task]
   const coachTip = {};          // partId -> { task, say } from the last command
+  const undoSnap = {};          // partId -> { snap, line }: the machine before the last command, for "Undo last command"
+  const stuck = {};             // partId -> { task, line }: the last command made this task impossible to finish
   const labState = id => (st.labs[id] = st.labs[id] || { done: [] });
   const partsOf = code => LABS.filter(l => l.lesson === code);
   const lessonName = L => L.track === TROUBLE ? L.lesson + " · uses " + L.obj : L.obj + (partsOf(L.lesson).length && LESSONS.filter(x => x.obj === L.obj && !x.track).length > 1 ? " · Lesson " + L.num : "");
@@ -808,7 +813,7 @@
     const hl = hintLevel[id] = hintLevel[id] || lab.tasks.map(() => 0);
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
     const tip = coachTip[id];
-    const fi = typeof focusTask[id] === "number" ? focusTask[id] : (tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
+    const fi = typeof focusTask[id] === "number" ? focusTask[id] : (stuck[id] ? stuck[id].task : tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
     shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><span class="eyebrow" style="margin-top:8px">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span>
         <h1>${esc(lab.title)}</h1><p class="lead">${rich(lab.intro)}</p>
         <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
@@ -824,17 +829,19 @@
           ${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
           return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
             ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>` : `
+            ${stuck[id] && stuck[id].task === i ? `<div class="coach stuck" role="alert"><b>Heads-up:</b> after <code>${esc(stuck[id].line)}</code> this task can't be finished the usual way.${/^\s*sudo\s/.test(stuck[id].line) ? " (Without <code>sudo</code> the system would have stopped that with “Permission denied”: in your own home folder you never need it.)" : ""}
+              <div class="row" style="gap:10px;margin-top:8px"><button class="small primary" data-undo>Undo last command</button><button class="small ghost" data-restart>Restart part</button></div></div>` : ""}
             ${tip && tip.task === i ? `<div class="coach" role="status"><b>Coach:</b> ${rich(tip.say)}</div>` : ""}
             ${t.hints.slice(0, shown).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
             <div class="row small" style="gap:12px;margin-top:6px">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
             <pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
-          <div class="row small hide-one" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span><button class="ghost small" id="labReset">Restart part</button></div></div>
+          <div class="row small hide-one" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span>${undoSnap[id] ? `<button class="ghost small" data-undo title="Undo: ${esc(undoSnap[id].line)}">Undo last command</button>` : ""}<button class="ghost small" id="labReset">Restart part</button></div></div>
         <div class="term" id="term"><div class="term-out" id="termOut"></div>
           <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>
       </div>
       <div class="labfoot stack small">
         <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
-        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a>
+        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF) ↗</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
       <p class="small muted hide-sm"><span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line</p>`);
     const out = $("#termOut"), inp = $("#termIn");
@@ -873,6 +880,7 @@
     const run = line => {
       sh.log += promptText() + line + "\n";
       const src = sh.pending != null ? sh.pending + "\n" + line : line;
+      const before = sh.snapshot && line.trim() ? sh.snapshot() : null;
       const r = sh.exec(src);
       if (r.incomplete) { sh.pending = src; hi = null; paint(); return; }       // unfinished (open quote, heredoc, if...fi): keep reading with a "> " prompt
       sh.pending = null;
@@ -882,10 +890,25 @@
       if (sh.log.length > 60000) sh.log = sh.log.slice(-50000);
       const rerender = () => { const y = scrollY; renderLab(id); scrollTo(0, y); const i = $("#termIn"); if (i) i.focus({ preventScroll: true }); };
       const tipChanged = coach(src, r.out, r.code);
+      if (before) undoSnap[id] = { snap: before, line: src };
+      const wasStuck = stuck[id]; delete stuck[id];
+      const stuckNow = before && findStuck(before, src); if (stuckNow) stuck[id] = stuckNow;
       if (r.edit) openLabEditor(sh, r.edit, () => { if (evaluate()) rerender(); else paint(); });
-      if (evaluate() || tipChanged) { rerender(); return; }
+      if (evaluate() || tipChanged || stuckNow || wasStuck || (before && !lastHadUndo)) { lastHadUndo = true; rerender(); return; }
       paint();
     };
+    let lastHadUndo = !!undoSnap[id];
+    // A command that turns a task from "doable" into "not doable" (like moving away the file it needs): find the first such task.
+    function findStuck(snap, src) {
+      if (!sh.canComplete) return null;
+      for (let i = 0; i < lab.tasks.length; i++) { if (ls.done.includes(i)) continue; const t = lab.tasks[i];
+        if (sh.canComplete(t.check, t.solution)) continue;
+        const was = window.LEShell.createMachine({ setup: lab.setup }); was.restore(snap);
+        if (was.canComplete(t.check, t.solution)) return { task: i, line: src }; }
+      return null;
+    }
+    const undo = () => { const u = undoSnap[id]; if (!u) return; sh.restore(u.snap); sh.log += `(lab: undid \`${u.line}\`. Files and directories are back as they were before it.)\n`;
+      delete undoSnap[id]; delete stuck[id]; delete coachTip[id]; const y = scrollY; renderLab(id); scrollTo(0, y); const i = $("#termIn"); if (i) i.focus({ preventScroll: true }); };
     inp.onkeydown = e => {
       if (e.key === "Enter") { e.preventDefault(); const line = inp.value; inp.value = ""; run(line); }
       else if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); const h = sh.m.history; if (!h.length) return;
@@ -902,8 +925,9 @@
     $$("[data-hint]").forEach(b => b.onclick = () => { const i = +b.dataset.hint; hl[i] = Math.min(lab.tasks[i].hints.length, hl[i] + 1); const y = scrollY; renderLab(id); scrollTo(0, y); });
     $$("[data-sol]").forEach(b => b.onclick = () => { const el = $("#sol" + b.dataset.sol); el.hidden = !el.hidden; b.textContent = el.hidden ? "Show solution" : "Hide solution"; });
     $$("[data-man]").forEach(b => b.onclick = () => { inp.value = "man " + b.dataset.man; inp.focus(); });
-    const reset = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; delete focusTask[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
+    const reset = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; delete focusTask[id]; delete undoSnap[id]; delete stuck[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
     $("#labReset").onclick = reset; $("#labReset2").onclick = reset;
+    $$("[data-undo]").forEach(b => b.onclick = undo); $$("[data-restart]").forEach(b => b.onclick = reset);
     $$("[data-tp]").forEach(b => b.onclick = () => { focusTask[id] = Math.max(0, Math.min(lab.tasks.length - 1, fi + +b.dataset.tp)); const y = scrollY; renderLab(id); scrollTo(0, y); });
     $("#allTasks").onclick = () => { if (focusTask[id] === "all") delete focusTask[id]; else focusTask[id] = "all"; const y = scrollY; renderLab(id); scrollTo(0, y); };
     if ($("#labQs")) $("#labQs").onclick = () => begin(C.newSession(BANK, "drill", "Lab follow-up · " + lab.title, C.shuffle(related.slice(), C.rng()).slice(0, 10), { study: true }));
@@ -1095,14 +1119,14 @@
       body = `<div class="opts" role="${multi ? "group" : "radiogroup"}">${S.optOrder[id].map((oi, pos) => {
         const sel = Array.isArray(a) && a.includes(oi);
         let cls = (multi ? "multi" : "single") + (sel ? " sel" : ""), tag = "";
-        if (revealed) { const k = q.answer.includes(oi); cls += " locked" + (k ? " k" : sel ? " w" : ""); if (k) cls = cls.replace(" sel", ""); tag = k ? (sel ? "Your answer · correct" : "Correct") : sel ? "Your answer" : ""; }
+        if (revealed) { const k = q.answer.includes(oi); cls += " locked" + (k ? " k" : sel ? " w" : ""); if (k) cls = cls.replace(" sel", ""); tag = k ? (sel ? "Your pick · correct" : multi && C.answered(q, a) ? "Correct · you missed this" : "Correct") : sel ? "Your pick · wrong" : ""; }
         return `<label class="opt ${cls}" for="o${pos}"><input type="${multi ? "checkbox" : "radio"}" name="opt" id="o${pos}" data-oi="${oi}" ${sel ? "checked" : ""} ${revealed ? "disabled" : ""}>
           <span class="key">${L[pos]}</span><span class="t">${rich(q.options[oi])}${revealed ? whyNote(q, oi) : ""}</span>${tag ? `<span class="tag">${tag}</span>` : ""}</label>`;
       }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
     }
     const ok = revealed && C.isCorrect(q, a);
     const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${ok ? "Correct" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
-        ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}
+        ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
         <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
     app.innerHTML = `<div class="exam-bar"><div class="in">
@@ -1182,6 +1206,13 @@
     return n ? `<span class="note"><b>Why not:</b> ${rich(n)}</span>` : "";
   }
 
+  // Why a partly right "Choose TWO" answer is still wrong.
+  function multiNote(q, a) {
+    if (q.type !== "multi" || !Array.isArray(a) || !a.length) return "";
+    const right = a.filter(x => q.answer.includes(x)).length, n = q.answer.length;
+    const why = a.length < n ? `you picked ${a.length} of the ${n} answers asked for` : `${right} of your ${a.length} picks ${right === 1 ? "is" : "are"} correct`;
+    return `<p class="small muted multinote">Scored as wrong because ${why}. A "Choose ${n === 2 ? "TWO" : "THREE"}" question only counts when every pick is right, so pick exactly ${n}.</p>`;
+  }
   function studyRef(q) {
     const nc = CARDS.filter(c => c.obj === q.obj).length;
     return `<div class="studyref"><span class="eyebrow">Study this</span>
@@ -1236,7 +1267,7 @@
       let body;
       if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
       else body = `<div class="stack" style="gap:4px">${rec.optOrder[id].map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
-        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${k && p ? "Your answer ✓" : k ? "Correct" : "Your answer"}</span>` : ""}</div>`; }).join("")}</div>`;
+        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${k && p ? "Your pick · correct" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct · missed" : "Correct") : "Your pick · wrong"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
         <span class="verdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}

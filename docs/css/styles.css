@@ -435,6 +435,8 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .partnav a.on { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .partnav a.done { background: var(--good-soft); border-color: transparent; color: var(--good); } .partnav a svg.i { width: 13px; height: 13px; stroke-width: 3; }
 .explain { margin-top: 8px; font-size: .86rem; color: var(--ink-2); }
+.coach.stuck { background: var(--bad-soft, var(--flag-soft)); border-left-color: var(--bad); }
+.multinote { margin: 8px 0 0; }
 .coach { margin-top: 8px; background: var(--flag-soft); border-left: 3px solid var(--flag); border-radius: 8px; padding: 8px 10px; font-size: .86rem; }
 .cmdrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cmdchip { font: 600 .74rem var(--mono); padding: 4px 8px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--ink-2); }
@@ -515,3 +517,6 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .exam-bar .title { flex: 0 1 auto; max-width: none; }
 @media (max-width: 900px) { .startbar { bottom: calc(76px + env(safe-area-inset-bottom)); } }
 .exam-bar .in > :not(.title):not(.grow) { flex: none; white-space: nowrap; }
+
+/* Last on purpose: the font shorthands above reset ligatures. JetBrains Mono joins -- -> != etc. into ligatures; in commands every character has to look like what you type */
+code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }

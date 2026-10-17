@@ -32,6 +32,7 @@
 
   // Commands that live in /usr/sbin (administration); everything else is in /usr/bin. Builtins also exist as files where real systems have them.
   const SBIN = ["useradd", "usermod", "userdel", "groupadd", "groupdel", "groupmems", "adduser", "updatedb", "chpasswd"];
+  const DEFAULT_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
   const SUID = ["passwd", "sudo", "su", "chsh", "chfn", "mount", "umount"];
   const ZONES = { UTC: [0, "UTC"], GMT: [0, "GMT"], "Etc/UTC": [0, "UTC"], EST: [-300, "EST"], EST5EDT: [-240, "EDT"], "America/New_York": [-240, "EDT"], CST: [-360, "CST"], "America/Chicago": [-300, "CDT"],
     MST: [-420, "MST"], "America/Denver": [-360, "MDT"], PST: [-480, "PST"], PST8PDT: [-420, "PDT"], "America/Los_Angeles": [-420, "PDT"], CET: [120, "CEST"], "Europe/Berlin": [120, "CEST"],
@@ -117,7 +118,7 @@
     writeNew(m, "/home/student/.profile", "# ~/.profile\n", 0o644, 1000, 1000);
     writeNew(m, "/home/student/.bash_logout", "# ~/.bash_logout: executed by bash when a login shell exits\n", 0o644, 1000, 1000);
     m.aliases = { ll: "ls -l" };
-    m.env = { HOME: "/home/student", USER: "student", LOGNAME: "student", SHELL: "/bin/bash", PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    m.env = { HOME: "/home/student", USER: "student", LOGNAME: "student", SHELL: "/bin/bash", PATH: DEFAULT_PATH,
               PWD: "/home/student", LANG: "C.UTF-8", TERM: "xterm-256color", HOSTNAME: m.hostname, SHLVL: "1" };
     ["HOME", "USER", "LOGNAME", "SHELL", "PATH", "PWD", "LANG", "TERM", "SHLVL"].forEach(k => m.exported.add(k));
     m.cwd = "/home/student";
@@ -601,6 +602,26 @@
         try { return editorSave(m, path, data); } finally { m.uid = uid; } },
       readFileForEdit(path) { const r = asRoot(m, () => tryResolve(m, path)); if (r.ino == null) return ""; const n = node(m, r.ino); return n.type === "file" ? contentOf(m, n) : ""; },
       check(c) { m.realUid = m.uid; try { return asRoot(m, () => evalCheck(m, c)); } finally { delete m.realUid; } },
+      /** A copy of the whole machine, for undo. */
+      snapshot() { return structuredClone(m); },
+      /** Put the machine back to a snapshot (in place, so this api object keeps working). */
+      restore(snap) { for (const k of Object.keys(m)) delete m[k]; Object.assign(m, structuredClone(snap)); },
+      /** Could the task still be finished from here? Runs the solution (or any tail of it, for a solution the learner
+       *  has started) on a throwaway copy: as things are, from home, and in a fresh login (subshells and su/sudo -i
+       *  exited, default PATH). Only damage those don't undo counts, like moving away the file a task needs. */
+      canComplete(check, solution) {
+        const lines = String(solution).split("\n");
+        for (let k = 0; k < lines.length; k++) for (const mode of [0, 1, 2]) {
+          const copy = api(structuredClone(m));
+          if (mode === 2) { for (let n = 0; n < 8 && copy.m.stack.length; n++) copy.exec("exit", { noHistory: true }); copy.m.env.PATH = DEFAULT_PATH; }
+          if (mode && copy.m.env.HOME) copy.m.cwd = copy.m.env.HOME;
+          let buf = null;
+          try { for (const line of lines.slice(k)) { const src = buf == null ? line : buf + "\n" + line; const r = copy.exec(src, { tty: false }); buf = r.incomplete ? src : null; } }
+          catch (e) { continue; }
+          if (buf == null && copy.check(check)) return true;
+        }
+        return false;
+      },
       // helpers for tests and checks
       stat(path, follow) { const r = asRoot(m, () => tryResolve(m, path, { follow: follow !== false })); if (r.ino == null) return null; const n = node(m, r.ino);
         return { type: n.type, mode: n.mode, perms: modeString(n), owner: (userById(m, n.uid) || {}).name || String(n.uid), group: (groupById(m, n.gid) || {}).name || String(n.gid), ino: n.ino, nlink: n.nlink, data: n.data, target: n.target, blob: n.blob, size: sizeOf(n, m) }; },

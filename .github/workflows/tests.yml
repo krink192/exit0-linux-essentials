@@ -18,3 +18,5 @@ jobs:
         run: node tools/test_shell.js
       - name: Type-the-command questions checked by the lab shell accept right commands and reject wrong ones
         run: node tools/test_questions.js
+      - name: Every command drill can be solved, and its listed wrong commands are rejected
+        run: node tools/test_drills.js

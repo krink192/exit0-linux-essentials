@@ -25,6 +25,15 @@
     if (window.LEShell && window.LE_LABS) return Promise.resolve();
     return labsLoading = labsLoading || Promise.all([window.LE_LABS ? null : addScript("data/labs.js"), ensureShell()]).catch(e => { labsLoading = null; throw e; });
   }
+  let drillsLoading = null;
+  /** Command practice and the sandbox: the drills data plus the lab shell. */
+  function loadDrills() {
+    if (window.LEShell && window.LE_DRILLS) return Promise.resolve();
+    return drillsLoading = drillsLoading || Promise.all([window.LE_DRILLS ? null : addScript("data/drills.js"), ensureShell()]).catch(e => { drillsLoading = null; throw e; });
+  }
+  const SKILLS = LABX.skills || [], SKILL = {}; SKILLS.forEach(s => { SKILL[s.id] = s; });
+  const CMDX = { skills: SKILLS, cmdq: LABX.cmdq || {} };
+  const cmdDueN = () => C.cmdDue(st.cmdstats, C.dayNum(), SKILLS).length;
   const needsShell = S => !!S && S.qids.some(id => BANK.byId[id] && BANK.byId[id].lab);
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";
@@ -151,7 +160,7 @@
   // Re-render after remote changes, but never in the middle of a question, lab, flashcard or while typing.
   function rerenderIfIdle() {
     const h = (location.hash || "#test").slice(1), el = document.activeElement;
-    if (h === "exam" || h.startsWith("lab/") || (h === "cards" && cs && cs.i < cs.queue.length)) return;
+    if (h === "exam" || h.startsWith("lab/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
     render();
   }
@@ -194,10 +203,12 @@
   // Four places to go, plus reference material and settings. Practice and Learn pages share a tab bar.
   const NAV = [["today", "Today", "target"], ["practice", "Practice", "test"], ["labs", "Labs", "terminal"], ["progress", "Progress", "progress"]];
   const NAV2 = [["learn", "Learn", "guide"], ["settings", "Settings", "settings"]];
-  const SECTION = { review: "practice", test: "practice", study: "practice", cards: "practice", guide: "learn", sheets: "learn" };
-  const TABS = { practice: [["review", "Daily review"], ["test", "Exam"], ["study", "Study"], ["cards", "Flashcards"]], learn: [["guide", "Exam guide"], ["sheets", "Cheat sheets"]] };
+  const SECTION = { review: "practice", test: "practice", study: "practice", cards: "practice", guide: "learn", sheets: "learn", commands: "labs", sandbox: "labs", cmdrun: "labs" };
+  const TABS = { practice: [["review", "Daily review"], ["test", "Exam"], ["study", "Study"], ["cards", "Flashcards"]], learn: [["guide", "Exam guide"], ["sheets", "Cheat sheets"]],
+                 labs: [["labs", "Lessons"], ["commands", "Commands"], ["sandbox", "Sandbox"]] };
+  const TAB_LABEL = { practice: "Practice", learn: "Learn", labs: "Labs" };
   let lastPractice = null;
-  const navCount = id => { if (id !== "practice") return 0; return C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due; };
+  const navCount = id => id === "practice" ? C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due : id === "labs" ? cmdDueN() : 0;
   function sidebarHTML(active) {
     const qdue = C.reviewForecast(BANK, st.qstats).due;
     const due = C.deckStats(CARDS, st.cards).due;
@@ -207,28 +218,28 @@
     return `<aside class="side" id="side">
       <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span><small>Linux Essentials 010-160</small></div></div>
       ${[NAV, NAV2].map((items, k) => `${k ? `<div class="nav-label">More</div>` : `<div class="nav-label">Study</div>`}<nav class="nav">${items.map(([id, name, ic]) => {
-        const n = id === "practice" ? qdue + due : 0;
+        const n = id === "practice" ? qdue + due : navCount(id);
         return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${name}</span>${n ? `<span class="count">${n}</span>` : ""}</a>`;
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
-        <div class="today" title="Daily goal: ${st.settings.goal} questions or cards">
+        <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
           ${ring(goalPct, 46, 5, `<span style="font-size:11px">${sk.today}</span>`, "", sk.metToday ? "var(--good)" : "var(--accent)")}
           <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
             <div class="t2">${sk.metToday ? "Today's goal done" : `${Math.max(0, st.settings.goal - sk.today)} to today's goal`}</div></div>
-        </div>
+        </a>
         ${canInstall() ? `<button class="ghost small install-btn" id="installSide">${icon("download")}Install app</button>` : ""}
         <div class="theme-row"><span class="small muted">Theme</span>
           <div class="seg" role="group" aria-label="Theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) =>
             `<button data-theme-set="${k}" class="${t === k ? "on" : ""}" title="${n}" aria-label="${n} theme">${icon(k === "system" ? "system" : k === "light" ? "sun" : "moon")}</button>`).join("")}</div></div>
       </div></aside>`;
   }
-  function shell(active, body) {
-    clearInterval(timerId);
+  function shell(active, body, opts) {
+    clearInterval(timerId); clearInterval(cmdTimer);
     const sk = C.streak(st.days, st.settings.goal);
     const section = SECTION[active] || active;
     if (section === "practice") lastPractice = active;
-    const tabs = TABS[section] ? `<nav class="tabs" aria-label="${section === "practice" ? "Practice" : "Learn"}">${TABS[section].map(([id, name]) => {
-      const n = id === "review" ? C.reviewForecast(BANK, st.qstats).due : id === "cards" ? C.deckStats(CARDS, st.cards).due : 0;
+    const tabs = TABS[section] && !(opts && opts.noTabs) ? `<nav class="tabs" aria-label="${TAB_LABEL[section]}">${TABS[section].map(([id, name]) => {
+      const n = id === "review" ? C.reviewForecast(BANK, st.qstats).due : id === "cards" ? C.deckStats(CARDS, st.cards).due : id === "commands" ? cmdDueN() : 0;
       return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${name}${n ? ` <span class="count">${n}</span>` : ""}</a>`; }).join("")}</nav>` : "";
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
@@ -255,7 +266,8 @@
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
-    const pages = { today: renderToday, labs: renderLabs, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
+    if (h === "cmdrun" && !cp) return go("commands");
+    const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings };
     (pages[h] || renderToday)();
   }
@@ -287,6 +299,7 @@
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
     $$("[data-start=review]", root).forEach(b => b.onclick = startReview);
     $$("[data-start=duecards]", root).forEach(b => b.onclick = startDueCards);
+    $$("[data-start=cmddue]", root).forEach(b => b.onclick = () => startCmd({ source: "recommended", count: Math.max(5, Math.min(20, cmdDueN())) }));
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
     $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
     $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
@@ -322,18 +335,25 @@
     const steps = [];
     if (f.due || cardsDue) steps.push({ ic: "repeat", eyebrow: "Daily review", title: [f.due ? plural(f.due, "question") : "", cardsDue ? plural(cardsDue, "flashcard") : ""].filter(Boolean).join(" and ") + " due",
       desc: "Questions and cards come back on a schedule. A few minutes now keeps them from slipping.", btn: f.due ? `<button class="primary" data-start="review">Start review</button>` : `<button class="primary" data-start="duecards">Review flashcards</button>` });
+    const cmdDue = cmdDueN(), triedCmds = Object.keys(st.cmdstats || {}).length;
+    if (cmdDue) steps.push({ ic: "terminal", eyebrow: "Command practice", title: plural(cmdDue, "command skill") + " due", desc: "Short drills on a fresh terminal, with new file names every time. Recall beats recognition.",
+      btn: `<button class="primary" data-start="cmddue">Practice commands</button>` });
     if (lab) steps.push({ ic: "terminal", eyebrow: labName(lab), title: lab.title, desc: `${esc(lab.lessonTitle)} · ${plural(lab.n, "task")}, checked as you type.`,
       btn: `<a class="btn primary" href="#lab/${lab.id}">${labState(lab.id).done.length ? "Continue lab" : "Start lab"}</a>` });
     if (!tests.length) steps.push({ ic: "test", eyebrow: "Exam", title: "Take a baseline exam", desc: "40 questions in 60 minutes, weighted like the real exam. It shows where to focus.", btn: `<button class="primary" data-start="test">Start exam</button>` });
     else if (weak) steps.push({ ic: "weak", eyebrow: "Weakest objective", title: `Study ${weak} ${OBJ[weak].name}`, desc: `You're at ${C.objectiveStats(BANK, st.qstats)[weak].pct}% there. Ten questions with hints and answers.`, btn: `<button class="primary" data-study="${weak}">Study it</button>` });
     else steps.push({ ic: "test", eyebrow: "Exam", title: "Take a practice exam", desc: "Three exams in a row at 80% or more is the signal to book the real one.", btn: `<button class="primary" data-start="test">Start exam</button>` });
+    if (!cmdDue && !triedCmds && LABS.some(l => labState(l.id).done.length)) steps.push({ ic: "drill", eyebrow: "Command practice", title: "Drill the commands you've met",
+      desc: "Quick tasks on a fresh terminal, picked from what you haven't practised yet.", btn: `<a class="btn primary" href="#commands">Open command practice</a>` });
     const [main, ...rest] = steps;
     const sk = C.streak(st.days, st.settings.goal), ready = C.readiness(st.tests), pp = C.passPrediction(BANK, st.qstats), plan = C.examPlan(st, BANK);
     const labsDone = LABS.filter(l => labState(l.id).completedAt).length;
     const hour = new Date().getHours(), hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
     shell("today", `${resumeBanner()}
       <div class="page-head"><span class="eyebrow">${new Date().toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" })}</span><h1>${hello}</h1>
-        <p class="lead">${sk.metToday ? `Today's goal is done${sk.count > 1 ? ` and your streak is ${sk.count} days` : ""}. Anything more is a bonus.` : `${Math.max(0, st.settings.goal - sk.today)} more answers or cards reach today's goal.`}</p></div>
+        <p class="lead">${sk.metToday ? `Today's goal is done${sk.count > 1 ? ` and your streak is ${sk.count} days` : ""}. Anything more is a bonus.` : `${Math.max(0, st.settings.goal - sk.today)} more to reach today's goal of ${st.settings.goal}.`}
+          <button class="linkbtn" id="goalEdit" aria-expanded="${goalOpen}">${goalOpen ? "Done" : "Change goal"}</button></p>
+        ${goalOpen ? `<div class="card stack goalcard"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div>` : ""}</div>
       ${st.current ? "" : `<div class="card next-card"><div class="row" style="gap:14px;align-items:flex-start;flex-wrap:nowrap"><div class="ic">${icon(main.ic)}</div>
         <div class="stack grow" style="gap:6px"><span class="eyebrow">Do this next · ${esc(main.eyebrow)}</span><h2>${esc(main.title)}</h2><p class="muted">${main.desc}</p><div class="row">${main.btn}</div></div></div></div>`}
       ${rest.length ? `<div class="stack" style="gap:8px"><span class="small muted">Also good today</span>${rest.map(x => `<div class="card later row spread"><div class="row" style="gap:12px;flex-wrap:nowrap">${icon(x.ic)}
@@ -343,8 +363,27 @@
         <a class="card stat" href="#progress"><b>${pp.chance == null ? "—" : Math.round(pp.chance * 100) + "%"}</b><span>Pass chance</span></a>
         <a class="card stat" href="#labs"><b>${labsDone}<span class="muted" style="font-size:.9rem">/${LABS.length}</span></b><span>Lab parts done</span></a>
         <a class="card stat" href="#progress"><b>${plan && plan.phase !== "past" ? (plan.phase === "today" ? "Today" : plan.days + "d") : "—"}</b><span>${plan && plan.phase !== "past" ? "Until exam day" : "No exam date set"}</span></a></div>`);
+    $("#goalEdit").onclick = () => { goalOpen = !goalOpen; renderToday(); };
+    wireGoalPicker(renderToday);
     wireResume();
     wireStarts($("#page"));
+  }
+  // ------------------------------------------------------------------ daily goal (Today and Settings)
+  let goalOpen = false;
+  const GOAL_CHOICES = [5, 10, 15, 20, 30, 50];
+  const GOAL_TEXT = "Questions answered, flashcards reviewed, lab tasks finished and command drills all count. Meeting the goal keeps your streak going. Pick what fits your day; a small goal you keep beats a big one you skip.";
+  function goalPickerHTML() {
+    const g = st.settings.goal, custom = GOAL_CHOICES.indexOf(g) < 0;
+    return `<div class="row goalpick" style="gap:10px;flex-wrap:wrap;align-items:center"><div class="seg" id="goalSeg" role="group" aria-label="Daily goal">${GOAL_CHOICES.map(n =>
+        `<button data-v="${n}" class="${g === n ? "on" : ""}">${n}</button>`).join("")}</div>
+      <label class="small muted row" style="gap:6px">or <input type="number" id="goalNum" min="${C.GOAL_MIN}" max="${C.GOAL_MAX}" step="1" inputmode="numeric" value="${custom ? g : ""}" placeholder="${g}" aria-label="Custom daily goal" style="width:5.5em"> a day</label></div>`;
+  }
+  function wireGoalPicker(rerender) {
+    const set = v => { const n = C.clampGoal(v); if (n === st.settings.goal) return; st.settings.goal = n; save(); toast("Daily goal: " + n); rerender(); };
+    $$("#goalSeg button").forEach(b => b.onclick = () => set(+b.dataset.v));
+    const num = $("#goalNum"); if (!num) return;
+    num.onchange = () => { if (num.value !== "") set(num.value); };
+    num.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (num.value !== "") set(num.value); } };
   }
 
   // ================================================================== DAILY REVIEW
@@ -506,7 +545,7 @@
       <div class="lvl-row"><div class="lvl-badge">${x.level}</div><div class="grow"><div class="row spread"><b>${esc(x.name)}</b>
         <span class="small muted mono">${x.xp} XP${x.next ? ` · ${x.next - x.xp} to level ${x.level + 1}` : " · max level"}</span></div>
         <div class="track2" style="margin-top:8px"><i style="width:${pct}%;background:var(--accent)"></i></div>
-        <div class="small muted" style="margin-top:6px">1 XP for every answer, 1 more when it's right, 1 for every flashcard and 5 for every lab task.</div></div></div>
+        <div class="small muted" style="margin-top:6px">1 XP for every answer or command drill, 1 more when it's right, 1 for every flashcard and 5 for every lab task.</div></div></div>
       <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
           <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div></div>`;
   }
@@ -800,7 +839,7 @@
   function renderLab(id) {
     const meta = LABS.find(l => l.id === id); if (!meta) return go("labs");
     if (!window.LEShell || !window.LE_LABS) {
-      shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><h1>${esc(meta.title)}</h1><p class="lead muted">Starting the lab system…</p></div>`);
+      shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><h1>${esc(meta.title)}</h1><p class="lead muted">Starting the lab system…</p></div>`, { noTabs: true });
       loadLabs().then(() => { if ((location.hash || "").slice(1) === "lab/" + id) renderLab(id); },
         () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the lab files. Check your connection and <a href="#lab/${esc(id)}" onclick="location.reload()">try again</a>.</div>`); });
       return;
@@ -843,7 +882,7 @@
         <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
         <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF) ↗</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
-      <p class="small muted hide-sm"><span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line</p>`);
+      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
@@ -953,6 +992,230 @@
     ta.focus();
   }
 
+  // ================================================================== TERMINAL (shared by command practice and the sandbox)
+  const KEYS_HELP = `<span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line`;
+  const termHTML = cls => `<div class="term ${cls || ""}" id="term"><div class="term-out" id="termOut"></div>
+    <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
+  /** Wire the terminal markup to a machine. onRun(line, result) runs after every finished command; return true if it re-rendered the page.
+   *  onEmpty() runs when Enter is pressed on an empty line. */
+  function mountTerm(sh, onRun, onEmpty) {
+    const out = $("#termOut"), inp = $("#termIn");
+    const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
+    const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
+    const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); $("#term").scrollTop = $("#term").scrollHeight; };
+    paint();
+    let hi = null;
+    const run = line => {
+      sh.log += promptText() + line + "\n";
+      const src = sh.pending != null ? sh.pending + "\n" + line : line;
+      const r = sh.exec(src);
+      if (r.incomplete) { sh.pending = src; hi = null; paint(); return; }
+      sh.pending = null;
+      let text = r.out; const clr = text.lastIndexOf("\u001bc"); if (clr >= 0) { sh.log = ""; text = text.slice(clr + 2); }
+      if (r.code === 127) { const m0 = /^bash: (\S+): command not found$/m.exec(text); const guess = m0 && closestCommand(sh, m0[1]); if (guess) text += `(lab: did you mean '${guess}'?)\n`; }
+      sh.log += text; hi = null;
+      if (sh.log.length > 60000) sh.log = sh.log.slice(-50000);
+      if (r.edit) return openLabEditor(sh, r.edit, () => { if (!onRun(src, r)) paint(); });
+      if (!onRun(src, r)) paint();
+    };
+    inp.onkeydown = e => {
+      if (e.key === "Enter") { e.preventDefault(); const line = inp.value; inp.value = ""; if (!line.trim() && sh.pending == null && onEmpty && onEmpty()) return; run(line); }
+      else if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); const h = sh.m.history; if (!h.length) return;
+        hi = hi == null ? h.length : hi; hi = Math.max(0, Math.min(h.length, hi + (e.key === "ArrowUp" ? -1 : 1))); inp.value = (h[hi] || "").split("\n")[0]; }
+      else if (e.key === "Tab") { e.preventDefault(); const words = inp.value.split(" "); const opts = sh.complete(inp.value);
+        if (opts.length === 1) { words[words.length - 1] = opts[0].replace(/ /g, "\\ ") + (opts[0].endsWith("/") ? "" : " "); inp.value = words.join(" "); }
+        else if (opts.length > 1) { let pre = opts[0]; opts.forEach(o => { while (!o.startsWith(pre)) pre = pre.slice(0, -1); }); if (pre.length > words[words.length - 1].length) { words[words.length - 1] = pre; inp.value = words.join(" "); }
+          else { sh.log += promptText() + inp.value + "\n" + opts.map(o => o.split("/").filter(Boolean).pop() + (o.endsWith("/") ? "/" : "")).join("  ") + "\n"; paint(); } } }
+      else if (e.ctrlKey && e.key.toLowerCase() === "l") { e.preventDefault(); sh.log = ""; paint(); }
+      else if (e.ctrlKey && e.key.toLowerCase() === "c") { e.preventDefault(); sh.log += promptText() + inp.value + "^C\n"; sh.pending = null; inp.value = ""; paint(); }
+    };
+    $("#term").onclick = () => { if (!getSelection().toString()) inp.focus(); };
+    inp.onfocus = () => { if (matchMedia("(max-width: 900px)").matches) setTimeout(() => $("#term") && $("#term").scrollIntoView({ block: "end", behavior: "smooth" }), 250); };
+    if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
+    return { paint, focus: () => inp.focus({ preventScroll: true }) };
+  }
+  const keepScroll = fn => { const y = scrollY; fn(); scrollTo(0, y); const i = $("#termIn"); if (i && matchMedia("(pointer:fine)").matches) i.focus({ preventScroll: true }); };
+  function loadingPage(active, title, retryHash) {
+    shell(active, `<div class="page-head"><h1>${esc(title)}</h1><p class="lead muted">Starting the terminal…</p></div>`, { noTabs: active === "cmdrun" });
+    loadDrills().then(() => { if ((location.hash || "").slice(1) === retryHash) render(); },
+      () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the practice files. Check your connection and <a href="#${retryHash}" onclick="location.reload()">try again</a>.</div>`); });
+  }
+
+  // ================================================================== COMMAND PRACTICE: mastery map, set builder, drill runner
+  const CMD_MODES = { guided: ["Guided", "Hints when you want them. Using one makes the drill come back sooner."],
+                      recall: ["Recall", "No hints: type it from memory, like on a real system."],
+                      timed: ["Timed", "Recall against a 90-second clock per task."] };
+  const CMD_SRC = { recommended: ["Recommended", "Due reviews first, then your misses, your weakest commands and skills you haven't tried."],
+                    due: ["Due", "Only skills scheduled for review today."], new: ["Not tried yet", "Skills you haven't practised, in exam order."],
+                    pick: ["Chosen commands", "Only the commands you tap in the map below."] };
+  let cp = null, cmdTimer = null;
+  /** Lab tasks finished per command, from the lab index (coverage only, not accuracy). */
+  function labUse() {
+    const out = {};
+    for (const cmd in LABX.labcmds || {}) { let n = 0; const parts = LABX.labcmds[cmd];
+      for (const pid in parts) { const done = (st.labs[pid] || {}).done || []; n += parts[pid].filter(i => done.includes(i)).length; }
+      out[cmd] = n; }
+    return out;
+  }
+  function startCmd(opts) {
+    loadDrills().then(() => {
+      const s = C.buildCmdSession(window.LE_DRILLS, CMDX, st, Object.assign({}, opts, { seed: Date.now() % 2147483647 }));
+      if (!s) return toast(opts.source === "due" ? "Nothing is due right now" : opts.source === "new" ? "You've tried every skill. Pick Recommended instead." : "Nothing matches those choices");
+      cp = Object.assign(s, { res: [], opts, sh: null }); go("cmdrun");
+    }, () => toast("Couldn't load the practice files. Check your connection."));
+  }
+  function renderCommands() {
+    const sp = st.settings.cmd, sel = new Set(sp.cmds);
+    const m = C.commandMastery(CMDX, st, { labUse: labUse() });
+    const cmds = Object.values(m), mastered = cmds.filter(c => c.level === "mastered").length, weak = cmds.filter(c => c.level === "weak");
+    const due = cmdDueN(), tried = SKILLS.filter(s => st.cmdstats[s.id] && st.cmdstats[s.id].seen).length;
+    let right = 0; for (const id in st.cmdstats) right += st.cmdstats[id].right || 0;
+    const byObj = {}; cmds.forEach(c => (byObj[c.obj] = byObj[c.obj] || []).push(c));
+    const objOrder = Object.keys(byObj).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    const src = sp.source === "pick" && !sel.size ? "pick" : sp.source;
+    const startable = !(src === "pick" && !sel.size) && !(src === "due" && !due) && !(src === "new" && tried === SKILLS.length);
+    const tip = c => `${c.cmd}: ${c.practised} of ${c.skills.length} ${c.skills.length === 1 ? "skill" : "skills"} practised${c.pct == null ? "" : ` · ${c.pct}% right`}${c.due ? ` · ${c.due} due` : ""}${c.labTasks ? ` · used in ${plural(c.labTasks, "lab task")}` : ""}`;
+    const resume = cp && cp.i < cp.tasks.length ? `<div class="card accent banner"><div><b>You have a practice set in progress</b><div class="small muted">Task ${cp.i + 1} of ${cp.tasks.length} · ${esc(CMD_MODES[cp.mode][0])}</div></div>
+        <div class="row"><button class="ghost" id="cdiscard">Discard</button><a class="btn primary" href="#cmdrun">Resume</a></div></div>` : "";
+    shell("commands", `${resume}<div class="page-head"><span class="eyebrow">Command practice · drills on a fresh terminal</span><h1>Commands</h1>
+        <p class="lead">Short tasks that each target one thing you do with a command. Every run uses new file names and data, so you have to know the command, not the answer. Any command that gets the job done counts, and each skill comes back on a schedule: tomorrow after a miss, then further out each time you get it right.</p></div>
+      <div class="grid4">
+        <div class="card stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/${cmds.length}</span></b><span>Commands mastered</span></div>
+        <div class="card stat"><b>${due}</b><span>Skills due today</span></div>
+        <div class="card stat"><b>${tried}<span class="muted" style="font-size:.9rem">/${SKILLS.length}</span></b><span>Skills tried</span></div>
+        <div class="card stat"><b>${right}</b><span>Drills right</span></div></div>
+      <div class="quick">
+        <button class="qs" data-cmdgo="recommended">${icon("target")}<b>Practise what matters</b><span>${due ? plural(due, "skill") + " due, then your weakest" : weak.length ? "Your weakest: " + esc(weak.slice(0, 4).map(c => c.cmd).join(", ")) : "Skills you haven't tried, in exam order"}</span></button>
+        <button class="qs" data-cmdgo="due" ${due ? "" : "disabled"}>${icon("repeat")}<b>Due today</b><span>${due ? plural(due, "skill") + " to review" : "Nothing due. Come back tomorrow."}</span></button>
+        <button class="qs" data-cmdgo="new" ${tried < SKILLS.length ? "" : "disabled"}>${icon("bulb")}<b>Something new</b><span>${tried < SKILLS.length ? plural(SKILLS.length - tried, "skill") + " you haven't tried" : "You've tried every skill"}</span></button>
+      </div>
+      <div class="card stack builder"><h2>Build a set</h2>
+        <div class="frow"><span class="flabel">What</span><div><div class="seg" id="csrc">${Object.keys(CMD_SRC).map(k => `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${CMD_SRC[k][0]}${k === "due" && due ? ` (${due})` : ""}${k === "pick" && sel.size ? ` (${sel.size})` : ""}</button>`).join("")}</div>
+          <div class="small muted fnote">${sp.source === "pick" ? (sel.size ? `Practising: ${esc([...sel].join(", "))}. <button class="linkbtn" id="cclear">Clear</button>` : "Tap commands in the map below to choose them.") : CMD_SRC[sp.source][1]}</div></div></div>
+        <div class="frow"><span class="flabel">Mode</span><div><div class="seg" id="cmode">${Object.keys(CMD_MODES).map(k => `<button data-v="${k}" class="${sp.mode === k ? "on" : ""}">${CMD_MODES[k][0]}</button>`).join("")}</div>
+          <div class="small muted fnote">${CMD_MODES[sp.mode][1]}</div></div></div>
+        <div class="frow"><span class="flabel">How many</span><div class="seg" id="ccount">${[5, 10, 20].map(n => `<button data-v="${n}" class="${sp.count === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
+        <div class="row spread"><span class="small muted">About ${Math.max(1, Math.round(sp.count * (sp.mode === "timed" ? 1 : 1.3)))} minutes</span><button class="primary" id="cstart" ${startable ? "" : "disabled"}>${icon("terminal")}Start practice</button></div>
+      </div>
+      <div class="card stack"><div class="row spread"><h2>Your commands</h2>
+          <div class="row small legend" style="gap:8px">${["new", "learning", "weak", "mastered"].map(l => `<span class="chip lv-${l}">${LV[l]}</span>`).join("")}</div></div>
+        <p class="small muted" style="margin:0">From your drills and the type-the-command exam questions: the latest result of each counts. A command is mastered when every one of its skills was right last time. Tap commands to practise just those.</p>
+        ${objOrder.map(o => `<div class="cmdgroup"><div class="eyebrow">${o} ${esc((OBJ[o] || {}).name || "")}</div><div class="cmdtiles">${byObj[o].map(c =>
+          `<button class="cmdtile lv-${c.level} ${sel.has(c.cmd) && sp.source === "pick" ? "sel" : ""}" data-cmd="${esc(c.cmd)}" title="${esc(tip(c))}" aria-pressed="${sel.has(c.cmd) && sp.source === "pick"}">
+            <span class="mono">${esc(c.cmd)}</span><span class="small">${c.pct == null ? c.practised + "/" + c.skills.length : c.pct + "%"}${c.due ? ` · <b>${c.due} due</b>` : ""}</span></button>`).join("")}</div></div>`).join("")}
+      </div>
+      <p class="small muted">Want to experiment without tasks? The <a href="#sandbox">sandbox</a> is a free terminal with files, logs, users and processes to explore.</p>`);
+    const keep = fn => { const y = scrollY; fn(); save(); renderCommands(); scrollTo(0, y); };
+    $$("#csrc button").forEach(b => b.onclick = () => keep(() => { sp.source = b.dataset.v; }));
+    $$("#cmode button").forEach(b => b.onclick = () => keep(() => { sp.mode = b.dataset.v; }));
+    $$("#ccount button").forEach(b => b.onclick = () => keep(() => { sp.count = +b.dataset.v; }));
+    if ($("#cclear")) $("#cclear").onclick = () => keep(() => { sp.cmds = []; });
+    $$("[data-cmd]").forEach(b => b.onclick = () => keep(() => { const c = b.dataset.cmd;
+      if (sp.source !== "pick") { sp.source = "pick"; sp.cmds = [c]; return; }
+      sp.cmds = sel.has(c) ? sp.cmds.filter(x => x !== c) : sp.cmds.concat(c); }));
+    const go2 = source => startCmd({ source, count: sp.count, mode: sp.mode, cmds: source === "pick" ? sp.cmds : null });
+    $$("[data-cmdgo]").forEach(b => b.onclick = () => go2(b.dataset.cmdgo));
+    $("#cstart").onclick = () => go2(sp.source);
+    if ($("#cdiscard")) $("#cdiscard").onclick = () => { cp = null; renderCommands(); };
+  }
+  function renderCmdRun() {
+    if (!window.LEShell || !window.LE_DRILLS) return loadingPage("cmdrun", "Command practice", "cmdrun");
+    if (cp.i >= cp.tasks.length) return renderCmdDone();
+    const t = cp.tasks[cp.i], r = cp.res[cp.i] = cp.res[cp.i] || { hint: 0, cmds: 0 }, sk = SKILL[t.skill] || { label: t.skill, obj: "" };
+    const sh = cp.sh = cp.sh || window.LEShell.createMachine({ setup: t.setup });
+    if (!sh.log) sh.log = `exit 0 · task ${cp.i + 1} of ${cp.tasks.length} on a fresh simulated system. 'man NAME' explains a command.\n`;
+    const guided = cp.mode === "guided", timed = cp.mode === "timed", over = !!r.recorded;
+    if (timed && !over && !r.deadline) r.deadline = Date.now() + cp.seconds * 1000;
+    const verdict = !over ? "" : r.ok ? `<div class="dverdict good">${icon("check")}<b>Right.</b></div>`
+      : r.solved ? `<div class="dverdict mid"><b>Done, with help.</b> <span class="muted">It comes back tomorrow so you can do it from memory.</span></div>`
+      : `<div class="dverdict bad"><b>${r.timeout ? "Out of time." : "Skipped."}</b> <span class="muted">It comes back tomorrow.</span></div>`;
+    const dots = cp.tasks.map((x, i) => { const q = cp.res[i]; const cls = i === cp.i ? "cur" : !q || !q.recorded ? "" : q.ok ? "ok" : "miss";
+      return `<span class="ddot ${cls}" title="Task ${i + 1}${q && q.recorded ? (q.ok ? ": right" : ": missed") : ""}"></span>`; }).join("");
+    shell("cmdrun", `<div class="page-head"><a class="small" href="#commands" id="cquit">← Command practice</a>
+        <span class="eyebrow" style="margin-top:8px">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span><h1>${esc(sk.label)}</h1>
+        <div class="drilldots" aria-hidden="true">${dots}</div></div>
+      <div class="labwrap drillwrap">
+        <div class="stack tasks">
+          <div class="task ${over ? (r.ok ? "done" : "") : "next"}"><div class="grow">
+            ${timed && !over ? `<div class="cmdclock" id="cmdClock" aria-live="off"></div>` : ""}
+            <div class="drilltext">${rich(t.text)}</div>
+            ${verdict}
+            ${over ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>
+              ${r.line ? `<div class="small" style="margin-top:8px">You typed <code>${esc(r.line)}</code>${r.line.trim() !== t.solution.trim() ? `. Another way: <code>${esc(t.solution.replace(/\n/g, "; "))}</code>` : ""}</div>`
+                : `<div class="small" style="margin-top:8px">One way: <pre class="code sol">${esc(t.solution)}</pre></div>`}`
+            : `${t.hints.slice(0, r.hint).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
+              ${r.revealed ? `<pre class="code sol">${esc(t.solution)}</pre><div class="small muted">Type it to see it work. This one counts as a miss.</div>` : ""}
+              ${r.cmds && !r.solved ? `<div class="small muted" style="margin-top:6px">Not yet: the task isn't done. Check the output, or try another way.</div>` : ""}`}
+          </div></div>
+          <div class="row" style="gap:10px;flex-wrap:wrap">${over
+            ? `<button class="primary" id="cnext">${cp.i + 1 < cp.tasks.length ? "Next task →" : "See results"}</button><span class="small muted hide-sm">or press Enter in the terminal</span>`
+            : `${guided && r.hint < t.hints.length ? `<button id="chint">${icon("bulb")}${r.hint ? "Another hint" : "Hint"}</button>` : ""}
+               ${r.revealed ? "" : `<button class="ghost" id="creveal">Show answer</button>`}<button class="ghost" id="cskip">Skip</button>`}</div>
+        </div>
+        ${termHTML()}
+      </div>
+      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
+    const record = () => { if (r.recorded) return; r.ok = C.cmdTaskOk(r); r.recorded = true; C.recordDrill(st, t.skill, r.ok); save(); celebrate(); };
+    const next = () => { record(); cp.i++; cp.sh = null; keepScroll(renderCmdRun); };
+    mountTerm(sh, (line, res) => {
+      if (r.recorded) return false;
+      r.cmds++;
+      if (sh.check(t.check)) { r.solved = true; r.line = line; record(); keepScroll(renderCmdRun); return true; }
+      if (r.cmds === 1) { keepScroll(renderCmdRun); return true; }      // show the "not yet" note once
+      return false;
+    }, () => { if (r.recorded) { next(); return true; } return false; });
+    if ($("#chint")) $("#chint").onclick = () => { r.hint++; keepScroll(renderCmdRun); };
+    if ($("#creveal")) $("#creveal").onclick = () => { r.revealed = true; keepScroll(renderCmdRun); };
+    if ($("#cskip")) $("#cskip").onclick = next;
+    if ($("#cnext")) { $("#cnext").onclick = next; }
+    if (timed && !over) {
+      const tick = () => { const left = Math.max(0, Math.ceil((r.deadline - Date.now()) / 1000)); const el = $("#cmdClock");
+        if (el) { el.textContent = fmt(left); el.classList.toggle("low", left <= 15); }
+        if (!left) { clearInterval(cmdTimer); r.timeout = true; record(); keepScroll(renderCmdRun); } };
+      tick(); cmdTimer = setInterval(tick, 500);
+    }
+  }
+  function renderCmdDone() {
+    const res = cp.res, okN = res.filter(x => x && x.ok).length, missed = cp.tasks.filter((t, i) => !(res[i] && res[i].ok));
+    const why = q => !q ? "skipped" : q.ok ? "" : q.timeout ? "out of time" : q.revealed ? "answer shown" : q.hint ? "used a hint" : q.solved ? "" : "skipped";
+    const pct = cp.tasks.length ? Math.round(100 * okN / cp.tasks.length) : 0;
+    shell("cmdrun", `<div class="page-head"><span class="eyebrow">Command practice · ${esc(CMD_MODES[cp.mode][0])}</span><h1>${okN} of ${cp.tasks.length} right</h1>
+        <p class="lead">${pct >= 80 ? "Strong set. These skills move further out in the schedule." : pct >= 50 ? "Good progress. The misses come back tomorrow, so they'll stick." : "Tough set, and that's how it should feel: the misses come back tomorrow."}</p></div>
+      <div class="card stack"><ol class="cmdresults">${cp.tasks.map((t, i) => { const q = res[i]; const sk = SKILL[t.skill] || { label: t.skill };
+        return `<li class="${q && q.ok ? "ok" : "miss"}">${icon(q && q.ok ? "check" : "dot")}<span class="grow"><b>${esc(sk.label)}</b> <span class="mono small muted">${esc(t.cmd)}</span></span>
+          <span class="small muted">${esc(why(q))}</span></li>`; }).join("")}</ol></div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">${missed.length ? `<button class="primary" id="cagain">${icon("repeat")}Practise the ${missed.length === 1 ? "miss" : missed.length + " misses"} again</button>` : ""}
+        <button class="${missed.length ? "" : "primary"}" id="cmore">Another set</button><a class="btn ghost" href="#commands">Back to commands</a></div>`, { noTabs: true });
+    const ids = [...new Set(missed.map(t => t.skill))];
+    if ($("#cagain")) $("#cagain").onclick = () => startCmd({ source: "recommended", ids, count: missed.length, mode: cp.mode, label: "Misses again" });
+    $("#cmore").onclick = () => startCmd(Object.assign({}, cp.opts, { ids: null }));
+  }
+
+  // ================================================================== SANDBOX: a free terminal, no tasks
+  let sandboxSh = null;
+  const SANDBOX_IDEAS = ["Find every `report.txt` under `docs`, whatever its case.", "Count how often each fruit appears in `fruit.txt`.",
+    "Show only the ERROR lines of `app.log`, with line numbers.", "Make `projects/scripts/hello.sh` executable and run it with your name as the argument.",
+    "Pack `projects` into a `.tar.gz`, list it, then extract it into `/tmp`.", "Find the `sleep` process and stop it.",
+    "Give `/srv/share` the sticky bit, then check with `ls -ld`.", "Print the second column of `scores.csv`, sorted and without repeats."];
+  function renderSandbox() {
+    if (!window.LEShell || !window.LE_DRILLS) return loadingPage("sandbox", "Sandbox", "sandbox");
+    const sh = sandboxSh = sandboxSh || window.LEShell.createMachine({ setup: window.LE_DRILLS.sandbox });
+    if (!sh.log) sh.log = "exit 0 sandbox: a simulated Linux system with no tasks and no score. Break whatever you like; Reset brings it back.\n'help' lists the commands, 'man NAME' explains one, 'ls -a' shows what's here.\n";
+    const cmds = [...new Set(SKILLS.map(s => s.cmd).filter(c => /^[a-z][\w-]*$/.test(c)))].sort();
+    shell("sandbox", `<div class="page-head"><span class="eyebrow">Sandbox · free practice</span><h1>Sandbox</h1>
+        <p class="lead">A terminal with files, a log, a script, users, groups and a running process to explore. Nothing is checked or scored here. It stays as you left it until you reset it or reload the app.</p></div>
+      <div class="labwrap">
+        <div class="stack tasks"><div class="card stack"><b>Ideas to try</b><ol class="ideas">${SANDBOX_IDEAS.map(x => `<li>${rich(x)}</li>`).join("")}</ol></div>
+          <div class="row" style="gap:10px"><button class="ghost" id="sbReset">Reset the sandbox</button><a class="btn ghost" href="#commands">Command practice</a></div></div>
+        ${termHTML()}
+      </div>
+      <div class="labfoot stack small"><div class="cmdrow"><span class="muted">Look one up:</span> ${cmds.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div></div>
+      <p class="small muted hide-sm">${KEYS_HELP}</p>`);
+    mountTerm(sh, () => false);
+    $$("[data-man]").forEach(b => b.onclick = () => { const i = $("#termIn"); i.value = "man " + b.dataset.man; i.focus(); });
+    $("#sbReset").onclick = () => { sandboxSh = null; renderSandbox(); toast("Sandbox reset"); };
+  }
+
   // ================================================================== CHEAT SHEETS
   let sheetTopic = "1";
   function renderSheets() {
@@ -1043,13 +1306,12 @@
   function renderSettings() {
     const s = st.settings;
     const linked = !!(SYNC && SYNC.linked);
-    const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, days: st.days, labs: st.labs, badges: st.badges, settings: st.settings }) : "";
+    const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, labs: st.labs, badges: st.badges, settings: st.settings }) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       <div class="card stack"><h2>Daily goal</h2>
-        <div class="row spread"><div><div>Daily goal</div><div class="small muted">Questions answered plus flashcards reviewed. Meeting it keeps your streak.</div></div>
-          <div class="seg" id="goal">${[10, 20, 40, 60].map(n => `<button data-v="${n}" class="${s.goal === n ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
+        <div class="stack" style="gap:10px"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
       ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
           <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device${SYNC && SYNC.linked ? " and synced" : " (or synced, if you set up Sync below)"}.</p></div>
         ${installEvt ? `<div class="row"><button class="primary" id="installNow">${icon("download")}Install exit 0</button></div>`
@@ -1065,13 +1327,13 @@
         ${exportOpen ? `<textarea id="expData" readonly aria-label="Export code">${esc(data)}</textarea><div class="row"><button class="primary" id="copy">Copy</button></div>` : ""}
         ${linked ? `<p class="small muted">To import an export code, sign out of sync first.</p>` : `<label class="small muted" for="impData">Import from another device</label><textarea id="impData" placeholder="Paste an export code here"></textarea>
         <div class="row"><button id="imp">Import</button></div>`}</div>
-      <div class="card stack"><h2>Reset</h2><p class="small muted">${linked ? "Deletes tests, question history, flashcard progress and streak on <b>every device</b> signed in to this account. Settings are kept." : "Deletes tests, question history, flashcard progress and streak. Settings are kept."}</p>
+      <div class="card stack"><h2>Reset</h2><p class="small muted">${linked ? "Deletes tests, question history, flashcard, lab and command practice progress and streak on <b>every device</b> signed in to this account. Settings are kept." : "Deletes tests, question history, flashcard, lab and command practice progress and streak. Settings are kept."}</p>
         ${resetOpen ? `<div class="row card confirm spread"><span>Delete all progress? This can't be undone.</span><span class="row"><button id="rno">Cancel</button><button class="primary" id="ryes">Delete</button></span></div>`
           : `<div class="row"><button id="reset">Reset all progress</button></div>`}</div>
       <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU AGPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
-    $$("#goal button").forEach(b => b.onclick = () => { s.goal = +b.dataset.v; save(); renderSettings(); });
+    wireGoalPicker(renderSettings);
     $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
     if ($("#installNow")) $("#installNow").onclick = promptInstall;
     if ($("#copy")) $("#copy").onclick = () => {
@@ -1085,7 +1347,7 @@
       try {
         const d = JSON.parse($("#impData").value);
         if (d.app !== "le010" || !Array.isArray(d.tests)) throw new Error("bad");
-        Object.assign(st, { tests: d.tests, qstats: d.qstats || {}, cards: d.cards || {}, days: d.days || {}, labs: d.labs || st.labs || {}, badges: d.badges || st.badges || {} });
+        Object.assign(st, { tests: d.tests, qstats: d.qstats || {}, cards: d.cards || {}, cmdstats: d.cmdstats || {}, days: d.days || {}, labs: d.labs || st.labs || {}, badges: d.badges || st.badges || {} });
         if (d.settings) st.settings = Object.assign(st.settings, d.settings);
         save(); applyTheme(); toast("Progress imported"); renderSettings();
       } catch (e) { toast("That code isn't valid. Copy the whole export code and try again."); }
@@ -1269,14 +1531,14 @@
       else body = `<div class="stack" style="gap:4px">${rec.optOrder[id].map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
         return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${k && p ? "Your pick · correct" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct · missed" : "Correct") : "Your pick · wrong"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
-        <span class="verdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
+        <span class="dverdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
         <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
     shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1></div>
       <div class="card score">${ring(pct, 128, 12, pct + "%", "", col(pct))}
-        <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="verdict ${vclass(pct)}">${verdict}</span><code class="exitcode" style="color:${col(pct)}">$ echo $? → ${pct >= 80 ? 0 : 1}</code></span>
+        <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode" style="color:${col(pct)}">$ echo $? → ${pct >= 80 ? 0 : 1}</code></span>
           <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in <span class="mono">${fmt(rec.secs)}</span></p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
             : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>

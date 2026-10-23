@@ -255,6 +255,126 @@
     return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
+  // ------------------------------------------------------------- command practice (drills on the lab shell)
+  // A "skill" is one thing to do with one command (find by name, chmod in octal, tar -czf...). Each has a few templates;
+  // a template's {{placeholders}} are filled from `cases` (values that belong together) and `vars` (independent picks),
+  // so every run has different file names and paths and the answer can't be memorised. Results go in
+  // state.cmdstats[skillId] = { seen, right, last, at, box, due }: the same shape and Leitner schedule as questions,
+  // so sync merges it the same way. Everything here is pure; the shell runs in the app and in tools/test_drills.js.
+  const fill = (x, vals) => typeof x === "string" ? (/^\{\{\w+\}\}$/.test(x) && typeof vals[x.slice(2, -2)] === "number" ? vals[x.slice(2, -2)]   // "{{pid}}" alone keeps its number type
+    : x.replace(/\{\{(\w+)\}\}/g, (m, k) => vals[k] != null ? vals[k] : m))
+    : Array.isArray(x) ? x.map(y => fill(y, vals)) : x && typeof x === "object" ? Object.fromEntries(Object.entries(x).map(([k, v]) => [fill(k, vals), fill(v, vals)])) : x;
+  /** Every combination a template can produce is too many to list, so instances are picked with a seeded PRNG. */
+  function drillValues(tpl, rand) {
+    rand = rand || Math.random; const vals = {};
+    if (tpl.cases && tpl.cases.length) Object.assign(vals, tpl.cases[Math.floor(rand() * tpl.cases.length)]);
+    for (const k in tpl.vars || {}) { const pool = tpl.vars[k]; vals[k] = pool[Math.floor(rand() * pool.length)]; }
+    return vals;
+  }
+  /** A ready-to-run task: { skill, text, hints, solution, check, setup, explain, wrong, vals }. */
+  function instantiateDrill(skill, tplIndex, rand) {
+    const tpl = skill.templates[tplIndex], vals = drillValues(tpl, rand);
+    const out = fill({ text: tpl.text, hints: tpl.hints || [], solution: tpl.solution, check: tpl.check, setup: tpl.setup || {}, explain: tpl.explain || "", wrong: tpl.wrong || [] }, vals);
+    return Object.assign(out, { skill: skill.id, cmd: skill.cmd, tpl: tplIndex, vals });
+  }
+  const isDue = (s, today) => s && s.seen && questionDue(s) <= today;
+  /** Skills due for review today (only skills that still exist when `skills` is given). */
+  function cmdDue(cmdstats, today, skills) {
+    today = today == null ? dayNum() : today; const known = skills ? new Set(skills.map(s => s.id)) : null;
+    return Object.keys(cmdstats || {}).filter(id => (!known || known.has(id)) && isDue(cmdstats[id], today));
+  }
+  /** Save one drill result: schedule the skill like a question and count it toward today's goal. */
+  function recordDrill(state, skillId, ok, now) {
+    now = now || Date.now(); state.cmdstats = state.cmdstats || {};
+    const s = state.cmdstats[skillId] || { seen: 0, right: 0, last: null };
+    s.seen++; if (ok) s.right++; s.last = !!ok; s.at = now;
+    scheduleQuestion(s, !!ok, dayNum(now));
+    state.cmdstats[skillId] = s; addActivity(state, 1, now);
+    return s;
+  }
+  /** Which command a typed answer starts with (skipping sudo and VAR=value), for linking questions to commands. */
+  function firstCommand(line) {
+    const words = String(line || "").trim().split(/\s+/);
+    while (words.length && (words[0] === "sudo" || /^\w+=/.test(words[0]))) words.shift();
+    return (words[0] || "").replace(/^\.\//, "");
+  }
+  /**
+   * How well each command is known, from three sources: drills for its skills, type-the-command questions whose
+   * answer uses it (index.cmdq), and lab tasks (labUse: cmd -> tasks done, coverage only). Accuracy counts the
+   * latest result of each skill and question, like the pass predictor, so old misses stop counting once fixed.
+   * Levels: new (no results), weak (under 60% after 2+), mastered (80%+ with every skill of the command right last
+   * time), learning otherwise.
+   */
+  function commandMastery(index, state, opts) {
+    opts = opts || {}; const today = opts.today == null ? dayNum() : opts.today;
+    const cs = state.cmdstats || {}, qs = state.qstats || {}, out = {};
+    for (const sk of index.skills || []) {
+      const c = out[sk.cmd] = out[sk.cmd] || { cmd: sk.cmd, obj: sk.obj, skills: [], right: 0, wrong: 0, qRight: 0, qWrong: 0, due: 0, practised: 0, labTasks: 0 };
+      c.objs = c.objs || {}; c.objs[sk.obj] = (c.objs[sk.obj] || 0) + 1;      // listed under the objective most of its skills belong to
+      if (c.objs[sk.obj] > c.objs[c.obj] || !c.objs[c.obj]) c.obj = sk.obj;
+      const s = cs[sk.id]; c.skills.push(sk.id);
+      if (s && s.seen) { c.practised++; if (s.last) c.right++; else c.wrong++; if (isDue(s, today)) c.due++; }
+    }
+    for (const cmd in index.cmdq || {}) {
+      const c = out[cmd]; if (!c) continue;
+      for (const id of index.cmdq[cmd]) { const s = qs[id]; if (!s || !s.seen) continue; const ok = s.last == null ? s.right * 2 >= s.seen : s.last; if (ok) c.qRight++; else c.qWrong++; }
+    }
+    for (const cmd in opts.labUse || {}) if (out[cmd]) out[cmd].labTasks = opts.labUse[cmd];
+    for (const cmd in out) {
+      const c = out[cmd], right = c.right + c.qRight, n = right + c.wrong + c.qWrong;
+      c.n = n; c.pct = n ? Math.round(100 * right / n) : null;
+      c.level = !n ? "new" : c.pct < 60 && n >= 2 ? "weak" : c.pct >= TARGET && c.practised === c.skills.length && !c.wrong ? "mastered" : "learning";
+    }
+    return out;
+  }
+  /**
+   * Choose skills for a practice set. source:
+   *   "recommended"  due first, then missed last time, then the weakest commands, then skills not tried yet (in exam order)
+   *   "due" | "new" | "all"
+   * ids / cmds / objs narrow the pool. When the pool is smaller than count, skills repeat (each run gets new values).
+   */
+  function pickSkills(index, state, opts) {
+    opts = opts || {}; const rand = rng(opts.seed), today = opts.today == null ? dayNum() : opts.today;
+    const cs = state.cmdstats || {}, count = opts.count || 10;
+    let pool = (index.skills || []).filter(s => (!opts.ids || opts.ids.indexOf(s.id) >= 0) && (!opts.cmds || !opts.cmds.length || opts.cmds.indexOf(s.cmd) >= 0) && (!opts.objs || !opts.objs.length || opts.objs.indexOf(s.obj) >= 0));
+    const src = opts.source || "recommended";
+    if (src === "due") pool = pool.filter(s => isDue(cs[s.id], today));
+    else if (src === "new") pool = pool.filter(s => !(cs[s.id] && cs[s.id].seen));
+    if (!pool.length) return [];
+    const mastery = commandMastery(index, state, { today });
+    const objKey = o => o.split(".").map(n => String(n).padStart(3, "0")).join(".");
+    const rank = s => {
+      const st = cs[s.id], m = mastery[s.cmd];
+      if (src === "new") return [objKey(s.obj), rand()];
+      if (src !== "recommended") return [0, rand()];
+      if (isDue(st, today)) return [0, questionDue(st), st.box || 0];
+      if (st && st.seen && st.last === false) return [1, st.right / st.seen];
+      if (m && m.level === "weak") return [2, m.pct, rand()];
+      if (!st || !st.seen) return [3, objKey(s.obj), rand()];
+      return [4, st.right / st.seen, questionDue(st)];
+    };
+    const ranked = shuffle(pool, rand).map(s => ({ s, r: rank(s) }))
+      .sort((a, b) => { for (let i = 0; i < Math.max(a.r.length, b.r.length); i++) { if (a.r[i] < b.r[i]) return -1; if (a.r[i] > b.r[i]) return 1; } return 0; })
+      .map(x => x.s);
+    const out = [];
+    for (let i = 0; out.length < count; i++) out.push(ranked[i % ranked.length]);
+    return out;
+  }
+  /** A practice session: one fresh machine per task. mode: "guided" (hints), "recall" (no hints), "timed" (recall + a clock). */
+  function buildCmdSession(drills, index, state, opts) {
+    opts = opts || {}; const rand = rng(opts.seed);
+    const byId = {}; for (const s of drills.skills) byId[s.id] = s;
+    const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
+    if (!picks.length) return null;
+    const used = {};
+    const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
+      return instantiateDrill(sk, k % sk.templates.length, rand); });
+    const mode = ["guided", "recall", "timed"].indexOf(opts.mode) >= 0 ? opts.mode : "guided";
+    return { mode, seconds: mode === "timed" ? (opts.seconds || 90) : null, tasks, i: 0, results: [], label: opts.label || "Command practice", start: opts.now || Date.now() };
+  }
+  /** Grade one task: right only when it was solved without hints or the answer (and in time, when timed). */
+  function cmdTaskOk(r) { return !!(r && r.solved && !r.hint && !r.revealed && !r.timeout); }
+
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
@@ -275,9 +395,10 @@
     }
     return n;
   }
-  function xpInfo(state) {          // 1 XP per answer, +1 when right, 1 per flashcard review, 5 per lab task
+  function xpInfo(state) {          // 1 XP per answer or command drill, +1 when right, 1 per flashcard review, 5 per lab task
     let total = 0;
     for (const id in state.qstats) total += (state.qstats[id].seen || 0) + (state.qstats[id].right || 0);
+    for (const id in state.cmdstats || {}) total += (state.cmdstats[id].seen || 0) + (state.cmdstats[id].right || 0);
     for (const id in state.cards) total += state.cards[id].seen || 0;
     for (const id in state.labs || {}) if (countedLab(state, id)) total += 5 * ((state.labs[id].done || []).length);
     let lv = 0; while (lv + 1 < LEVEL_XP.length && total >= LEVEL_XP[lv + 1]) lv++;
@@ -308,6 +429,7 @@
     ["cards-all", "Total recall", "Master every flashcard.", "cards"],
     ["lab1", "Hands on", "Complete a lab in the terminal.", "terminal"],
     ["lab-all", "Lab graduate", "Complete every lab.", "terminal"],
+    ["fluent", "Fluent", "Get 50 command drills right without a hint.", "terminal"],
   ];
   /** Every badge with done/progress. progress = [current, goal] where that makes sense. */
   function badgeStatus(state, bank, cards, labCount) {
@@ -322,6 +444,7 @@
     const cardsMastered = cards.filter(c => state.cards[c.id] && state.cards[c.id].box >= 4).length;
     const reviews = state.tests.filter(t => t.mode === "review").length;
     const labsDone = Object.keys(state.labs || {}).filter(id => state.labs[id].completedAt && countedLab(state, id)).length;
+    let drillsRight = 0; for (const id in state.cmdstats || {}) drillsRight += state.cmdstats[id].right || 0;
     const p = (n, goal) => ({ done: n >= goal, progress: [Math.min(n, goal), goal] });
     const flag = done => ({ done: !!done });
     const res = {
@@ -331,7 +454,7 @@
       "no-hints": flag(state.tests.some(t => t.mode !== "test" && t.total >= 10 && t.pct >= TARGET && Array.isArray(t.hints) && !t.hints.length)),
       "analyst": p(analyze, 50), "seen-all": p(seen, bank.questions.length), "obj-1": p(mastered, 1), "obj-all": p(mastered, nObj),
       "cards100": p(cardSeen, 100), "cards-all": p(cardsMastered, cards.length),
-      "lab1": p(labsDone, 1), "lab-all": p(labsDone, labCount || 12),
+      "lab1": p(labsDone, 1), "lab-all": p(labsDone, labCount || 12), "fluent": p(drillsRight, 50),
     };
     return BADGES.map(([id, name, desc, icon]) => Object.assign({ id, name, desc, icon, at: (state.badges || {})[id] || null }, res[id]));
   }
@@ -538,7 +661,7 @@
   // ------------------------------------------------------------- sync (merging progress from several devices)
   // Each device uploads only its own progress (its "replica"). Merging all replicas gives the same result on
   // every device, in any order: counts add up, schedules come from the device that answered last, lists are unions.
-  const LOCAL_SETTINGS = ["theme", "study"];   // per-device: look and the Study page's last filters
+  const LOCAL_SETTINGS = ["theme", "study", "cmd"];   // per-device: look and the last Study / command practice choices
   const TEST_DETAIL = ["qids", "answers", "optOrder", "flags", "hints"];
   const KEEP_DETAIL = 30;
   const clone = x => x == null ? x : JSON.parse(JSON.stringify(x));
@@ -565,12 +688,13 @@
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
   function mergeStates(docs) {
-    const out = { tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, settings: {}, settingsTs: {} };
+    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, settings: {}, settingsTs: {} };
     const tests = {};
     for (const d of docs || []) {
       if (!d) continue;
       for (const id in d.qstats || {}) mergeSched(out.qstats, id, d.qstats[id]);
       for (const id in d.cards || {}) mergeSched(out.cards, id, d.cards[id]);
+      for (const id in d.cmdstats || {}) mergeSched(out.cmdstats, id, d.cmdstats[id]);
       for (const k in d.days || {}) out.days[k] = (out.days[k] || 0) + (d.days[k] || 0);
       for (const id in d.badges || {}) { const t = d.badges[id]; if (t && (!out.badges[id] || t < out.badges[id])) out.badges[id] = t; }
       for (const id in d.labs || {}) {
@@ -600,10 +724,10 @@
    */
   function ownPart(view, others, settingsTs) {
     others = others || mergeStates([]);
-    const own = { v: 3, tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
-    for (const key of ["qstats", "cards"]) {
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    for (const key of ["qstats", "cards", "cmdstats"]) {
       for (const id in view[key] || {}) {
-        const s = view[key][id], o = others[key][id];
+        const s = view[key][id], o = (others[key] || {})[id];
         const seen = Math.max(0, (s.seen || 0) - (o ? o.seen || 0 : 0));
         const right = Math.max(0, Math.min(seen, (s.right || 0) - (o ? o.right || 0 : 0)));
         const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last]) !== JSON.stringify([o.box, o.due, o.last]));
@@ -623,12 +747,12 @@
   }
   /** Copy a merged view into the app state, keeping this device's local settings and any session in progress. */
   function applyMerged(state, view) {
-    state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.days = view.days;
+    state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
     state.badges = view.badges; state.labs = view.labs;
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
     return state;
   }
-  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length));
+  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.cmdstats || {}).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length));
   /** True when local progress looks like a copy of the account's (export/import, or this browser was linked before). */
   function looksCopied(local, remote) {
     const ids = {}; for (const t of remote.tests) ids[t.id] = 1;
@@ -638,9 +762,13 @@
   }
 
   // ------------------------------------------------------------- state
+  const GOAL_MIN = 1, GOAL_MAX = 200;
+  /** Daily goal: a whole number of answers, cards, lab tasks or command drills, 1 to 200. */
+  function clampGoal(n) { n = Math.round(Number(n)); return isFinite(n) ? Math.max(GOAL_MIN, Math.min(GOAL_MAX, n)) : 10; }
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 20, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 } },
-             tests: [], qstats: {}, cards: {}, days: {}, badges: {}, labs: {}, current: null };
+    return { v: 3, settings: { theme: "system", goal: 10, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
+                              cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
+             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -648,6 +776,9 @@
     st.settings = Object.assign(freshState().settings, (raw && raw.settings) || {});
     const had = st.settings.study || {};
     st.settings.study = Object.assign(freshState().settings.study, had);
+    st.settings.cmd = Object.assign(freshState().settings.cmd, st.settings.cmd || {});
+    st.settings.goal = clampGoal(st.settings.goal);      // saved progress keeps its goal; new installs start at 10
+    st.cmdstats = st.cmdstats || {};
     if (!had.objMode) st.settings.study.objMode = had.objs && had.objs.length ? "pick" : "all";
     if (st.settings.study.levels.length !== 1) st.settings.study.levels = [];   // one level, or all
     delete st.settings.timed; delete st.settings.reveal;    // Exam mode is always timed with answers hidden
@@ -666,5 +797,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
+           clampGoal, GOAL_MIN, GOAL_MAX,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

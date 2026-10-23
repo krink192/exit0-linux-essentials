@@ -94,7 +94,7 @@ select { max-width: 100%; min-width: 0; font: 500 .9rem var(--ui); padding: .5re
 .nav .count { margin-left: auto; font: 600 .72rem var(--mono); background: var(--warm-soft); color: var(--warm); padding: 2px 7px; border-radius: 999px; }
 .nav-label { font: 600 .68rem var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 14px 10px 4px; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 14px; }
-.today { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; gap: 12px; align-items: center; }
+.today { color: inherit; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; gap: 12px; align-items: center; }
 .today .t1 { font-weight: 700; font-size: .9rem; display: flex; align-items: center; gap: 5px; }
 .today .t2 { font-size: .78rem; color: var(--muted); }
 .flame { color: var(--warm); }
@@ -520,3 +520,33 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 
 /* Last on purpose: the font shorthands above reset ligatures. JetBrains Mono joins -- -> != etc. into ligatures; in commands every character has to look like what you type */
 code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+
+/* ---- daily goal picker */
+.goalcard { margin-top: 12px; max-width: 640px; }
+.page-head .lead .linkbtn { margin-left: 6px; vertical-align: baseline; }
+
+/* ---- command practice */
+.cmdgroup { display: flex; flex-direction: column; gap: 8px; }
+.cmdtiles { display: flex; flex-wrap: wrap; gap: 8px; }
+.cmdtile { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border-radius: 10px; border: 1px solid transparent; min-width: 92px; text-align: left; }
+.cmdtile .mono { font: 700 .86rem var(--mono); }
+.cmdtile .small { font-size: .74rem; opacity: .9; }
+.cmdtile.lv-new { border-color: var(--line); }
+.cmdtile:hover { border-color: currentColor; }
+.cmdtile.sel { outline: 2px solid var(--accent); outline-offset: 2px; }
+.legend .chip { font-size: .66rem; }
+.drilldots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.ddot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); }
+.ddot.cur { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ddot.ok { background: var(--good); } .ddot.miss { background: var(--bad); }
+.drilltext { font-size: 1rem; line-height: 1.55; }
+.dverdict { margin-top: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; font-size: .92rem; }
+.dverdict.good { color: var(--good); } .dverdict.good svg.i { width: 16px; height: 16px; stroke-width: 3; }
+.dverdict.mid b { color: var(--flag); } .dverdict.bad b { color: var(--bad); }
+.cmdclock { float: right; font: 700 1rem var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.cmdclock.low { color: var(--bad); }
+.cmdresults { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cmdresults li { display: flex; gap: 10px; align-items: center; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+.cmdresults li:last-child { border-bottom: 0; }
+.cmdresults li.ok svg.i { color: var(--good); stroke-width: 3; } .cmdresults li.miss svg.i { color: var(--bad); }
+.ideas { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }

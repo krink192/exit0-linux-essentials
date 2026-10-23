@@ -212,6 +212,17 @@ u("account details: passwd -S, chage, chsh, /etc/shadow fields", () => {
   sh.exec("chsh -s /bin/sh"); assert.strictEqual(sh.user("student").shell, "/bin/sh");
   assert.match(sh.exec("chsh -s /bin/fish").out, /invalid shell/);
 });
+u("name lookups need a nameserver in /etc/resolv.conf; /etc/hosts works without DNS", () => {
+  const sh = S.createMachine();
+  sh.exec("echo '# empty' | sudo tee /etc/resolv.conf");
+  assert.match(sh.exec("ping -c1 example.com").out, /Temporary failure in name resolution/);
+  assert.match(sh.exec("host example.com").out, /no servers could be reached/); assert.strictEqual(sh.exec("dig example.com").code, 9);
+  assert.match(sh.exec("ping -c1 localhost").out, /1 received/); assert.match(sh.exec("ping -c1 intranet").out, /10\.0\.0\.5/);
+  sh.exec("echo 'nameserver 192.168.1.1' | sudo tee /etc/resolv.conf"); sh.exec("sudo ip route del default");
+  assert.match(sh.exec("host example.com").out, /has address 93\.184\.215\.14/);    // names resolve again...
+  assert.match(sh.exec("ping -c1 example.com").out, /Network is unreachable/);       // ...but nothing leaves without a default route
+  sh.exec("sudo ip route add default via 192.168.1.1"); assert.match(sh.exec("ping -c1 example.com").out, /1 received/);
+});
 console.log(`units: ${units} passed`);
 
 // ---- every lab: tasks start incomplete, each solution completes its task (typed line by line, like a learner),
@@ -247,6 +258,32 @@ for (const lab of window.LE_LABS) {
 for (const L of window.LE_LESSONS) {
   const parts = window.LE_LABS.filter(l => l.lesson === L.lesson); assert.ok(parts.length, "lesson " + L.lesson + " has no parts");
   for (const c of L.covers) assert.ok(parts.some(p => p.tasks.some(t => usesCmd(t.solution, c))), `lesson ${L.lesson}: '${c}' is never used`);
+}
+// ---- "can this task still be finished?" (drives the lab's heads-up + Undo) and undo itself
+{
+  const lab = window.LE_LABS.find(l => l.id === "2.1.1-d"), t4 = lab.tasks[3];
+  const fresh = () => { const sh = S.createMachine({ setup: lab.setup }); lab.tasks.slice(0, 3).forEach(t => runLines(sh, t.solution)); return sh; };
+  let sh = fresh(); assert.ok(sh.canComplete(t4.check, t4.solution), "task 4 is doable after tasks 1-3");
+  const snap = sh.snapshot(); sh.exec("sudo mv notes.txt /jan");
+  assert.ok(!sh.canComplete(t4.check, t4.solution), "moving notes.txt to /jan makes task 4 impossible");
+  sh.restore(snap); assert.ok(sh.stat("/home/student/notes.txt") && !sh.stat("/jan"), "undo puts notes.txt back and removes /jan");
+  assert.ok(sh.canComplete(t4.check, t4.solution), "doable again after undo");
+  sh.exec("mv notes.txt jan/"); assert.ok(sh.check(t4.check) === false && sh.canComplete(t4.check, t4.solution), "half done (no pwd yet) still counts as doable");
+  sh = fresh(); sh.exec("cd /tmp"); assert.ok(sh.canComplete(t4.check, t4.solution), "changing directory doesn't count as stuck");
+  const t3 = lab.tasks[2], sh3 = S.createMachine({ setup: lab.setup }); lab.tasks.slice(0, 2).forEach(t => runLines(sh3, t.solution));
+  sh3.exec("rm game*"); assert.ok(!sh3.canComplete(t3.check, t3.solution), "rm game* deleted games.txt, so task 3 is stuck");
+  units++;
+}
+// Typing every solution in order must never trip the "can't be finished" heads-up (no false alarms on the right path).
+for (const lab of window.LE_LABS) {
+  const sh = S.createMachine({ setup: lab.setup }), done = new Set();
+  for (const t of lab.tasks) { let buf = null;
+    for (const line of t.solution.split("\n")) { const src = buf == null ? line : buf + "\n" + line; const snap = sh.snapshot(); const r = sh.exec(src);
+      if (r.incomplete) { buf = src; continue; } buf = null;
+      lab.tasks.forEach((x, j) => { if (!done.has(j) && sh.check(x.check)) done.add(j); });
+      lab.tasks.forEach((x, j) => { if (done.has(j) || sh.canComplete(x.check, x.solution)) return;
+        const was = S.createMachine({ setup: lab.setup }); was.restore(snap);
+        assert.ok(!was.canComplete(x.check, x.solution), `${lab.id}: the correct line '${src}' wrongly flags task ${j + 1} as impossible`); }); } }
 }
 console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length} parts, ${labTasks} tasks and ${mistakes} coaching tips verified`);
 process.exit(fail ? 1 : 0);

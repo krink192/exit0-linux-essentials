@@ -9,8 +9,8 @@ const C = require(path.join(__dirname, "../docs/js/core.js"));
 const bank = C.indexBank(window.LE_BANK), cards = window.LE_CARDS;
 let n = 0; const t = (name, fn) => { fn(); n++; console.log("ok -", name); };
 
-t("bank has 360 questions and weights sum to 40", () => {
-  assert.strictEqual(bank.questions.length, 360);
+t("bank has 400 questions (ten blueprint sets of 40) and weights sum to 40", () => {
+  assert.strictEqual(bank.questions.length, 400); assert.strictEqual(bank.forms.length * 40, bank.questions.length);
   assert.strictEqual(Object.values(bank.objectives).reduce((a, o) => a + o.weight, 0), 40);
 });
 t("every practice test matches the blueprint exactly", () => {
@@ -62,10 +62,10 @@ t("study mode filters by objective, difficulty and source", () => {
   const s = C.buildStudy(bank, {}, { objs: ["3.3"], levels: [3], count: 5 }, { seed: 9 });
   assert.strictEqual(s.qids.length, 5); assert(s.study); assert.strictEqual(s.mode, "study"); assert(!s.deadline);
   assert(s.qids.every(id => bank.byId[id].obj === "3.3" && bank.byId[id].level === 3));
-  const all = C.studyPool(bank, {}, {}); assert.strictEqual(all.length, 360);
+  const all = C.studyPool(bank, {}, {}); assert.strictEqual(all.length, bank.questions.length);
   const qs = { [all[0]]: { seen: 1, right: 0, last: false }, [all[1]]: { seen: 1, right: 1, last: true } };
   assert.deepStrictEqual(C.studyPool(bank, qs, { source: "missed" }), [all[0]]);
-  assert.strictEqual(C.studyPool(bank, qs, { source: "unseen" }).length, 358);
+  assert.strictEqual(C.studyPool(bank, qs, { source: "unseen" }).length, bank.questions.length - 2);
   assert.strictEqual(C.buildStudy(bank, {}, { source: "missed" }), null);
   const st = C.freshState(); s.hints[s.qids[0]] = 1;
   const rec = C.recordResult(st, bank, s, C.grade(bank, s));
@@ -236,7 +236,7 @@ t("exam plan: countdown, daily target and phases", () => {
   st.settings.examDate = "2026-10-22";
   let p = C.examPlan(st, bank, now);
   assert.strictEqual(p.days, 12); assert.strictEqual(p.phase, "learn");
-  assert.strictEqual(p.newPerDay, 36); assert.strictEqual(p.target, 36); assert.strictEqual(p.milestones.length, 4);
+  assert.strictEqual(p.newPerDay, 40); assert.strictEqual(p.target, 40);   // 400 unseen questions over 10 learning days assert.strictEqual(p.milestones.length, 4);
   st.qstats = answerAll(1, 0.9); p = C.examPlan(st, bank, now);
   assert.strictEqual(p.unseen, 0); assert.strictEqual(p.newPerDay, 0); assert(p.milestones.find(m => m.id === "seen").done);
   st.settings.examDate = "2026-10-12"; assert.strictEqual(C.examPlan(st, bank, now).phase, "final");

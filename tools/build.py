@@ -3,7 +3,7 @@
 import json, sys, os, collections
 sys.path.insert(0, os.path.dirname(__file__))
 from common import BANK, MARK
-import t1, t2, t3, t4, t5, t6  # noqa: F401  (populate BANK; t6 = harder pack)
+import t1, t2, t3, t4, t5, t6, t7  # noqa: F401  (populate BANK; t6 = harder pack; t7 = targeted set, form J)
 from hints import HINTS
 from whys import WHY
 
@@ -35,7 +35,9 @@ OBJ = {
     "5.3": ["Managing File Permissions and Ownership", 2],
     "5.4": ["Special Directories and Files", 1],
 }
-FORMS = "ABCDEFGHI"   # nine 40-question sets, each matching the blueprint exactly
+FORMS = "ABCDEFGHI"   # the original nine 40-question sets, balanced by assign_forms()
+FIXED = "J"           # added sets whose questions are pinned in the source (t7.py: analyze, scenario and lab-checked questions)
+ALL_FORMS = FORMS + FIXED
 WORDS = {2: "TWO", 3: "THREE"}
 
 
@@ -73,14 +75,20 @@ def build():
         q = {
             "id": f"{o}-{n:02d}",
             "obj": o,
-            "form": FORMS[(n - 1) % len(FORMS)],
+            "form": raw.get("form") or FORMS[(n - 1) % len(FORMS)],
             "q": raw["q"].strip(),
             "code": raw.get("code"),
             "explanation": raw["ex"].strip(),
         }
+        if raw.get("form") and raw["form"] not in FIXED:
+            errors.append(f"{q['id']}: pinned to unknown form {raw['form']}")
         if raw["kind"] == "fill":
             q["type"] = "fill"
             q["accept"] = raw["acc"]
+            if raw.get("lab"):
+                q["lab"] = raw["lab"]
+                if not raw["lab"].get("check"):
+                    errors.append(f"{q['id']}: lab question without a check")
             if not raw["acc"]:
                 errors.append(f"{q['id']}: no accepted answers")
         else:
@@ -103,11 +111,15 @@ def build():
             else:
                 q["type"] = "single"
         q["level"] = raw.get("level") or difficulty(q)
-        q["hint"] = HINTS.get(q["id"])
+        if raw.get("hint") and q["id"] in HINTS:
+            errors.append(f"{q['id']}: hint both inline and in hints.py")
+        q["hint"] = raw.get("hint") or HINTS.get(q["id"])
         if not q["hint"]:
             errors.append(f"{q['id']}: no hint in tools/hints.py")
         if q.get("options"):
-            notes = WHY.get(q["id"], {})
+            if raw.get("why") and q["id"] in WHY:
+                errors.append(f"{q['id']}: why-notes both inline and in whys.py")
+            notes = raw.get("why") or WHY.get(q["id"], {})
             for k in sorted(set(notes) - set(q["options"])):
                 errors.append(f"{q['id']}: whys.py note for unknown option {k!r}")
             q["why"] = []
@@ -120,7 +132,7 @@ def build():
                     if not notes.get(t):
                         errors.append(f"{q['id']}: no whys.py note for wrong option {t!r}")
                     q["why"].append(notes.get(t))
-        elif q["id"] in WHY:
+        elif q["id"] in WHY or raw.get("why"):
             errors.append(f"{q['id']}: whys.py note on a fill-in question")
         q["_run"], q["_expect"], q["_user"] = raw.get("run"), raw.get("expect"), raw.get("user")
         out.append(q)
@@ -135,9 +147,9 @@ def build():
 
     # blueprint checks
     for o, (_, w) in OBJ.items():
-        if seen[o] != len(FORMS) * w:
-            errors.append(f"objective {o}: {seen[o]} questions, need {len(FORMS)*w}")
-    for f in FORMS:
+        if seen[o] != len(ALL_FORMS) * w:
+            errors.append(f"objective {o}: {seen[o]} questions, need {len(ALL_FORMS)*w}")
+    for f in ALL_FORMS:
         fq = [q for q in out if q["form"] == f]
         if len(fq) != 40:
             errors.append(f"form {f}: {len(fq)} questions")
@@ -182,7 +194,8 @@ def assign_forms(out):
     rnd = random.Random(10160)
     byobj = collections.defaultdict(list)
     for q in out:
-        byobj[q["obj"]].append(q)
+        if q["form"] not in FIXED:          # pinned sets keep their questions
+            byobj[q["obj"]].append(q)
     cset = {}
     for i, grp in enumerate(CONFLICTS):
         for qid in grp:
@@ -190,7 +203,7 @@ def assign_forms(out):
 
     byid = {q["id"]: q for q in out}
     groups = [[byid[i] for i in grp if i in byid] for grp in CONFLICTS]
-    totals = collections.Counter(q["type"] for q in out)
+    totals = collections.Counter(q["type"] for q in out if q["form"] not in FIXED)
 
     def score():
         s = 0.0
@@ -235,7 +248,7 @@ def stats(out):
     types = collections.Counter(q["type"] for q in out)
     print(f"questions: {len(out)}  types: {dict(types)}")
     print(f"single-answer items where the correct option is the unique longest: {longest}/{len(single)} ({longest/len(single):.0%}; chance with 4 options = 25%)")
-    for f in FORMS:
+    for f in ALL_FORMS:
         t = collections.Counter(q["type"] for q in out if q["form"] == f)
         print(f"  form {f}: {dict(t)}")
     return [q for q in single if (lambda L, a: L[a] == max(L) and L.count(max(L)) == 1)([len(o) for o in q["options"]], q["answer"][0])]
@@ -265,7 +278,7 @@ def lab_index(bank, labs):
     spans, code blocks, typed answers and command-like options. Questions with no command in common (concepts,
     history, licences) get no link rather than a vague one."""
     import re
-    parts = [{k: L[k] for k in ("id", "obj", "lesson", "lessonTitle", "title", "part", "parts", "url", "commands")} | {"n": len(L["tasks"]), **({"from": L["from"]} if L.get("from") else {})}
+    parts = [{k: L[k] for k in ("id", "obj", "lesson", "lessonTitle", "title", "part", "parts", "url", "commands")} | {"n": len(L["tasks"]), **({"from": L["from"]} if L.get("from") else {}), **({"track": L["track"]} if L.get("track") else {})}
              for L in labs.LABS]
     by_obj = collections.defaultdict(list)
     for p in parts:
@@ -347,7 +360,7 @@ if __name__ == "__main__":
     public = [{k: v for k, v in q.items() if not k.startswith("_") and v is not None} for q in out]
     meta = {"exam": "LPI Linux Essentials 010-160", "objectives_version": "1.6", "topics": TOPICS,
             "objectives": {o: {"name": n, "weight": w, "lesson": lesson(o)} for o, (n, w) in OBJ.items()},
-            "forms": list(FORMS), "questions": public}
+            "forms": list(ALL_FORMS), "questions": public}
     json.dump(meta, open(os.path.join(os.path.dirname(__file__), "..", "bank.json"), "w"), indent=1, ensure_ascii=False)
     build_web()
     sys.exit(1 if errors else 0)

@@ -164,8 +164,15 @@ with the terminal output.
 - **Cheat sheets.** One printable page per exam topic: distro families, licenses, shell quoting, `ls`/`tar`/`grep`
   options, redirection, scripting, device names, key directories, networking and permissions.
 - **Levels and badges.** Earn XP for every answer and flashcard, level up from *Newcomer* to *root*, and collect
-  16 badges for things like three ready-range exams in a row or a 7-day streak.
-- **Daily goal and streak.** Keeps you studying a little every day.
+  19 badges for things like three ready-range exams in a row or a 7-day streak.
+- **Command practice.** Over 90 short drills, each on one thing you do with a command (find by name, `chmod`
+  in octal, `tar -czf`, `grep -v`, `usermod -aG`...), on a fresh simulated terminal with new file names every run.
+  Any command that does the job counts. A per-command map shows what you've mastered and what's weak, from your
+  drills and the type-the-command questions, and skills come back on a spaced-repetition schedule. Guided, recall
+  and timed modes.
+- **Sandbox.** A free terminal with files, a log, a script, users and a process to explore: no tasks, no score.
+- **Daily goal and streak.** Answers, flashcards, lab tasks and drills all count. Pick 5 to 50 a day, or any
+  number up to 200, on the Today screen or in Settings.
 - **Report a problem.** Every question has a link that opens a GitHub issue with its ID filled in.
 - **Light and dark themes,** following your system setting or chosen in Settings.
 
@@ -186,6 +193,9 @@ with the terminal output.
 - The lab terminal is tested against real Bash: `node tools/test_shell.js` runs 125 command sequences in both and
   requires identical output, then types every lab solution line by line to prove each task can be completed,
   checks that each coaching tip fires on its example mistake, and checks that every command a lesson lists is used.
+- `node tools/test_drills.js` builds every drill with every value combination: the check must fail before,
+  pass after the solution and fail after each listed wrong command. It also tests drill scheduling, the
+  per-command mastery map and how sync merges drill progress.
 - `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams that are
   each checked against the blueprint, and checks that no hint gives away a typed answer.
 - Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing them, checks the
@@ -203,6 +213,7 @@ docs/                 The web app (published by GitHub Pages)
   data/bank.js, data/cards.js   generated, do not edit by hand
   data/labindex.js    generated: lab titles/progress info and question-to-lab links (loaded with every page)
   data/labs.js        generated: the full labs, loaded with js/shell.js and js/man.js only when Labs opens
+  data/drills.js      generated: command practice drills and the sandbox, loaded when Commands or Sandbox opens
 desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
 .github/workflows/    tests.yml (every push), release.yml (desktop builds), pages.yml (website + package repo),
                       docker.yml (container image)
@@ -211,8 +222,8 @@ bank.json             The question bank
   js/shell.js         the simulated Linux system used by the labs
   js/man.js           its manual pages (man, info, whatis, apropos, --help)
   js/sync.js          optional sync with an exit0-sync server (merge rules are in core.js)
-tools/                Questions t1.py–t6.py, hints.py, whys.py, cards.py, sheets.py, labs.py, build.py, verify.py,
-                      test_core.js, test_shell.js, test_sync.js
+tools/                Questions t1.py–t7.py, hints.py, whys.py, cards.py, sheets.py, labs.py, trouble_labs.py, drills.py,
+                      build.py, verify.py, test_core.js, test_shell.js, test_sync.js, test_questions.js, test_drills.js
 ```
 
 ### Releasing

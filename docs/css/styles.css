@@ -550,3 +550,49 @@ code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-va
 .cmdresults li:last-child { border-bottom: 0; }
 .cmdresults li.ok svg.i { color: var(--good); stroke-width: 3; } .cmdresults li.miss svg.i { color: var(--bad); }
 .ideas { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 6px; font-size: .9rem; }
+
+/* Progress: one "am I ready?" card, then objectives, charts, badges, folded history */
+.progress-head { flex-direction: row; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.pills { gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-flex; gap: 4px; align-items: baseline; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: .84rem; color: var(--muted); text-decoration: none; }
+.pill b { color: var(--ink); font-weight: 700; }
+a.pill:hover { border-color: var(--line-2); color: var(--ink); }
+.readyhero { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; padding: 26px; }
+.hero-nums { display: flex; gap: 22px; align-items: center; }
+.hero-nums .big { font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hero-text { flex: 1 1 300px; gap: 12px; }
+.hero-head { font-size: 1.15rem; font-weight: 700; }
+.readyhero details summary { cursor: pointer; }
+.readyhero details p { margin-top: 6px; }
+.track2.slim { height: 6px; margin-top: 0; border: 0; background: var(--line); }
+.objcard .trow { border-top: 1px solid var(--line); }
+.objcard .trow > summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(80px, 200px) 3.4em; gap: 14px; align-items: center; padding: 13px 4px; cursor: pointer; list-style: none; }
+.objcard .trow > summary::-webkit-details-marker { display: none; }
+.objcard .trow > summary .tname::before { content: "▸"; display: inline-block; width: 1.3em; color: var(--muted); }
+.objcard .trow[open] > summary .tname::before { content: "▾"; }
+.objcard .trow[open] > summary .tname { font-weight: 700; }
+.objcard .pct { font: 600 .84rem var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.objcard .tbody { background: var(--sunk); border-radius: 10px; padding: 4px 12px; margin: 0 0 12px 1.3em; }
+.objcard .tbody.flat { margin: 0; }
+.orow2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 160px) 3.4em auto; gap: 12px; align-items: center; padding: 7px 0; }
+.orow2 + .orow2 { border-top: 1px solid var(--line); }
+.orow2 .o { font: 600 .8rem var(--mono); color: var(--muted); margin-right: 4px; }
+.orow2 button { padding: .4rem .7rem; }
+.okmark svg.i { width: 15px; height: 15px; color: var(--good); vertical-align: -2px; }
+.nextbadges { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.nb { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 10px; background: var(--sunk); }
+.allbadges > summary, .histcard > summary { cursor: pointer; color: var(--accent); font-weight: 600; }
+.allbadges .badges { margin-top: 12px; }
+.allbadges p { margin-top: 10px; }
+.histcard > summary { display: flex; gap: 12px; align-items: baseline; color: var(--ink); list-style: none; }
+.histcard > summary::-webkit-details-marker { display: none; }
+.histcard > summary h2::before { content: "▸ "; color: var(--muted); }
+.histcard[open] > summary h2::before { content: "▾ "; }
+.histcard .tablewrap { margin-top: 14px; }
+@media (max-width: 560px) {
+  .readyhero { padding: 20px; gap: 20px; }
+  .objcard .trow > summary { grid-template-columns: minmax(0, 1fr) 3.4em; }
+  .objcard .trow > summary .track2, .orow2 .track2 { display: none; }
+  .orow2 { grid-template-columns: minmax(0, 1fr) 3.4em auto; }
+  .objcard .tbody { margin-left: 0; }
+}

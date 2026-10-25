@@ -47,6 +47,12 @@
   const topicOf = o => o.split(".")[0];
 
   // ------------------------------------------------------------- grading
+  /** A wrong fill answer that would be right without a leading `sudo`: shown as "drop sudo", still marked wrong. */
+  function extraSudo(q, a) {
+    if (!q || q.type !== "fill" || a == null || isCorrect(q, a)) return false;
+    const n = norm(a); if (!/^sudo /.test(n)) return false;
+    return q.accept.some(x => norm(x) === n.slice(5));
+  }
   function answered(q, a) { return q.type === "fill" ? norm(a) !== "" : Array.isArray(a) && a.length > 0; }
   // Type-the-command questions with a `lab` block ({ setup, check }) are also graded by running the answer in the lab
   // shell (shell.js) on a fresh simulated machine: any command that leaves the machine in the checked state counts,
@@ -797,7 +803,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
-           fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
+           extraSudo, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

@@ -75,7 +75,7 @@
   function levelBars(byLevel) {
     return `<div class="bars">${[1, 2, 3].map(lv => { const [r, n] = byLevel[lv] || [0, 0]; const p = n ? Math.round(100 * r / n) : 0;
       return `<div class="bar"><div class="lbl"><span><b style="font-weight:700">${C.LEVELS[lv][0]}</b> <span class="muted small">${C.LEVELS[lv][1]}</span></span><b>${n ? r + "/" + n + " · " + p + "%" : "—"}</b></div>
-        <div class="track2"><i style="width:${p}%;background:${col(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div>`;
+        <div class="track2"><i style="width:${p}%;background:${ocol(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div>`;
   }
 
   const ICON = {
@@ -303,7 +303,7 @@
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
     $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
     $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
-    $$("[data-study]", root).forEach(b => b.onclick = () => startStudy({ objs: [b.dataset.study], count: 10 }));
+    $$("[data-study]", root).forEach(b => b.onclick = () => { const objs = b.dataset.study.split(","); startStudy({ objs, count: objs.length > 1 ? 20 : 10 }); });
     $$("[data-cards-obj]", root).forEach(b => b.onclick = e => { e.preventDefault(); startObjCards(b.dataset.cardsObj); });
     $$("[data-go]", root).forEach(b => b.onclick = () => go(b.dataset.go));
   }
@@ -362,9 +362,11 @@
         <a class="card stat" href="#progress"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></a>
         <a class="card stat" href="#progress"><b>${pp.chance == null ? "—" : Math.round(pp.chance * 100) + "%"}</b><span>Pass chance</span></a>
         <a class="card stat" href="#labs"><b>${labsDone}<span class="muted" style="font-size:.9rem">/${LABS.length}</span></b><span>Lab parts done</span></a>
-        <a class="card stat" href="#progress"><b>${plan && plan.phase !== "past" ? (plan.phase === "today" ? "Today" : plan.days + "d") : "—"}</b><span>${plan && plan.phase !== "past" ? "Until exam day" : "No exam date set"}</span></a></div>`);
+        <div class="card stat"><b>${plan && plan.phase !== "past" ? (plan.phase === "today" ? "Today" : plan.days + "d") : "—"}</b><span>${plan && plan.phase !== "past" ? "Until exam day" : "No exam date set"}</span></div></div>
+      <div id="plan">${planCard()}</div>`);
     $("#goalEdit").onclick = () => { goalOpen = !goalOpen; renderToday(); };
     wireGoalPicker(renderToday);
+    wirePlan(renderToday);
     wireResume();
     wireStarts($("#page"));
   }
@@ -506,8 +508,9 @@
   }
 
   // ================================================================== PROGRESS
-  function trendChart(tests) {
-    const pts = tests.slice(-15), W = 640, H = 190, pl = 36, pr = 14, pt = 12, pb = 26;
+  function trendChart(tests, W, H) {
+    W = W || 640; H = H || 190;
+    const pts = tests.slice(-15), pl = 36, pr = 14, pt = 12, pb = 26;
     const x = i => pl + (pts.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (pts.length - 1));
     const y = v => pt + (100 - v) * (H - pt - pb) / 100;
     const line = pts.map((t, i) => `${x(i).toFixed(1)},${y(t.pct).toFixed(1)}`).join(" ");
@@ -517,7 +520,7 @@
     const last = pts.length - 1;
     return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Practice test scores over time">
       ${grid}<line x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}" style="stroke:var(--good);stroke-dasharray:5 5"/>
-      <text x="${W - pr}" y="${y(80) - 6}" text-anchor="end" style="fill:var(--good)">80% target</text>
+      <text x="${pl + 6}" y="${y(80) - 6}" style="fill:var(--good)">80% target</text>
       <polygon points="${area}" style="fill:var(--accent);opacity:.1"/>
       <polyline points="${line}" style="fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round"/>
       ${pts.map((t, i) => `<circle cx="${x(i)}" cy="${y(t.pct)}" r="${i === last ? 5 : 3}" style="fill:${i === last ? "var(--accent)" : "var(--surface)"};stroke:var(--accent);stroke-width:2"><title>${fmtDate(t.date)}: ${t.pct}%</title></circle>`).join("")}
@@ -538,17 +541,6 @@
             <button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`;
       }).join("")).join("")}</div>`;
   }
-  function achievementsCard() {
-    const x = C.xpInfo(st), bs = C.badgeStatus(st, BANK, CARDS, LABS.length), got = bs.filter(b => b.done).length;
-    const pct = x.next ? Math.round(100 * (x.xp - x.floor) / (x.next - x.floor)) : 100;
-    return `<div class="card stack"><div class="row spread"><h2>Level and badges</h2><span class="small muted">${got} of ${bs.length} badges</span></div>
-      <div class="lvl-row"><div class="lvl-badge">${x.level}</div><div class="grow"><div class="row spread"><b>${esc(x.name)}</b>
-        <span class="small muted mono">${x.xp} XP${x.next ? ` · ${x.next - x.xp} to level ${x.level + 1}` : " · max level"}</span></div>
-        <div class="track2" style="margin-top:8px"><i style="width:${pct}%;background:var(--accent)"></i></div>
-        <div class="small muted" style="margin-top:6px">1 XP for every answer or command drill, 1 more when it's right, 1 for every flashcard and 5 for every lab task.</div></div></div>
-      <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
-          <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div></div>`;
-  }
   // ================================================================== PASS CHANCE + EXAM PLAN
   const SITE = "https://krink192.github.io/exit0-linux-essentials/";
   let planEdit = false;
@@ -560,26 +552,69 @@
   const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  function passCard() {
-    const p = C.passPrediction(BANK, st.qstats);
-    const pct = p.chance == null ? null : Math.round(p.chance * 100);
-    const why = `Estimated from your latest answer to each question, weighted like the real exam. Objectives you haven't practised count as a coin flip.
+  // One "am I ready?" card at the top of Progress: readiness, pass chance and the single most useful next step.
+  const passWhy = p => `Estimated from your latest answer to each question, weighted like the real exam. Objectives you haven't practised count as a coin flip.
       LPI doesn't publish the raw pass mark, so this assumes ${p.passPct}% to stay on the safe side. Questions you've seen before get easier, so treat it as a guide, not a promise.`;
-    if (pct == null) return `<div class="card stack passcard"><div class="row" style="gap:10px">${icon("target")}<span class="eyebrow">Pass chance</span></div>
-      <div class="row" style="gap:20px;align-items:center">${ring(Math.round(100 * p.seen / p.minSeen), 104, 10, "—", "", "var(--line-2)")}
-        <div class="stack grow" style="gap:6px"><b>Answer ${plural(p.more, "more question")} to unlock it</b>
-        <span class="small muted">${p.seen} of ${p.minSeen} so far. Exams, study sessions and daily review all count.</span></div></div>
-      <p class="small muted">${why}</p></div>`;
-    const verdict = pct >= 90 ? "Strong. Keep it there and book the exam." : pct >= 70 ? "Good odds, but not safe yet. Work the objectives below."
-      : pct >= 40 ? "Coin-flip territory. The objectives below move it most." : "Not yet. Cover every objective, then focus on the ones below.";
-    return `<div class="card stack passcard"><div class="row" style="gap:10px">${icon("target")}<span class="eyebrow">Pass chance</span></div>
-      <div class="row" style="gap:20px;align-items:center">${ring(pct, 104, 10, pct + "%", "", col(pct >= 90 ? 80 : pct >= 60 ? 65 : 0))}
-        <div class="stack grow" style="gap:6px"><b>${verdict}</b>
-          <span class="small muted">Expected score on a fresh exam: <b>${Math.round(p.mean)}/${p.total}</b> (${Math.round(100 * p.mean / p.total)}%), most likely between ${p.low} and ${p.high}. Passing here means ${p.need} or more.</span></div></div>
-      ${p.focus.length ? `<div class="stack" style="gap:8px"><span class="small muted">Where 3 more right answers help most</span>
-        ${p.focus.map(f => `<div class="focusrow"><span><span class="mono muted">${f.obj}</span> ${esc(OBJ[f.obj].name)}</span>
-          <span class="small gain">+${Math.max(1, Math.round(f.gain * 100))} pts</span><button class="ghost small" data-study="${f.obj}">Study</button></div>`).join("")}</div>` : ""}
-      <details class="small muted"><summary>How is this worked out?</summary><p>${why}</p></details></div>`;
+  const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+  function heroCard() {
+    const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats);
+    const pct = p.chance == null ? null : Math.round(p.chance * 100);
+    const focus = p.focus.map(f => f.obj);
+    const head = ready == null ? "Take an exam to get your readiness score."
+      : ready >= 80 ? "You're in the ready range."
+      : ready >= 65 ? "Close." : "Keep building.";
+    const sub = focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
+      : ready == null ? "Study sessions count toward pass chance, but only full exams count toward readiness."
+      : ready >= 80 ? "Keep it there across three exams in a row, then book the real one." : "Aim for 80% on three exams in a row.";
+    const passBlock = pct == null
+      ? `<span class="small muted">Pass chance</span><b class="big">—</b><span class="small muted">Answer ${plural(p.more, "more question")} to unlock it</span>`
+      : `<span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Likely ${p.low}–${p.high} of ${p.total} · need ${p.need}</span>`;
+    const btns = focus.length
+      ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
+      : `<button class="primary" data-start="test">Take an exam</button>`;
+    return `<section class="card readyhero">
+      <div class="hero-nums">${ring(ready || 0, 120, 10, ready == null ? "—" : ready + "%", "Readiness", ready == null ? "var(--line)" : col(ready))}
+        <div class="stack" style="gap:2px">${passBlock}</div></div>
+      <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
+        <details class="small muted"><summary>How are these worked out?</summary><p>Readiness is the average of your last three exams. ${passWhy(p)}</p></details></div></section>`;
+  }
+
+  // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
+  let objView = "topic";
+  const ocol = p => p >= 80 ? "var(--good)" : p >= 50 ? "var(--flag)" : "var(--bad)";
+  function objectivesCard(os) {
+    const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;
+    const row = o => { const s = os[o];
+      return `<div class="orow2"><span class="oname"><span class="o">${o}</span> ${esc(OBJ[o].name)}${s.level === "mastered" ? ` <span class="okmark" title="Mastered">${icon("check")}<span class="sr">mastered</span></span>` : ""}</span>
+        ${bar(s.pct, s.pct == null ? "var(--line-2)" : ocol(s.pct))}<span class="pct">${s.pct == null ? "—" : s.pct + "%"}</span><button class="ghost small" data-study="${o}">Study</button></div>`; };
+    const objsOf = t => Object.keys(OBJ).filter(o => C.topicOf(o) === t);
+    const rank = o => os[o].pct == null ? 101 : os[o].pct;
+    const weakest = Object.keys(OBJ).slice().sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : 1));
+    const openT = os[weakest[0]].pct == null ? null : C.topicOf(weakest[0]);
+    const body = objView === "weak" ? `<div class="tbody flat">${weakest.map(row).join("")}</div>`
+      : Object.keys(TOP).map(t => { let r = 0, n = 0; objsOf(t).forEach(o => { r += os[o].right; n += os[o].seen; }); const p = n ? Math.round(100 * r / n) : null;
+          return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${t}. ${esc(TOP[t])}</span>${bar(p, "var(--muted)")}<span class="pct">${p == null ? "—" : p + "%"}</span></summary>
+            <div class="tbody">${objsOf(t).map(row).join("")}</div></details>`; }).join("");
+    const ds = C.deckStats(CARDS, st.cards), cm = Object.values(C.commandMastery(CMDX, st, { labUse: labUse() }));
+    return `<section class="card stack objcard"><div class="row spread"><h2>Objectives</h2>
+        <div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
+      <div>${body}</div>
+      <p class="small muted">${ds.mastered}/${ds.total} flashcards mastered · <a href="#commands">${cm.filter(c => c.level === "mastered").length}/${cm.length} commands mastered</a></p></section>`;
+  }
+
+  // Level, the three badges closest to unlocking, and the full set folded away.
+  function badgesCard() {
+    const x = C.xpInfo(st), bs = C.badgeStatus(st, BANK, CARDS, LABS.length), got = bs.filter(b => b.done).length;
+    const pct = x.next ? Math.round(100 * (x.xp - x.floor) / (x.next - x.floor)) : 100;
+    const near = bs.filter(b => !b.done && b.progress && b.progress[1] > 1).sort((a, b) => b.progress[0] / b.progress[1] - a.progress[0] / a.progress[1]).slice(0, 3);
+    return `<section class="card stack"><div class="row spread"><h2>Next badges</h2><span class="small muted mono">Level ${x.level} · ${esc(x.name)}${x.next ? ` · ${x.next - x.xp} XP to ${x.level + 1}` : ""}</span></div>
+      <div class="track2 slim" aria-hidden="true"><i style="width:${pct}%;background:var(--accent)"></i></div>
+      ${near.length ? `<div class="nextbadges">${near.map(b => `<div class="nb"><b>${esc(b.name)}</b><span class="small muted">${esc(b.desc)}</span>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${Math.round(100 * b.progress[0] / b.progress[1])}%;background:var(--accent)"></i></div><span class="small muted mono">${b.progress[0]} / ${b.progress[1]}</span></div>`).join("")}</div>` : ""}
+      <details class="allbadges"><summary>All ${bs.length} badges · ${got} earned</summary>
+        <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
+          <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div>
+        <p class="small muted">1 XP for every answer or command drill, 1 more when it's right, 1 for every flashcard and 5 for every lab task.</p></details></section>`;
   }
 
   function planCard() {
@@ -627,55 +662,35 @@
 
   function renderProgress() {
     const tests = st.tests.filter(t => t.mode === "test");
+    const plan = C.examPlan(st, BANK), sk = C.streak(st.days, st.settings.goal), x = C.xpInfo(st);
+    const pills = [plan && plan.phase !== "past" ? `<a class="pill" href="#today"><b>${plan.phase === "today" ? "Exam day" : plural(plan.days, "day")}</b>${plan.phase === "today" ? "" : " to exam"}</a>` : `<a class="pill" href="#today">Set an exam date</a>`,
+      sk.count ? `<span class="pill"><b>${sk.count}-day</b> streak</span>` : "", `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
+    const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
-      shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">Your scores, readiness and weak sections show up here after your first exam or study session.</p></div>
-        <div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam to see where you stand.</p><button class="primary" data-start="test">Start exam</button></div>
-        <div class="grid2">${passCard()}${planCard()}</div>`);
-      wirePlan(renderProgress);
+      shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your readiness, pass chance and weak objectives show up here.</p>
+        <div class="row" style="justify-content:center"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`);
       return wireStarts($("#page"));
     }
-    const ready = C.readiness(st.tests);
     const os = C.objectiveStats(BANK, st.qstats);
-    const seen = Object.keys(st.qstats).filter(id => BANK.byId[id]).length;
-    const ds = C.deckStats(CARDS, st.cards);
-    const mastered = Object.values(os).filter(s => s.level === "mastered").length;
-    const weak = C.weakObjectives(BANK, st.qstats, 5);
-    const tAcc = {}; for (const t in TOP) tAcc[t] = [0, 0];
-    for (const o in os) { tAcc[C.topicOf(o)][0] += os[o].right; tAcc[C.topicOf(o)][1] += os[o].seen; }
-    const status = ready == null ? "Finish an exam to get a readiness score. Study sessions don't count toward it."
-      : ready >= 80 ? "You're in the ready range. Keep it there across three exams, then book the real one."
-      : ready >= 65 ? "Close. Study your weak sections and aim for 80% three exams in a row."
-      : "Keep building. Study your weak sections, review flashcards, then take another exam.";
-    shell("progress", `<div class="page-head"><h1>Progress</h1><p class="lead">How you're doing across every exam objective.</p></div>
-      <div class="card row" style="gap:28px;align-items:center">
-        ${ring(ready || 0, 132, 12, ready == null ? "—" : ready + "%", "Readiness", ready == null ? "var(--line)" : col(ready))}
-        <div class="stack grow" style="gap:14px;min-width:240px"><p>${status}</p>
-          <div class="grid4" style="gap:10px">
-            <div class="stat"><b>${tests.length}</b><span>Exams</span></div>
-            <div class="stat"><b>${tests.length ? Math.max(...tests.map(t => t.pct)) + "%" : "—"}</b><span>Best</span></div>
-            <div class="stat"><b>${seen}<span class="muted" style="font-size:.9rem">/${BANK.questions.length}</span></b><span>Questions seen</span></div>
-            <div class="stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/19</span></b><span>Objectives mastered</span></div></div></div></div>
-      <div class="grid2" id="plan">${passCard()}${planCard()}</div>
-      ${achievementsCard()}
-      ${tests.length >= 2 ? `<div class="card stack"><div class="row spread"><h2>Score trend</h2><span class="small muted">Last ${Math.min(15, tests.length)} exams</span></div>${trendChart(tests)}</div>` : ""}
+    shell("progress", `${head}
+      ${heroCard()}
+      ${objectivesCard(os)}
       <div class="grid2">
-        <div class="card stack"><h2>Troubled sections</h2>${weak.length ? `<div class="bars">${weak.map(o => `<div class="bar"><div class="lbl"><span><span class="mono muted">${o}</span> ${esc(OBJ[o].name)}</span><b>${os[o].pct}%</b></div>
-            <div class="track2"><i style="width:${os[o].pct}%;background:${col(os[o].pct)}"></i><span class="mark"></span></div></div>`).join("")}</div>
-            <button data-start="weak">Study weak areas</button>` : `<p class="muted small">Nothing below 80% with enough answers yet. Nice.</p>`}</div>
-        <div class="card stack"><h2>By topic</h2><div class="bars">${Object.keys(TOP).map(t => { const [r, n] = tAcc[t]; const p = n ? Math.round(100 * r / n) : 0;
-            return `<div class="bar"><div class="lbl"><span>${t}. ${esc(TOP[t])}</span><b>${n ? p + "%" : "—"}</b></div><div class="track2"><i style="width:${p}%;background:${col(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div></div>
+        <section class="card stack"><div class="row spread"><h2>Exam scores</h2><span class="small muted">${tests.length ? "best " + Math.max(...tests.map(t => t.pct)) + "% · " + plural(tests.length, "exam") : "no exams yet"}</span></div>
+          ${tests.length >= 2 ? trendChart(tests, 360, 200) : `<p class="small muted">Take ${tests.length ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
+        <section class="card stack"><div class="row spread"><h2>By difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
+          <p class="small muted">The real exam leans on exact syntax. If Apply or Analyze trails Recall, study those levels.</p></section>
       </div>
-      <div class="card stack"><div class="row spread"><h2>By question difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
-        <p class="small muted">The real exam leans on exact syntax and reading commands. If Apply or Analyze trails Recall, study those levels and use the Commands &amp; files flashcards.</p></div>
-      <div class="card stack"><div class="row spread"><h2>Objective mastery</h2><span class="small muted">${ds.mastered}/${ds.total} flashcards mastered</span></div>${objList(os)}</div>
-      <div class="stack"><h2>History</h2><div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th style="text-align:right">Score</th><th style="text-align:right">Time</th><th></th></tr></thead><tbody>
+      ${badgesCard()}
+      <details class="card histcard"><summary><h2>History</h2><span class="small muted">${plural(st.tests.length, "session")}</span></summary>
+        <div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th style="text-align:right">Score</th><th style="text-align:right">Time</th><th></th></tr></thead><tbody>
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
           <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
           <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${t.id}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
-      </tbody></table></div></div>
+        </tbody></table></div></details>
       ${SYNC && !SYNC.linked ? `<p class="small muted">Studying on more than one device? <a href="#settings">Set up sync</a> with your own exit0-sync server to keep this progress in step.</p>` : ""}`);
-    wirePlan(renderProgress);
     wireStarts($("#page"));
+    $$("#objView button").forEach(b => b.onclick = () => { objView = b.dataset.v; renderProgress(); });
     $$("[data-review]").forEach(b => b.onclick = () => { lastRec = st.tests.find(t => t.id === b.dataset.review); reviewFilter = "all"; go("results"); });
   }
 
@@ -771,7 +786,8 @@
       <div class="card stack guide"><h2>Question types</h2><ul>
         <li><b>Single answer:</b> pick the one best option.</li>
         <li><b>Multiple answer:</b> the question tells you how many to pick, as in "Choose TWO".</li>
-        <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li></ul></div>
+        <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li>
+        <li><b>Shortest command, no extras:</b> like the real exam, assume you're a regular user, the files named are in your current directory, and you have permission to them. Leave out <code>sudo</code> unless the task needs root, such as installing software, managing users and groups, or changing a file's owner.</li></ul></div>
       <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table. Each Lesson link opens LPI's free online lesson; <a href="${LPI_PDF}" target="_blank" rel="noopener">the whole book is also a PDF</a>.</p>
         <div class="tablewrap"><table class="table"><thead><tr><th>Obj.</th><th>Objective</th><th style="text-align:right">Questions</th><th>Study</th></tr></thead><tbody>${bp}
         <tr class="topic"><td colspan="2">Total</td><td class="n">40</td><td></td></tr></tbody></table></div></div>
@@ -1375,7 +1391,7 @@
     if (q.type === "fill") {
       body = `<label class="fill ${revealed ? "locked" : ""}" for="fillin"><span class="ps">$</span><input id="fillin" autocomplete="off" autocapitalize="off" spellcheck="false"
         value="${esc(a || "")}" placeholder="${q.lab ? "type a command" : "type your answer"}" ${revealed ? "disabled" : ""}></label>
-        <p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text. Case matters."} Press <span class="kbd">Enter</span> ${S.study && !revealed ? "to check" : "for the next question"}.</p>`;
+        <p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text, as a regular user in the current directory. Add <code>sudo</code> only when the task needs root. Case matters."} Press <span class="kbd">Enter</span> ${S.study && !revealed ? "to check" : "for the next question"}.</p>`;
     } else {
       const multi = q.type === "multi";
       body = `<div class="opts" role="${multi ? "group" : "radiogroup"}">${S.optOrder[id].map((oi, pos) => {
@@ -1387,7 +1403,8 @@
       }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
     }
     const ok = revealed && C.isCorrect(q, a);
-    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${ok ? "Correct" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${ok ? "Correct" : C.extraSudo(q, a) ? "Right command, but drop sudo" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+        ${!ok && C.extraSudo(q, a) ? `<p>Nothing in the question needs root, and the exam wants the shortest command that does the job. Running a command like this as root also removes the permission checks that would stop a mistake.</p>` : ""}
         ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
         <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";

@@ -2275,7 +2275,7 @@
    "id": "2.4-09",
    "obj": "2.4",
    "form": "C",
-   "q": "Type the complete command that deletes the directory old_logs and everything inside it.",
+   "q": "Type the complete command that deletes the directory old_logs, in your current directory, and everything inside it.",
    "explanation": "`rm -r` removes a directory tree recursively, and adding `-f` suppresses prompts and errors, so double-check before using it. `rmdir` only removes empty directories.",
    "type": "fill",
    "accept": [

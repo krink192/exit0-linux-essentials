@@ -258,4 +258,10 @@ t("calendar file is valid iCalendar", () => {
   assert.strictEqual(C.examIcs("2026-10-10", { now }).split("BEGIN:VEVENT").length - 1, 1, "no daily reminder on exam day");
   assert.strictEqual(C.examIcs("nope"), null);
 });
+t("a correct fill answer with an extra leading sudo is flagged, still marked wrong", () => {
+  const q = bank.byId["2.4-09"];
+  assert(!C.isCorrect(q, "sudo rm -rf old_logs")); assert(C.extraSudo(q, "sudo rm -rf old_logs")); assert(C.extraSudo(q, "  sudo  rm -r old_logs "));
+  assert(!C.extraSudo(q, "rm -rf old_logs"), "right answers aren't flagged"); assert(!C.extraSudo(q, "sudo rmdir old_logs"), "wrong commands aren't flagged");
+  for (const q2 of bank.questions) if (q2.type === "fill") for (const a of q2.accept) assert(!C.extraSudo(q2, a), q2.id + " accepted answer flagged");
+});
 console.log(`\n${n} tests passed`);

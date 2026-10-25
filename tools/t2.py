@@ -216,7 +216,7 @@ S("2.4", "A directory contains resolv.conf, .hidden.conf, conf.bak, nginx.conf.b
   ["✔my.conf", "✔resolv.conf", ".hidden.conf", "conf.bak", "nginx.conf.bak"],
   "`*` matches any characters, but by default it does not match a leading dot, so hidden files are skipped. The name must also end in .conf, which rules out conf.bak and nginx.conf.bak.",
   run="touch resolv.conf .hidden.conf conf.bak nginx.conf.bak my.conf; echo *.conf", expect="my.conf resolv.conf")
-F("2.4", "Type the complete command that deletes the directory old_logs and everything inside it.",
+F("2.4", "Type the complete command that deletes the directory old_logs, in your current directory, and everything inside it.",
   ["rm -r old_logs", "rm -rf old_logs", "rm -R old_logs", "rm -fr old_logs", "rm -r old_logs/", "rm -rf old_logs/", "rm -Rf old_logs", "rm --recursive old_logs"],
   "`rm -r` removes a directory tree recursively, and adding `-f` suppresses prompts and errors, so double-check before using it. `rmdir` only removes empty directories.",
   run="mkdir -p old_logs/sub; touch old_logs/sub/a; {A}; ls | wc -l", expect="0")

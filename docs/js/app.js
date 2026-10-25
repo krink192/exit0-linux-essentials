@@ -766,49 +766,73 @@
   }
 
   // ================================================================== EXAM GUIDE
+  // Exam guide: a contents rail on the left, the reference on the right. The blueprint shows your score next to each weight.
+  const GUIDE_SECTIONS = [["g-glance", "At a glance"], ["g-format", "Format and delivery"], ["g-types", "Question types"], ["g-blueprint", "Exam blueprint"],
+    ["difficulty", "How hard is it?"], ["g-plan", "Study plan"], ["g-tips", "Test-day tips"], ["g-sources", "Official sources"]];
+  let guideObserver = null;
   function renderGuide() {
-    let bp = "";
-    for (const t in TOP) {
-      const objs = Object.keys(OBJ).filter(o => C.topicOf(o) === t);
-      bp += `<tr class="topic"><td colspan="2">Topic ${t}: ${esc(TOP[t])}</td><td class="n">${objs.reduce((n, o) => n + OBJ[o].weight, 0)}</td><td></td></tr>` +
-        objs.map(o => `<tr><td class="mono">${o}</td><td>${esc(OBJ[o].name)}</td><td class="n">${OBJ[o].weight}</td><td><a href="${OBJ[o].lesson}" target="_blank" rel="noopener">Lesson</a></td></tr>`).join("");
+    const os = C.objectiveStats(BANK, st.qstats), started = Object.keys(st.qstats).length > 0;
+    const you = p => p == null ? `<span class="muted">—</span>` : `<span style="color:${ocol(p)}">${p}%</span>`;
+    const rank = o => os[o].pct == null ? 101 : os[o].pct;
+    const weakest = Object.keys(OBJ).slice().sort((a, b) => rank(a) - rank(b))[0];
+    const openT = started && os[weakest].pct != null ? C.topicOf(weakest) : "1";
+    const bp = Object.keys(TOP).map(t => { const objs = Object.keys(OBJ).filter(o => C.topicOf(o) === t);
+      let r = 0, n = 0; objs.forEach(o => { r += os[o].right; n += os[o].seen; });
+      return `<details class="bprow"${t === openT ? " open" : ""}><summary><span class="tname">${t}. ${esc(TOP[t])}</span><span class="n">${objs.reduce((s, o) => s + OBJ[o].weight, 0)}</span><span class="n">${you(n ? Math.round(100 * r / n) : null)}</span><span></span></summary>
+        <div class="tbody">${objs.map(o => `<div class="bpobj"><span><span class="o">${o}</span> ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="n">${you(os[o].pct)}</span>
+          <a href="${OBJ[o].lesson}" target="_blank" rel="noopener">Lesson ↗</a></div>`).join("")}</div></details>`; }).join("");
+    shell("guide", `<div class="guidewrap">
+      <aside class="guiderail"><h1>Exam guide</h1><span class="eyebrow">On this page</span>
+        <nav aria-label="Exam guide sections">${GUIDE_SECTIONS.map(([id, label], i) => `<button class="railbtn ${i === 0 ? "on" : ""}" data-jump="${id}">${label}</button>`).join("")}</nav></aside>
+      <div class="guidemain stack">
+        <p class="lead muted" id="g-glance">Everything about LPI Linux Essentials 010-160 in one place, taken from LPI's published information.</p>
+        <div class="factstrip">
+          <div><b>40</b><span>questions</span></div><div><b>60 min</b><span>time limit</span></div>
+          <div><b>500 / 800</b><span>scaled score to pass (range 200 to 800)</span></div><div><b>Lifetime</b><span>certificate validity</span></div></div>
+        <section class="card stack guide" id="g-format"><h2>Format and delivery</h2><ul>
+          <li>The exam is delivered by Pearson VUE, at a test center or online through OnVUE.</li>
+          <li>OnVUE needs a Windows or Mac computer with a webcam, a quiet private room and a stable internet connection.</li>
+          <li>It is available in English, French, German, Japanese, Portuguese (Brazilian) and Spanish.</li>
+          <li>You get your result and score report as soon as you finish. Linux Essentials comes as a PDF certificate, with no physical copy.</li>
+          <li>The number of correct answers needed varies with the questions you get, because scores are scaled. Treat 80% in this app as your target.</li></ul></section>
+        <section class="card stack guide" id="g-types"><h2>Question types</h2><ul>
+          <li><b>Single answer:</b> pick the one best option.</li>
+          <li><b>Multiple answer:</b> the question tells you how many to pick, as in "Choose TWO".</li>
+          <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li></ul>
+          <div class="callout"><b>Shortest command, no extras</b><p>Like the real exam, assume you're a regular user, the files named are in your current directory, and you have permission to them. Leave out <code>sudo</code> unless the task needs root, such as installing software, managing users and groups, or changing a file's owner.</p></div></section>
+        <section class="card stack" id="g-blueprint"><h2>Exam blueprint</h2>
+          <p class="muted small">An objective's weight equals its number of questions, and every exam in this app follows this table.${started ? " Your accuracy is next to each one, so you can see where the points are." : " Your accuracy shows up here once you start answering."}</p>
+          <div class="bphead"><span>Objective</span><span class="n">Questions</span><span class="n">You</span><span></span></div>
+          <div class="bplist">${bp}<div class="bptotal"><b>Total</b><b class="n">40</b><span></span><span></span></div></div>
+          <p class="small muted">Each Lesson link opens LPI's free online lesson; <a href="${LPI_PDF}" target="_blank" rel="noopener">the whole book is also a PDF</a>.</p></section>
+        <section class="card stack guide" id="difficulty"><h2>How hard is the real exam?</h2>
+          <p>LPI sets the pass mark for a "minimally qualified candidate": someone with basic Linux knowledge who is most likely the end user of a mostly managed system and can work on the command line. LPI doesn't publish difficulty data. Candidates and trainers mostly describe the challenge as breadth plus exact recall: precise command options, permission notation, package tools and directory names.</p>
+          <p>Every question in this app is tagged by the kind of thinking it needs:</p>
+          <ul>${[1, 2, 3].map(lv => `<li><b>${C.LEVELS[lv][0]}</b>: ${C.LEVELS[lv][1].toLowerCase()}. ${C.levelMix(BANK)[lv]} questions in the bank.</li>`).join("")}</ul>
+          <p class="small muted">The tags are a guide, not an official rating. Your Progress page shows your accuracy at each level, and Study mode can filter by level. Strong Apply and Analyze scores are the best sign that you're ready for exact-syntax questions on the real exam.</p></section>
+        <div class="grid2">
+          <section class="card stack guide" id="g-plan"><h2>A study plan that works</h2><ol>
+            <li>Take an exam cold to get a baseline.</li><li>Study your weak objectives. Use hints only when stuck, and read the linked lesson for anything you miss.</li>
+            <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your readiness stays at 80% or higher.</li></ol></section>
+          <section class="card stack guide" id="g-tips"><h2>Test-day tips</h2><ul>
+            <li>Answer every question, because a blank can't score.</li><li>Flag hard questions and come back. Don't let one question eat your time.</li>
+            <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></section></div>
+        <section class="card stack guide" id="g-sources"><h2>Official sources</h2><ul>
+          <li><a href="https://www.lpi.org/our-certifications/linux-essentials-overview/" target="_blank" rel="noopener">Linux Essentials overview</a></li>
+          <li><a href="https://www.lpi.org/our-certifications/exam-010-objectives/" target="_blank" rel="noopener">Exam 010 objectives (v1.6)</a></li>
+          <li><a href="https://www.lpi.org/about-lpi/frequently-asked-questions/" target="_blank" rel="noopener">LPI FAQ: scoring, delivery and results</a></li>
+          <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a> (online, one page per lesson)</li>
+          <li><a href="${LPI_PDF}" target="_blank" rel="noopener">The same learning materials as one PDF book</a> (download, print or read offline)</li></ul></section>
+      </div></div>`);
+    const btns = $$("[data-jump]");
+    const mark = id => btns.forEach(b => b.classList.toggle("on", b.dataset.jump === id));
+    btns.forEach(b => b.onclick = () => { const el = document.getElementById(b.dataset.jump); if (el) { el.scrollIntoView({ behavior: "smooth", block: "start" }); mark(b.dataset.jump); } });
+    if (guideObserver) guideObserver.disconnect();
+    if ("IntersectionObserver" in window) {
+      guideObserver = new IntersectionObserver(es => { const v = es.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]; if (v) mark(v.target.id); },
+        { rootMargin: "0px 0px -70% 0px" });
+      GUIDE_SECTIONS.forEach(([id]) => { const el = document.getElementById(id); if (el) guideObserver.observe(el); });
     }
-    shell("guide", `<div class="page-head"><h1>Exam guide</h1><p class="lead">Everything about LPI Linux Essentials 010-160 in one place, taken from LPI's published information.</p></div>
-      <div class="facts">
-        <div class="card"><b>40</b><span>questions</span></div><div class="card"><b>60 min</b><span>time limit</span></div>
-        <div class="card"><b>500 / 800</b><span>scaled score to pass (range 200 to 800)</span></div><div class="card"><b>Lifetime</b><span>certificate validity</span></div></div>
-      <div class="card stack guide"><h2>Format and delivery</h2><ul>
-        <li>The exam is delivered by Pearson VUE, at a test center or online through OnVUE.</li>
-        <li>OnVUE needs a Windows or Mac computer with a webcam, a quiet private room and a stable internet connection.</li>
-        <li>It is available in English, French, German, Japanese, Portuguese (Brazilian) and Spanish.</li>
-        <li>You get your result and score report as soon as you finish. Linux Essentials comes as a PDF certificate, with no physical copy.</li>
-        <li>The number of correct answers needed varies with the questions you get, because scores are scaled. Treat 80% in this app as your target.</li></ul></div>
-      <div class="card stack guide"><h2>Question types</h2><ul>
-        <li><b>Single answer:</b> pick the one best option.</li>
-        <li><b>Multiple answer:</b> the question tells you how many to pick, as in "Choose TWO".</li>
-        <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li>
-        <li><b>Shortest command, no extras:</b> like the real exam, assume you're a regular user, the files named are in your current directory, and you have permission to them. Leave out <code>sudo</code> unless the task needs root, such as installing software, managing users and groups, or changing a file's owner.</li></ul></div>
-      <div class="stack"><h2>Exam blueprint</h2><p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table. Each Lesson link opens LPI's free online lesson; <a href="${LPI_PDF}" target="_blank" rel="noopener">the whole book is also a PDF</a>.</p>
-        <div class="tablewrap"><table class="table"><thead><tr><th>Obj.</th><th>Objective</th><th style="text-align:right">Questions</th><th>Study</th></tr></thead><tbody>${bp}
-        <tr class="topic"><td colspan="2">Total</td><td class="n">40</td><td></td></tr></tbody></table></div></div>
-      <div class="card stack guide" id="difficulty"><h2>How hard is the real exam?</h2>
-        <p>LPI sets the pass mark for a "minimally qualified candidate": someone with basic Linux knowledge who is most likely the end user of a mostly managed system and can work on the command line. LPI doesn't publish difficulty data. Candidates and trainers mostly describe the challenge as breadth plus exact recall: precise command options, permission notation, package tools and directory names.</p>
-        <p>Every question in this app is tagged by the kind of thinking it needs:</p>
-        <ul>${[1, 2, 3].map(lv => `<li><b>${C.LEVELS[lv][0]}</b>: ${C.LEVELS[lv][1].toLowerCase()}. ${C.levelMix(BANK)[lv]} questions in the bank.</li>`).join("")}</ul>
-        <p class="small muted">The tags are a guide, not an official rating. Your Progress page shows your accuracy at each level, and Study mode can filter by level. Strong Apply and Analyze scores are the best sign that you're ready for exact-syntax questions on the real exam.</p></div>
-      <div class="grid2">
-        <div class="card stack guide"><h2>A study plan that works</h2><ol>
-          <li>Take an exam cold to get a baseline.</li><li>Study your weak objectives. Use hints only when stuck, and read the linked lesson for anything you miss.</li>
-          <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your readiness stays at 80% or higher.</li></ol></div>
-        <div class="card stack guide"><h2>Test-day tips</h2><ul>
-          <li>Answer every question, because a blank can't score.</li><li>Flag hard questions and come back. Don't let one question eat your time.</li>
-          <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></div></div>
-      <div class="card stack guide"><h2>Official sources</h2><ul>
-        <li><a href="https://www.lpi.org/our-certifications/linux-essentials-overview/" target="_blank" rel="noopener">Linux Essentials overview</a></li>
-        <li><a href="https://www.lpi.org/our-certifications/exam-010-objectives/" target="_blank" rel="noopener">Exam 010 objectives (v1.6)</a></li>
-        <li><a href="https://www.lpi.org/about-lpi/frequently-asked-questions/" target="_blank" rel="noopener">LPI FAQ: scoring, delivery and results</a></li>
-        <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a> (online, one page per lesson)</li>
-        <li><a href="${LPI_PDF}" target="_blank" rel="noopener">The same learning materials as one PDF book</a> (download, print or read offline)</li></ul></div>`);
   }
 
   // ================================================================== LABS (simulated terminal)
@@ -821,28 +845,51 @@
   const labState = id => (st.labs[id] = st.labs[id] || { done: [] });
   const partsOf = code => LABS.filter(l => l.lesson === code);
   const lessonName = L => L.track === TROUBLE ? L.lesson + " · uses " + L.obj : L.obj + (partsOf(L.lesson).length && LESSONS.filter(x => x.obj === L.obj && !x.track).length > 1 ? " · Lesson " + L.num : "");
+  // Labs: one "continue" card, then every lesson in one list folded by topic, troubleshooting folded at the end.
+  let labFilter = "all";
   function renderLabs() {
     const doneParts = LABS.filter(l => labState(l.id).completedAt).length;
-    const doneLessons = LESSONS.filter(L => partsOf(L.lesson).every(p => labState(p.id).completedAt)).length;
-    const next = LABS.find(l => !labState(l.id).completedAt);
+    const lessonDone = L => partsOf(L.lesson).every(p => labState(p.id).completedAt);
+    const lessonStarted = L => partsOf(L.lesson).some(p => labState(p.id).done.length);
+    const doneLessons = LESSONS.filter(lessonDone).length;
+    const next = LABS.find(l => !labState(l.id).completedAt && labState(l.id).done.length) || LABS.find(l => !labState(l.id).completedAt);
+    const nextL = next && LESSONS.find(L => L.lesson === next.lesson);
+    const segs = parts => `<span class="psegs" aria-hidden="true">${parts.map(p => { const ls = labState(p.id);
+      return `<i class="${ls.completedAt ? "on" : ls.done.length ? "half" : ""}"></i>`; }).join("")}</span>`;
+    const row = L => { const parts = partsOf(L.lesson), done = parts.filter(p => labState(p.id).completedAt).length;
+      const go = parts.find(p => !labState(p.id).completedAt) || parts[0];
+      const label = done === parts.length ? "Review" : lessonStarted(L) ? "Continue" : "Start";
+      return `<div class="lrow ${done === parts.length ? "done" : ""}"><span class="lname"><span class="o">${esc(lessonName(L))}</span> ${esc(L.title)}</span>
+        ${segs(parts)}<span class="small muted mono lcount">${done}/${parts.length}</span><a href="#lab/${go.id}" class="${label === "Continue" ? "strong" : ""}">${label}</a></div>`; };
+    const keep = L => labFilter === "all" || !lessonDone(L);
     const byTopic = {}; LESSONS.filter(L => !L.track).forEach(L => (byTopic[C.topicOf(L.obj)] = byTopic[C.topicOf(L.obj)] || []).push(L));
     const trouble = LESSONS.filter(L => L.track === TROUBLE);
-    shell("labs", `<div class="page-head"><span class="eyebrow">Labs · hands-on practice</span><h1>Labs</h1>
-        <p class="lead">A lab for every lesson of the LPI Learning Materials, split into short parts so you use every command the lesson teaches. Each task is checked as you type, with hints that get more specific, coaching when a command goes wrong, and an explanation once you've got it. The system is simulated, so nothing you do can break anything.</p></div>
-      <div class="card row spread"><span><b>${doneParts}</b> <span class="muted">of ${LABS.length} parts</span> · <b>${doneLessons}</b> <span class="muted">of ${LESSONS.length} lessons complete</span></span>
-        ${next ? `<a class="btn primary" href="#lab/${next.id}">${doneParts ? "Continue" : "Start"}: ${esc(next.lesson)} part ${next.part}</a>` : `<span class="chip lv-mastered">All labs complete</span>`}</div>
-      ${Object.keys(byTopic).sort().map(t => `<div class="stack" style="gap:10px"><div class="eyebrow">${t}. ${esc(TOP[t])}</div><div class="lessongrid">${byTopic[t].map(lessonCard).join("")}</div></div>`).join("")}
-      ${trouble.length ? `<div class="stack" style="gap:10px"><div class="eyebrow">Troubleshooting</div>
-        <p class="small muted" style="margin:0">Something is broken: find out why and fix it, using only commands from the exam objectives. Each task checks the system itself, so any correct fix counts. Best after the lessons they use.</p>
-        <div class="lessongrid">${trouble.map(lessonCard).join("")}</div></div>` : ""}`);
+    const openT = nextL && !nextL.track ? C.topicOf(nextL.obj) : null;
+    const topics = Object.keys(byTopic).sort().map(t => { const ls = byTopic[t], shown = ls.filter(keep);
+        if (!shown.length) return "";
+        const parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(p => labState(p.id).completedAt).length;
+        const all = pd === parts.length;
+        return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${t}. ${esc(TOP[t])}</span>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="tbody">${shown.map(row).join("")}</div></details>`; }).join("");
+    const tParts = trouble.reduce((a, L) => a.concat(partsOf(L.lesson)), []), tDone = tParts.filter(p => labState(p.id).completedAt).length;
+    shell("labs", `<div class="page-head row spread progress-head"><div><h1>Labs</h1><p class="lead">One lab per LPI lesson, in short parts. Each task is checked as you type. It's simulated, so nothing can break.</p></div>
+        <div class="row pills"><span class="pill"><b>${doneParts} / ${LABS.length}</b> parts</span><span class="pill"><b>${doneLessons} / ${LESSONS.length}</b> lessons</span></div></div>
+      ${next ? `<section class="card continue"><div class="cic">${icon("terminal")}</div>
+        <div class="stack grow" style="gap:6px"><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span>
+          <p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
+          <div class="row" style="gap:10px;align-items:center">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
+        <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
+      : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
+      <section class="card stack objcard labscard"><div class="row spread"><h2>Lessons</h2>
+          <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
+        <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
+        <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
+      ${trouble.length ? `<details class="card troublecard"><summary><div class="stack" style="gap:2px"><b>Troubleshooting · ${plural(trouble.length, "scenario")}${tDone ? ` · ${tDone}/${tParts.length} parts done` : ""}</b>
+          <span class="small muted">Something's broken: find out why and fix it, using only exam commands. Best after the lessons each one uses.</span></div><span class="tlink">Show scenarios</span></summary>
+        <div class="tbody flat">${trouble.filter(keep).map(row).join("") || `<p class="muted small">All scenarios finished.</p>`}</div></details>` : ""}`);
+    $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
   }
-  function lessonCard(L) {
-        const parts = partsOf(L.lesson); const total = parts.reduce((a, p) => a + p.n, 0), got = parts.reduce((a, p) => a + labState(p.id).done.length, 0);
-        const all = parts.every(p => labState(p.id).completedAt);
-        return `<div class="card lessoncard ${all ? "done" : ""}"><div class="row spread"><span class="mono small muted">${esc(lessonName(L))}</span>${all ? `<span class="chip lv-mastered">Complete</span>` : got ? `<span class="chip lv-learning">${got}/${total}</span>` : `<span class="small muted">${parts.length} parts</span>`}</div>
-          <b>${esc(L.title)}</b><div class="track2"><i style="width:${total ? 100 * got / total : 0}%;background:${all ? "var(--good)" : "var(--accent)"}"></i></div>
-          <ol class="partlist">${parts.map(p => { const ls = labState(p.id);
-            return `<li><a href="#lab/${p.id}" class="${ls.completedAt ? "done" : ""}"><span class="pn">${ls.completedAt ? icon("check") : p.part}</span><span class="grow">${esc(p.title)}</span><span class="small muted mono">${ls.done.length}/${p.n}</span></a></li>`; }).join("")}</ol></div>`; }
   // A light "did you mean" for typos, like command-not-found on real systems.
   function closestCommand(sh, word) {
     const cands = sh.complete(""); let best = null, bd = 3;

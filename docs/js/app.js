@@ -245,7 +245,7 @@
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
         <div class="streakmini">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count}</div></header>
-      <main class="page" id="page">${tabs}${body}</main>
+      <main class="page${opts && opts.wide ? " wide" : ""}" id="page">${tabs}${body}</main>
       <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
         return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;
     $("#menuBtn").onclick = () => $("#shell").classList.toggle("open");
@@ -294,6 +294,12 @@
     const first = C.cardQueue(CARDS, st.cards, c => c.obj === o, C.dayNum(), 20);
     cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 };
     go("cards");
+  }
+  function startCardList(ids) {      // flashcards from a list: due and new first, then the rest
+    const set = new Set(ids), pool = CARDS.filter(c => set.has(c.id));
+    if (!pool.length) return toast("No flashcards for that yet");
+    const first = C.cardQueue(CARDS, st.cards, c => set.has(c.id), C.dayNum(), 20);
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
   }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
@@ -1127,60 +1133,125 @@
       cp = Object.assign(s, { res: [], opts, sh: null }); go("cmdrun");
     }, () => toast("Couldn't load the practice files. Check your connection."));
   }
+  // Short original notes for drill "commands" that are shell features or builtins, so they have no man page here.
+  const CMD_INFO = {
+    variables: ["Shell variables hold a value for the current shell.", ["NAME=value", "echo $NAME"], "No spaces around =. Read a value with $NAME."],
+    export: ["Marks a variable so programs started from this shell inherit it.", ["export NAME=value", "export NAME"], "Bash builtin: try `help export`."],
+    unset: ["Removes a variable (or function) from the shell.", ["unset NAME"], "Bash builtin: try `help unset`."],
+    type: ["Tells you what a name is: alias, builtin, function or a file on disk.", ["type NAME", "type -a NAME"], "Bash builtin: try `help type`."],
+    "brace expansion": ["Bash expands {a,b,c} and {1..5} into several words before the command runs.", ["mkdir dir{1..3}", "touch file.{txt,bak}"], "No spaces inside the braces."],
+    alias: ["Gives a short name to a longer command for this shell.", ["alias ll='ls -l'", "alias", "unalias ll"], "Bash builtin. Put aliases in ~/.bashrc to keep them."],
+    cd: ["Changes the current directory.", ["cd DIR", "cd", "cd -", "cd .."], "Bash builtin: `cd` alone goes home, `cd -` goes back."],
+    globbing: ["The shell matches file names with * (anything), ? (one character) and [abc] (one of a set).", ["ls *.txt", "rm log_?.txt", "ls [a-c]*"], "Patterns don't match hidden files unless they start with a dot."],
+    "head/tail": ["head prints the first lines of a file and tail the last. Both default to 10.", ["head -n 5 FILE", "tail -n 20 FILE", "tail -f LOG"], "`tail -f` keeps printing new lines as they're added."],
+    redirection: ["Sends a command's output to a file, or reads its input from one.", ["cmd > out", "cmd >> out", "cmd 2> err", "cmd < in"], "`>` overwrites, `>>` appends, `2>` is for errors."],
+    pipes: ["| sends one command's output into the next command's input.", ["ls -l | less", "grep x f | wc -l"], "Each command in a pipeline runs at the same time."],
+    "$?": ["Holds the exit status of the last command: 0 means success, anything else is an error.", ["echo $?"], "Read it straight after the command you care about."],
+    test: ["Checks a condition and sets $? to 0 (true) or 1 (false). [ ] is the same command.", ["test -f FILE", "[ -d DIR ]", "[ \"$a\" -eq 5 ]"], "Spaces inside [ ] are required."],
+    for: ["Repeats commands once for each word in a list.", ["for f in *.txt; do echo \"$f\"; done"], "Bash keyword: try `help for`."],
+    PATH: ["The list of directories the shell searches for commands, separated by colons.", ["echo $PATH", "PATH=$PATH:~/bin"], "Scripts in the current directory need ./ because . isn't in PATH."],
+  };
+  let cmdOpen = null, sheetFocus = null;
+  const LVN = { new: "Not tried", learning: "Learning", weak: "Needs work", mastered: "Mastered" };
+  function cmdLinks(c) {
+    const qids = C.relatedQuestions(BANK, LABX.cmdq, c.cmd), cids = C.relatedCards(CARDS, c.cmd);
+    const fromIndex = Object.keys((LABX.labcmds || {})[c.cmd] || {});
+    const parts = LABS.filter(p => fromIndex.includes(p.id) || C.cmdNamesOf(c.cmd).some(n => (p.commands || []).includes(n)));
+    const rank = p => (p.obj === c.obj ? 0 : 2) + (labState(p.id).completedAt ? 1 : 0);
+    return { qids, cids, parts: parts.sort((a, b) => rank(a) - rank(b)).slice(0, 3), partsN: parts.length };
+  }
+  function cmdPanel(m) {
+    const c = m[cmdOpen];
+    if (!c) return `<div class="cpanel-empty">${icon("terminal")}<b>Tap a command</b><p class="small muted">See what it does, how each of its skills went, and where else to practise it: labs, exam questions, flashcards and the cheat sheet.</p></div>`;
+    const man = window.LEManPages && window.LEManPages[c.cmd], info = CMD_INFO[c.cmd];
+    const summary = info ? info[0] : man ? man.summary.charAt(0).toUpperCase() + man.summary.slice(1) + "." : "";
+    const syn = info ? info[1] : man ? (man.synopsis || []).slice(0, 2) : [];
+    const opts = man && man.options ? man.options.slice(0, 3) : [];
+    const sel = st.settings.cmd.cmds.includes(c.cmd);
+    const L = cmdLinks(c), o = c.obj, t = C.topicOf(o), today = C.dayNum();
+    const skills = c.skills.map(id => { const s = st.cmdstats[id], sk = SKILL[id] || { label: id };
+      const mark = !s || !s.seen ? ["·", "untried", "not tried"] : s.last ? ["✓", "ok", "right last time"] : ["✗", "miss", "missed last time"];
+      const due = s && s.seen && C.cmdDue({ [id]: s }, today).length;
+      return `<li class="${mark[1]}"><span class="mk" aria-hidden="true">${mark[0]}</span><span class="grow">${esc(sk.label)}</span><span class="small muted">${mark[2]}${due ? " · due" : ""}</span></li>`; }).join("");
+    const link = (href, ic, label, sub, attrs) => `<a class="plink" href="${href}" ${attrs || ""}>${icon(ic)}<span class="grow"><b>${label}</b>${sub ? `<span class="small muted">${sub}</span>` : ""}</span><span class="muted" aria-hidden="true">›</span></a>`;
+    return `<div class="cpanel-in">
+      <div class="row spread" style="align-items:flex-start;flex-wrap:nowrap"><div class="stack" style="gap:4px;min-width:0"><span class="eyebrow">${esc(o)} ${esc((OBJ[o] || {}).name || "")}</span><h2 class="mono cname">${esc(c.cmd)}</h2></div>
+        <button class="ghost small cclose" id="cclose" aria-label="Close">✕</button></div>
+      <span class="chip lv-${c.level}">${LVN[c.level]}${c.pct != null ? " · " + c.pct + "% right" : ""}</span>
+      ${summary ? `<p>${rich(summary)}</p>` : ""}
+      ${syn.length ? `<pre class="code small csyn">${syn.map(esc).join("\n")}</pre>` : ""}
+      ${opts.length ? `<dl class="copts">${opts.map(([k, v]) => `<dt class="mono" title="${esc(k)}">${esc(k.split(",")[0])}</dt><dd>${rich(v)}</dd>`).join("")}</dl>` : ""}
+      ${info && info[2] ? `<p class="small muted">${rich(info[2])}</p>` : ""}
+      <div class="row" style="gap:8px"><button class="primary" id="cdrill">${icon("terminal")}Drill ${esc(c.cmd)}</button>
+        <button id="csel" aria-pressed="${sel}">${sel ? icon("check") + "In your set" : "+ Add to set"}</button></div>
+      <div class="stack" style="gap:2px"><span class="eyebrow">Prep it elsewhere</span>
+        ${L.parts.map(p => link("#lab/" + p.id, labState(p.id).completedAt ? "check" : "terminal", esc(partLabel(p)), esc(p.title) + (labState(p.id).completedAt ? " · done" : ""))).join("")}
+        ${L.partsN > L.parts.length ? `<span class="small muted" style="padding:2px 10px">and ${plural(L.partsN - L.parts.length, "more lab part")}</span>` : ""}
+        ${L.qids.length ? link("#", "test", `Answer ${plural(L.qids.length, "exam question")}`, `Study mode, about ${esc(c.cmd)}`, `data-cq="1"`) : ""}
+        ${L.cids.length ? link("#", "cards", `Review ${plural(L.cids.length, "flashcard")}`, "", `data-ccards="1"`) : ""}
+        ${link("#", "sheet", `Topic ${t} cheat sheet`, esc(TOP[t]), `data-csheet="${t}"`)}
+        ${link("#sandbox", "drill", "Try it in the sandbox", man ? `Type <code>man ${esc(c.cmd)}</code> for the full page` : "A free terminal, no tasks")}
+        ${OBJ[o] && OBJ[o].lesson ? link(esc(OBJ[o].lesson), "guide", `LPI lesson ${esc(o)} ↗`, "Read it on learning.lpi.org", `target="_blank" rel="noopener"`) : ""}</div>
+      <div class="stack" style="gap:6px"><span class="eyebrow">Skills · ${c.practised} of ${c.skills.length} tried</span><ul class="cskills">${skills}</ul></div></div>`;
+  }
   function renderCommands() {
-    const sp = st.settings.cmd, sel = new Set(sp.cmds);
+    const sp = st.settings.cmd;
     const m = C.commandMastery(CMDX, st, { labUse: labUse() });
-    const cmds = Object.values(m), mastered = cmds.filter(c => c.level === "mastered").length, weak = cmds.filter(c => c.level === "weak");
-    const due = cmdDueN(), tried = SKILLS.filter(s => st.cmdstats[s.id] && st.cmdstats[s.id].seen).length;
-    let right = 0; for (const id in st.cmdstats) right += st.cmdstats[id].right || 0;
-    const byObj = {}; cmds.forEach(c => (byObj[c.obj] = byObj[c.obj] || []).push(c));
-    const objOrder = Object.keys(byObj).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const src = sp.source === "pick" && !sel.size ? "pick" : sp.source;
-    const startable = !(src === "pick" && !sel.size) && !(src === "due" && !due) && !(src === "new" && tried === SKILLS.length);
-    const tip = c => `${c.cmd}: ${c.practised} of ${c.skills.length} ${c.skills.length === 1 ? "skill" : "skills"} practised${c.pct == null ? "" : ` · ${c.pct}% right`}${c.due ? ` · ${c.due} due` : ""}${c.labTasks ? ` · used in ${plural(c.labTasks, "lab task")}` : ""}`;
+    if (!window.LEManPages) ensureShell().then(() => { if ((location.hash || "").slice(1) === "commands" && cmdOpen) { const y = scrollY; renderCommands(); scrollTo(0, y); } }, () => {});
+    const cmds = Object.values(m), n = cmds.length, by = l => cmds.filter(c => c.level === l);
+    const mastered = by("mastered").length, weak = by("weak"), due = cmdDueN(), tried = SKILLS.filter(s => st.cmdstats[s.id] && st.cmdstats[s.id].seen).length;
+    if (cmdOpen && !m[cmdOpen]) cmdOpen = null;
+    const sel = sp.cmds.filter(c => m[c]);
+    const byTopic = {}; cmds.slice().sort((a, b) => a.obj.localeCompare(b.obj, undefined, { numeric: true })).forEach(c => (byTopic[C.topicOf(c.obj)] = byTopic[C.topicOf(c.obj)] || []).push(c));
+    const pips = c => `<span class="cpips" aria-hidden="true">${c.skills.map(id => { const s = st.cmdstats[id]; return `<i class="${!s || !s.seen ? "" : s.last ? "ok" : "miss"}"></i>`; }).join("")}</span>`;
+    const tile = c => `<button class="ctile t-${c.level}${sel.includes(c.cmd) ? " sel" : ""}${cmdOpen === c.cmd ? " open" : ""}" data-cmd="${esc(c.cmd)}" aria-expanded="${cmdOpen === c.cmd}" aria-controls="cpanel"
+        aria-label="${esc(c.cmd)}: ${LVN[c.level]}${c.due ? ", " + c.due + " due" : ""}${sel.includes(c.cmd) ? ", in your set" : ""}"><span class="cn">${esc(c.cmd)}</span>${pips(c)}${c.due ? `<span class="cdue" title="${c.due} due"></span>` : ""}${sel.includes(c.cmd) ? `<span class="csel">${icon("check")}</span>` : ""}</button>`;
     const resume = cp && cp.i < cp.tasks.length ? `<div class="card accent banner"><div><b>You have a practice set in progress</b><div class="small muted">Task ${cp.i + 1} of ${cp.tasks.length} · ${esc(CMD_MODES[cp.mode][0])}</div></div>
         <div class="row"><button class="ghost" id="cdiscard">Discard</button><a class="btn primary" href="#cmdrun">Resume</a></div></div>` : "";
-    shell("commands", `${resume}<div class="page-head"><span class="eyebrow">Command practice · drills on a fresh terminal</span><h1>Commands</h1>
-        <p class="lead">Short tasks that each target one thing you do with a command. Every run uses new file names and data, so you have to know the command, not the answer. Any command that gets the job done counts, and each skill comes back on a schedule: tomorrow after a miss, then further out each time you get it right.</p></div>
-      <div class="grid4">
-        <div class="card stat"><b>${mastered}<span class="muted" style="font-size:.9rem">/${cmds.length}</span></b><span>Commands mastered</span></div>
-        <div class="card stat"><b>${due}</b><span>Skills due today</span></div>
-        <div class="card stat"><b>${tried}<span class="muted" style="font-size:.9rem">/${SKILLS.length}</span></b><span>Skills tried</span></div>
-        <div class="card stat"><b>${right}</b><span>Drills right</span></div></div>
-      <div class="quick">
-        <button class="qs" data-cmdgo="recommended">${icon("target")}<b>Practise what matters</b><span>${due ? plural(due, "skill") + " due, then your weakest" : weak.length ? "Your weakest: " + esc(weak.slice(0, 4).map(c => c.cmd).join(", ")) : "Skills you haven't tried, in exam order"}</span></button>
-        <button class="qs" data-cmdgo="due" ${due ? "" : "disabled"}>${icon("repeat")}<b>Due today</b><span>${due ? plural(due, "skill") + " to review" : "Nothing due. Come back tomorrow."}</span></button>
-        <button class="qs" data-cmdgo="new" ${tried < SKILLS.length ? "" : "disabled"}>${icon("bulb")}<b>Something new</b><span>${tried < SKILLS.length ? plural(SKILLS.length - tried, "skill") + " you haven't tried" : "You've tried every skill"}</span></button>
-      </div>
-      <div class="card stack builder"><h2>Build a set</h2>
-        <div class="frow"><span class="flabel">What</span><div><div class="seg" id="csrc">${Object.keys(CMD_SRC).map(k => `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${CMD_SRC[k][0]}${k === "due" && due ? ` (${due})` : ""}${k === "pick" && sel.size ? ` (${sel.size})` : ""}</button>`).join("")}</div>
-          <div class="small muted fnote">${sp.source === "pick" ? (sel.size ? `Practising: ${esc([...sel].join(", "))}. <button class="linkbtn" id="cclear">Clear</button>` : "Tap commands in the map below to choose them.") : CMD_SRC[sp.source][1]}</div></div></div>
-        <div class="frow"><span class="flabel">Mode</span><div><div class="seg" id="cmode">${Object.keys(CMD_MODES).map(k => `<button data-v="${k}" class="${sp.mode === k ? "on" : ""}">${CMD_MODES[k][0]}</button>`).join("")}</div>
-          <div class="small muted fnote">${CMD_MODES[sp.mode][1]}</div></div></div>
-        <div class="frow"><span class="flabel">How many</span><div class="seg" id="ccount">${[5, 10, 20].map(n => `<button data-v="${n}" class="${sp.count === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
-        <div class="row spread"><span class="small muted">About ${Math.max(1, Math.round(sp.count * (sp.mode === "timed" ? 1 : 1.3)))} minutes</span><button class="primary" id="cstart" ${startable ? "" : "disabled"}>${icon("terminal")}Start practice</button></div>
-      </div>
-      <div class="card stack"><div class="row spread"><h2>Your commands</h2>
-          <div class="row small legend" style="gap:8px">${["new", "learning", "weak", "mastered"].map(l => `<span class="chip lv-${l}">${LV[l]}</span>`).join("")}</div></div>
-        <p class="small muted" style="margin:0">From your drills and the type-the-command exam questions: the latest result of each counts. A command is mastered when every one of its skills was right last time. Tap commands to practise just those.</p>
-        ${objOrder.map(o => `<div class="cmdgroup"><div class="eyebrow">${o} ${esc((OBJ[o] || {}).name || "")}</div><div class="cmdtiles">${byObj[o].map(c =>
-          `<button class="cmdtile lv-${c.level} ${sel.has(c.cmd) && sp.source === "pick" ? "sel" : ""}" data-cmd="${esc(c.cmd)}" title="${esc(tip(c))}" aria-pressed="${sel.has(c.cmd) && sp.source === "pick"}">
-            <span class="mono">${esc(c.cmd)}</span><span class="small">${c.pct == null ? c.practised + "/" + c.skills.length : c.pct + "%"}${c.due ? ` · <b>${c.due} due</b>` : ""}</span></button>`).join("")}</div></div>`).join("")}
-      </div>
-      <p class="small muted">Want to experiment without tasks? The <a href="#sandbox">sandbox</a> is a free terminal with files, logs, users and processes to explore.</p>`);
+    const quick = [
+      ["recommended", "Recommended · " + sp.count, due ? plural(due, "skill") + " due, then your weakest" : weak.length ? "Your weakest: " + weak.slice(0, 3).map(c => c.cmd).join(", ") : "Skills you haven't tried, in exam order", true],
+      ["weak", "Needs work", weak.length ? plural(weak.length, "command") + ": " + weak.slice(0, 3).map(c => c.cmd).join(", ") + (weak.length > 3 ? "…" : "") : "Nothing yet. Keep practising.", weak.length > 0],
+      ["new", "Something new", tried < SKILLS.length ? plural(SKILLS.length - tried, "skill") + " you haven't tried" : "You've tried every skill", tried < SKILLS.length]];
+    shell("commands", `${resume}<div class="page-head row spread progress-head"><div><h1>Commands</h1><p class="lead">Every exam command at a glance. Tap one to see what it does and where to practise it.</p></div>
+        <div class="cmdsum"><div class="segbar" aria-hidden="true"><i style="width:${100 * mastered / n}%;background:var(--accent)"></i><i style="width:${100 * weak.length / n}%;background:var(--warm)"></i></div>
+          <span class="small muted"><b style="color:var(--ink)">${mastered}</b> of ${n} mastered${due ? ` · <b style="color:var(--ink)">${due}</b> due` : ""}</span></div></div>
+      <div class="cquick">${quick.map(([k, b, s, on], i) => `<button class="cq${i === 0 ? " primary-soft" : ""}" data-cmdgo="${k}" ${on ? "" : "disabled"}><b>${esc(b)}</b><span>${esc(s)}</span></button>`).join("")}</div>
+      <div class="row csettings"><div class="seg" id="cmode" role="group" aria-label="Mode">${Object.keys(CMD_MODES).map(k => `<button data-v="${k}" class="${sp.mode === k ? "on" : ""}">${CMD_MODES[k][0]}</button>`).join("")}</div>
+        <div class="seg" id="ccount" role="group" aria-label="Drills per set">${[5, 10, 20].map(x => `<button data-v="${x}" class="${sp.count === x ? "on" : ""}">${x}</button>`).join("")}</div>
+        <span class="small muted">${CMD_MODES[sp.mode][1]}</span></div>
+      ${sel.length ? `<div class="cselbar" role="region" aria-label="Your set"><b>${plural(sel.length, "command")}</b><span class="mono small muted grow">${esc(sel.join(", "))}</span>
+        <button class="ghost small" id="cclear">Clear</button><button class="primary" id="cdrillset">${icon("terminal")}Drill these</button></div>` : ""}
+      <div class="cmdlayout${cmdOpen ? " has-open" : ""}">
+        <section class="card stack cmdmap"><div class="row spread"><h2>All commands</h2>
+            <div class="row small clegend"><span><i class="lg new"></i>Not tried</span><span><i class="lg learning"></i>Learning</span><span><i class="lg weak"></i>Needs work</span><span><i class="lg mastered"></i>Mastered</span></div></div>
+          ${Object.keys(byTopic).sort().map(t => `<div class="cgroup"><span class="eyebrow">${t} · ${esc(TOP[t])}</span><div class="ctiles">${byTopic[t].map(tile).join("")}</div></div>`).join("")}
+          <p class="small muted">Dots under each command are its skills: filled when right last time, amber when missed. A command is mastered when every skill was right last time. Drills, type-the-command exam questions and lab tasks all feed in.</p></section>
+        ${cmdOpen ? `<button class="cbackdrop" id="cback" aria-label="Close ${esc(cmdOpen)}" tabindex="-1"></button>` : ""}
+        <aside class="card cpanel" id="cpanel" aria-live="polite">${cmdPanel(m)}</aside></div>
+      <p class="small muted">Want to experiment without tasks? The <a href="#sandbox">sandbox</a> is a free terminal with files, logs, users and processes to explore.</p>`, { wide: true });
     const keep = fn => { const y = scrollY; fn(); save(); renderCommands(); scrollTo(0, y); };
-    $$("#csrc button").forEach(b => b.onclick = () => keep(() => { sp.source = b.dataset.v; }));
     $$("#cmode button").forEach(b => b.onclick = () => keep(() => { sp.mode = b.dataset.v; }));
     $$("#ccount button").forEach(b => b.onclick = () => keep(() => { sp.count = +b.dataset.v; }));
+    $$("[data-cmd]").forEach(b => b.onclick = () => { const y = scrollY; cmdOpen = cmdOpen === b.dataset.cmd && !matchMedia("(max-width: 900px)").matches ? null : b.dataset.cmd; renderCommands(); scrollTo(0, y);
+      const p = $("#cpanel"); if (p && cmdOpen) { const h = p.querySelector("h2"); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); } } });
+    const pick = cs => startCmd({ source: "pick", cmds: cs, count: sp.count, mode: sp.mode });
+    $$("[data-cmdgo]").forEach(b => b.onclick = () => b.dataset.cmdgo === "weak" ? pick(weak.map(c => c.cmd)) : startCmd({ source: b.dataset.cmdgo, count: sp.count, mode: sp.mode }));
+    if ($("#cclose")) $("#cclose").onclick = () => { const was = cmdOpen; cmdOpen = null; keep(() => {}); const t = $(`[data-cmd="${CSS.escape(was)}"]`); if (t) t.focus({ preventScroll: true }); };
+    if ($("#cback")) $("#cback").onclick = () => $("#cclose").click();
+    if ($("#cdrill")) $("#cdrill").onclick = () => pick([cmdOpen]);
+    if ($("#csel")) $("#csel").onclick = () => keep(() => { sp.cmds = sel.includes(cmdOpen) ? sel.filter(x => x !== cmdOpen) : sel.concat(cmdOpen); });
     if ($("#cclear")) $("#cclear").onclick = () => keep(() => { sp.cmds = []; });
-    $$("[data-cmd]").forEach(b => b.onclick = () => keep(() => { const c = b.dataset.cmd;
-      if (sp.source !== "pick") { sp.source = "pick"; sp.cmds = [c]; return; }
-      sp.cmds = sel.has(c) ? sp.cmds.filter(x => x !== c) : sp.cmds.concat(c); }));
-    const go2 = source => startCmd({ source, count: sp.count, mode: sp.mode, cmds: source === "pick" ? sp.cmds : null });
-    $$("[data-cmdgo]").forEach(b => b.onclick = () => go2(b.dataset.cmdgo));
-    $("#cstart").onclick = () => go2(sp.source);
+    if ($("#cdrillset")) $("#cdrillset").onclick = () => pick(sel);
+    const c = m[cmdOpen];
+    if (c) {
+      const L = cmdLinks(c);
+      $$("[data-cq]").forEach(a => a.onclick = e => { e.preventDefault(); startStudy({ ids: L.qids, count: Math.min(20, L.qids.length), label: "Questions about " + c.cmd }); });
+      $$("[data-ccards]").forEach(a => a.onclick = e => { e.preventDefault(); startCardList(L.cids); });
+      $$("[data-csheet]").forEach(a => a.onclick = e => { e.preventDefault(); sheetTopic = a.dataset.csheet; sheetFocus = c.cmd; go("sheets"); });
+    }
     if ($("#cdiscard")) $("#cdiscard").onclick = () => { cp = null; renderCommands(); };
   }
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && cmdOpen && (location.hash || "").slice(1) === "commands") { const b = $("#cclose"); if (b) b.click(); } });
   function renderCmdRun() {
     if (!window.LEShell || !window.LE_DRILLS) return loadingPage("cmdrun", "Command practice", "cmdrun");
     if (cp.i >= cp.tasks.length) return renderCmdDone();
@@ -1291,6 +1362,13 @@
         <div class="sheet-grid">${x.sections.map(sec => `<div class="sheet-sec"><h3>${esc(sec.h)}</h3><dl>${sec.rows.map(([k, v]) => `<dt>${rich(k)}</dt><dd>${rich(v)}</dd>`).join("")}</dl></div>`).join("")}</div></section>`).join("")}`);
     $$("#stopic button").forEach(b => b.onclick = () => { sheetTopic = b.dataset.v; renderSheets(); });
     $("#sprint").onclick = () => window.print();
+    if (sheetFocus) {            // opened from a command's panel: jump to the first row that shows the command
+      const want = sheetFocus; sheetFocus = null;
+      const re = new RegExp("^(sudo\\s+)?" + want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").split("/")[0] + "(\\s|$)");
+      const hit = $$(".sheet code").find(el => re.test(el.textContent.trim()));
+      const row = hit && (hit.closest("tr") || hit.parentElement);
+      if (row) { row.classList.add("hl"); row.scrollIntoView({ block: "center" }); }
+    }
   }
 
   // ================================================================== SETTINGS

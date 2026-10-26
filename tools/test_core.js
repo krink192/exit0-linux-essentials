@@ -264,4 +264,17 @@ t("a correct fill answer with an extra leading sudo is flagged, still marked wro
   assert(!C.extraSudo(q, "rm -rf old_logs"), "right answers aren't flagged"); assert(!C.extraSudo(q, "sudo rmdir old_logs"), "wrong commands aren't flagged");
   for (const q2 of bank.questions) if (q2.type === "fill") for (const a of q2.accept) assert(!C.extraSudo(q2, a), q2.id + " accepted answer flagged");
 });
+t("command panel links: related questions, flashcards and study by question ids", () => {
+  global.window.LE_LABINDEX || require(path.join(__dirname, "../docs/data/labindex.js"));
+  const L = window.LE_LABINDEX, cmds = [...new Set(L.skills.map(s => s.cmd))];
+  const rq = c => C.relatedQuestions(bank, L.cmdq, c);
+  assert(rq("grep").includes("3.2-15"), "an answer option that starts with grep counts");
+  assert(!rq("free").includes("1.3-01"), "the word 'free' in prose isn't the free command");
+  assert(!rq("for").includes("1.1-04"), "the word 'for' in prose isn't a for loop");
+  for (const c of cmds) for (const id of L.cmdq[c] || []) assert(rq(c).includes(id), c + " keeps its type-the-command questions");
+  for (const c of ["grep", "tar", "chmod", "cd", "PATH", "pipes", "test", "for", "free", "id", "head/tail"]) assert(rq(c).length, c + " links to exam questions");
+  const kc = C.relatedCards(cards, "tar"); assert(kc.length && kc.every(id => /tar/.test(cards.find(c => c.id === id).front)), "tar cards are about tar");
+  const ids = rq("grep"), s = C.buildStudy(bank, {}, { ids, count: 50, label: "Questions about grep" }, { seed: 3 });
+  assert.strictEqual(s.qids.length, ids.length); assert(s.qids.every(id => ids.includes(id))); assert(/grep/.test(s.label));
+});
 console.log(`\n${n} tests passed`);

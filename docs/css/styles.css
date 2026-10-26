@@ -665,3 +665,82 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
   .bphead, .bprow > summary, .bpobj, .bptotal { grid-template-columns: minmax(0, 1fr) 3em 3.4em 4.6em; gap: 8px; }
   .bphead span:first-child { visibility: hidden; }
 }
+
+/* Commands: quick starts, a tile map of every command, and a detail panel with links to the rest of the app */
+.page.wide { max-width: 1120px; }
+.cmdsum { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+.segbar { display: flex; height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; }
+.segbar i { display: block; height: 100%; }
+.cquick { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cq { text-align: left; display: flex; align-items: flex-start; justify-content: flex-start; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: var(--r); background: var(--surface); border: 1px solid var(--line); min-height: 44px; }
+.cq b { font-size: .98rem; }
+.cq span { font-size: .84rem; color: var(--muted); font-weight: 400; }
+.cq.primary-soft { background: var(--accent-soft); border-color: transparent; }
+.cq:disabled { opacity: .55; }
+.csettings { gap: 12px; flex-wrap: wrap; align-items: center; margin-top: -12px; }
+.cselbar { background: var(--accent-soft); border-color: transparent; }
+.cmdlayout { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-start; }
+.cmdmap { flex: 999 1 520px; min-width: 0; }
+.cpanel { flex: 1 1 320px; position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow: auto; }
+.clegend { gap: 12px; color: var(--muted); flex-wrap: wrap; }
+.clegend span { display: inline-flex; gap: 6px; align-items: center; }
+.lg { display: inline-block; width: 12px; height: 12px; border-radius: 3px; border: 1px solid var(--line-2); }
+.lg.learning { background: var(--sunk); }
+.lg.weak { background: var(--warm-soft); border-color: var(--warm); }
+.lg.mastered { background: var(--accent-soft); border-color: var(--accent); }
+.cgroup { display: flex; flex-direction: column; gap: 8px; }
+.ctiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.ctile { position: relative; display: flex; justify-content: flex-start; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 10px 9px; min-height: 52px; border-radius: 9px; text-align: left;
+  border: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: 600 .84rem var(--mono); }
+.ctile .cn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctile.t-new { background: transparent; border-style: dashed; border-color: var(--line-2); color: var(--ink-2); }
+.ctile.t-weak { background: var(--warm-soft); border-color: var(--warm); }
+.ctile.t-mastered { background: var(--accent-soft); border-color: var(--accent); }
+.ctile:hover { border-color: var(--ink-2); }
+.ctile.open { box-shadow: 0 0 0 2px var(--ink); }
+.cpips { display: flex; gap: 3px; flex-wrap: wrap; }
+.cpips i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
+.cpips i.ok { background: var(--accent); }
+.cpips i.miss { background: var(--warm); }
+.cdue { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--warm); }
+.csel { position: absolute; bottom: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; }
+.csel svg.i { width: 12px; height: 12px; color: var(--surface); }
+.cpanel-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px 10px; color: var(--muted); }
+.cpanel-empty svg.i { width: 30px; height: 30px; color: var(--line-2); }
+.cpanel-empty b { color: var(--ink); }
+.cpanel-in { display: flex; flex-direction: column; gap: 14px; }
+.cpanel-in .chip { align-self: flex-start; }
+.cname { font-size: 1.7rem; letter-spacing: -.01em; }
+.cclose { padding: .35rem .6rem; }
+.cpanel .csyn { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.copts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: .88rem; }
+.copts dt { font-size: .8rem; color: var(--accent); white-space: nowrap; }
+.copts dd { margin: 0; color: var(--ink-2); }
+.cskills { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cskills li { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; font-size: .9rem; }
+.cskills li + li { border-top: 1px solid var(--line); }
+.cskills .mk { font: 700 .85rem var(--mono); width: 1em; color: var(--muted); }
+.cskills .ok .mk { color: var(--accent); }
+.cskills .miss .mk { color: var(--warm); }
+.plink { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 9px; color: var(--ink); text-decoration: none; }
+.plink:hover { background: var(--sunk); }
+.plink svg.i { width: 18px; height: 18px; color: var(--accent); flex: none; }
+.plink .grow { display: flex; flex-direction: column; min-width: 0; }
+.plink b { font-weight: 600; font-size: .92rem; }
+.cselbar { z-index: 30; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 14px 12px 18px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--line-2); box-shadow: var(--shadow); }
+.cselbar .grow { flex: 1 1 120px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet tr.hl, .sheet .hl { background: var(--accent-soft); outline: 2px solid var(--accent); outline-offset: -2px; transition: background 2s; }
+@media (max-width: 900px) {
+  .cpanel { display: none; }
+  .cmdlayout.has-open .cpanel { display: block; position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 40; max-height: 82vh; border-radius: 18px 18px 0 0;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.35); }
+  .cselbar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+@media (min-width: 901px) { .cclose, .cbackdrop { display: none; } }
+.cbackdrop { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.45); border: 0; border-radius: 0; padding: 0; }
+@media (max-width: 560px) {
+  .cquick { grid-auto-flow: column; grid-auto-columns: 78%; grid-template-columns: none; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .cq { scroll-snap-align: start; }
+  .csettings > span { display: none; }
+}

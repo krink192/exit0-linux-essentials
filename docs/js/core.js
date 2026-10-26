@@ -136,6 +136,7 @@
     const objs = f.objs && f.objs.length ? f.objs : Object.keys(bank.objectives);
     const levels = f.levels && f.levels.length ? f.levels : [1, 2, 3];
     let ids = [].concat(...objs.map(o => bank.byObj[o] || [])).filter(id => levels.indexOf(bank.byId[id].level || 1) >= 0);
+    if (f.ids) { const want = new Set(f.ids); ids = ids.filter(id => want.has(id)); }
     if (f.source === "missed") ids = ids.filter(id => qstats[id] && qstats[id].last === false);
     else if (f.source === "unseen") ids = ids.filter(id => !qstats[id] || !qstats[id].seen);
     return ids;
@@ -150,7 +151,7 @@
     const objs = f.objs && f.objs.length && f.objs.length < all ? f.objs : null;
     const what = !objs ? "All objectives" : objs.length === 1 ? objs[0] + " " + bank.objectives[objs[0]].name : objs.length + " objectives";
     const src = { missed: "Missed last time", unseen: "New questions" }[f.source];
-    return newSession(bank, "study", "Study · " + (src ? src + " · " : "") + what, shuffle(ids, rand), { study: true, seed: opts.seed });
+    return newSession(bank, "study", "Study · " + (f.label ? f.label : (src ? src + " · " : "") + what), shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
   function objectiveStats(bank, qstats) {
@@ -333,6 +334,38 @@
     }
     return out;
   }
+  // ------------------------------------------------------------- what else in the app covers a command
+  // Commands that are shell features or builtins are matched by keyword; everything else by the command name.
+  const CMD_KEYWORDS = { variables: /\bvariables?\b/i, "brace expansion": /brace expansion|\{[^{}\s]*,[^{}\s]*\}/i, globbing: /\bglob(s|bing)?\b|wildcard/i,
+    test: /`(test|\[)\s[^`]*`|\btest command|\s-(eq|ne|gt|lt|ge|le)\s/, for: /`for\s[^`]*`|\bfor loops?\b|^for\s+\w+\s+in\s/m,
+    redirection: /\bredirect/i, pipes: /\bpipes?\b|\bpipeline/i, "$?": /\$\?|exit status/i, PATH: /\bPATH\b/ };
+  const cmdNames = cmd => cmd === "head/tail" ? ["head", "tail"] : [cmd];
+  const escRe = x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  /** Does this text mention the command as a command (in a `code span`, or as a line that starts with it)? */
+  function mentionsCmd(cmd, text, opts) {
+    if (!text) return false;
+    if (CMD_KEYWORDS[cmd]) return CMD_KEYWORDS[cmd].test(text);
+    return cmdNames(cmd).some(n => { const w = escRe(n);
+      return new RegExp("`(sudo\\s+)?" + w + "(\\s[^`]*)?`").test(text) || (opts && opts.lead && new RegExp("^(sudo\\s+)?" + w + "(\\s+[-./~$'\"\\w]|$)").test(text.trim())); });
+  }
+  /** Exam questions about a command: the type-the-command ones, plus any that name it in code or offer it as an answer. */
+  function relatedQuestions(bank, cmdq, cmd) {
+    const out = new Set((cmdq && cmdq[cmd]) || []);
+    for (const q of bank.questions) {
+      if (out.has(q.id)) continue;
+      if (mentionsCmd(cmd, q.q) || mentionsCmd(cmd, q.explanation) || (q.options || []).some(o => mentionsCmd(cmd, o, { lead: true })) ||
+          (q.accept || []).some(a => mentionsCmd(cmd, a, { lead: true }))) out.add(q.id);
+    }
+    return [...out].filter(id => bank.byId[id]);
+  }
+  /** Flashcards about a command: command cards whose front or example starts with it, plus concept cards for shell features. */
+  function relatedCards(cards, cmd) {
+    return cards.filter(c => {
+      if (CMD_KEYWORDS[cmd]) return CMD_KEYWORDS[cmd].test(c.front) || (c.deck === "commands" && CMD_KEYWORDS[cmd].test(c.back));
+      return String(c.front).split(" / ").some(f => mentionsCmd(cmd, f, { lead: true })) || mentionsCmd(cmd, c.front) || (c.deck === "commands" && mentionsCmd(cmd, c.ex || "", { lead: true }));
+    }).map(c => c.id);
+  }
+
   /**
    * Choose skills for a practice set. source:
    *   "recommended"  due first, then missed last time, then the weakest commands, then skills not tried yet (in exam order)
@@ -803,7 +836,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
-           extraSudo, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
+           extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

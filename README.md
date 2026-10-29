@@ -88,7 +88,7 @@ Corrections and new questions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md
 
 ## License
 
-Copyright (C) 2026 krink192 and contributors. Free software under the [GNU AGPL v3.0 or later](LICENSE), with no warranty. If you run a modified version for others over a network, you must offer them your source code.
+Copyright (C) 2026 krink192 and contributors. Free software under the [GNU Affero General Public License v3.0 or later](LICENSE), with no warranty. If you run a modified version for others over a network, you must offer them your source code.
 
 Linux Essentials stays free. Practice packs for other certifications may be offered later as a separate paid product; see the [contributor license grant](CONTRIBUTING.md#contributor-license-grant). The name *exit 0* and the `$?` logo identify this project, so please rename forks.
 

@@ -465,6 +465,16 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .term-prompt { white-space: pre; } .term-prompt .pu { color: #5fd7a8; font-weight: 600; } .term-prompt .pp { color: #79b8ff; font-weight: 600; }
 .term-line input { flex: 1; min-width: 40px; background: transparent; border: 0; outline: 0; color: inherit; font: inherit; padding: 0; caret-color: #5fd7a8; }
 .done-banner { background: var(--good-soft); border-color: transparent; } .done-banner svg.i { color: var(--good); }
+.pager { display: flex; flex-direction: column; gap: 8px; overflow: hidden; outline: none; }
+.pager:focus-visible { box-shadow: 0 0 0 2px var(--accent, #3ccf91); }
+.pager-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid #22302a; padding-bottom: 8px; }
+.pager-find { font: 13px var(--mono); background: #18201c; color: #d6e2dc; border: 1px solid #2c3b34; border-radius: 8px; padding: 4px 8px; width: 12em; }
+.pager-text { flex: 1; margin: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; position: relative; }
+.pager-text mark { background: #6b5d1f; color: inherit; border-radius: 2px; }
+.pager-text mark.on { background: #e0b84a; color: #0f1412; }
+.pager-bar .ghost { color: #d6e2dc; }
+@media (max-width: 600px) { .pager-bar #pgPrev, .pager-bar #pgNext { display: none; } .pager-find { flex: 1; width: auto; min-width: 6em; } .pager-bar > b { width: 100%; } .pager-bar .grow { display: none; } }
+.pager-status { color: #9fb3aa; border-top: 1px solid #22302a; padding-top: 6px; min-height: 1.4em; }
 .editor-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; display: grid; place-items: center; padding: 16px; }
 .editor { width: min(820px, 100%); display: flex; flex-direction: column; gap: 10px; }
 .editor textarea { width: 100%; min-height: 50vh; font: 13.5px/1.5 var(--mono); background: #0f1412; color: #d6e2dc; border-radius: 10px; padding: 12px; border: 1px solid #22302a; resize: vertical; }

@@ -17,7 +17,8 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
 Dockerfile, docker/   App-only container image (nginx serving docs/). exit0-sync builds on it; point users to exit0-sync
 bank.json             The question bank
 tools/                Questions t1.py–t7.py, hints.py, whys.py, cards.py, sheets.py, labs.py, trouble_labs.py, drills.py,
-                      build.py, verify.py, test_core.js, test_shell.js, test_sync.js, test_questions.js, test_drills.js
+                      build.py, verify.py, test_core.js, test_shell.js, test_sync.js, test_questions.js, test_drills.js,
+                      test_man.js
 ```
 
 ## How the content is checked
@@ -34,6 +35,9 @@ tools/                Questions t1.py–t7.py, hints.py, whys.py, cards.py, shee
 - `node tools/test_drills.js` builds every drill with every value combination: the check must fail before, pass
   after the solution and fail after each listed wrong command. It also tests drill scheduling, the per-command
   mastery map and how sync merges drill progress.
+- `node tools/test_man.js` checks that the lab's own help is enough: every command a lab or drill uses has a man
+  page (or `help` text for builtins and keywords), every option a solution uses is documented on that page, every
+  command page has examples, and each example runs in the lab shell without a usage error.
 - `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams checked against
   the blueprint, and checks that no hint gives away a typed answer.
 - Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing, checks the `.rpm`

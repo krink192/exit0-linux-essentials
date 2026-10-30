@@ -996,8 +996,8 @@
       const wasStuck = stuck[id]; delete stuck[id];
       const stuckNow = before && findStuck(before, src); if (stuckNow) stuck[id] = stuckNow;
       if (r.edit) openLabEditor(sh, r.edit, () => { if (evaluate()) rerender(); else paint(); });
-      if (evaluate() || tipChanged || stuckNow || wasStuck || (before && !lastHadUndo)) { lastHadUndo = true; rerender(); return; }
-      paint();
+      if (evaluate() || tipChanged || stuckNow || wasStuck || (before && !lastHadUndo)) { lastHadUndo = true; rerender(); if (r.pager) openPager(r.pager, sh); return; }
+      paint(); if (r.pager) openPager(r.pager, sh);
     };
     let lastHadUndo = !!undoSnap[id];
     // A command that turns a task from "doable" into "not doable" (like moving away the file it needs): find the first such task.
@@ -1055,8 +1055,58 @@
     ta.focus();
   }
 
+  /** A less-like reader that takes the terminal's place: starts at the top, scrolls, searches. q or Esc returns to the prompt. */
+  function openPager(req, sh) {
+    const term = $("#term"); if (!term) return;
+    const old = $("#pager"); if (old) old.remove();
+    const pg = document.createElement("div"); pg.id = "pager"; pg.className = "term pager"; pg.tabIndex = 0;
+    pg.setAttribute("role", "dialog"); pg.setAttribute("aria-label", req.title);
+    pg.innerHTML = `<div class="pager-bar"><b class="mono">${esc(req.title)}</b><span class="grow"></span>
+        <input id="pgFind" class="pager-find" placeholder="Search ( / )" aria-label="Search this page" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="small ghost" id="pgPrev" aria-label="Previous match">↑</button><button class="small ghost" id="pgNext" aria-label="Next match">↓</button>
+        <button class="small" id="pgQuit">Close (q)</button></div>
+      <pre class="pager-text" id="pgText"></pre>
+      <div class="pager-status small" id="pgStatus"></div>`;
+    term.hidden = true; term.after(pg);
+    const text = pg.querySelector("#pgText"), find = pg.querySelector("#pgFind"), status = pg.querySelector("#pgStatus");
+    let hits = [], cur = -1;
+    const draw = () => {
+      const q = find.value; hits = []; cur = -1;
+      if (!q) { text.textContent = req.text; return; }
+      const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"); let html = "", last = 0, mm;
+      while ((mm = re.exec(req.text))) { html += esc(req.text.slice(last, mm.index)) + `<mark>${esc(mm[0])}</mark>`; last = mm.index + mm[0].length; }
+      text.innerHTML = html + esc(req.text.slice(last)); hits = [...text.querySelectorAll("mark")];
+    };
+    const go = d => { if (!hits.length) { status.textContent = find.value ? `Pattern not found: ${find.value}` : ""; return; }
+      if (cur >= 0) hits[cur].classList.remove("on"); cur = (cur + d + hits.length) % hits.length; hits[cur].classList.add("on");
+      text.scrollTop = Math.max(0, hits[cur].offsetTop - text.clientHeight / 3); status.textContent = `Match ${cur + 1} of ${hits.length}`; };
+    const where = () => { if (find.value && hits.length) return; const max = text.scrollHeight - text.clientHeight;
+      status.textContent = max <= 0 ? "(END)  q to close" : text.scrollTop <= 0 ? "(TOP)  Space next page · / search · q close" : text.scrollTop >= max - 2 ? "(END)  q to close" : Math.round(100 * text.scrollTop / max) + "%"; };
+    const close = () => { pg.remove(); term.hidden = false; term.scrollTop = term.scrollHeight; const i = $("#termIn"); if (i) i.focus({ preventScroll: true }); };
+    const line = () => parseFloat(getComputedStyle(text).lineHeight) || 20;
+    if (req.pages && sh && sh.manText) {        // reflow manual pages to the pager's width, like man does for a terminal
+      const probe = document.createElement("span"); probe.textContent = "0".repeat(20); probe.style.visibility = "hidden"; text.append(probe);
+      const cw = probe.getBoundingClientRect().width / 20; probe.remove();
+      if (cw > 0) req = Object.assign({}, req, { text: sh.manText(req.pages, Math.floor((text.clientWidth - 4) / cw)) });
+    }
+    draw(); text.scrollTop = 0; where();
+    text.onscroll = where;
+    find.oninput = () => { draw(); go(1); };
+    find.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); go(e.shiftKey ? -1 : 1); } else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); pg.focus(); } };
+    pg.querySelector("#pgNext").onclick = () => go(1); pg.querySelector("#pgPrev").onclick = () => go(-1); pg.querySelector("#pgQuit").onclick = close;
+    pg.onkeydown = e => {
+      if (e.target === find) return;
+      const k = e.key, page = text.clientHeight - line();
+      const act = { q: close, Escape: close, "/": () => find.focus(), n: () => go(1), N: () => go(-1), " ": () => text.scrollBy(0, page), PageDown: () => text.scrollBy(0, page), f: () => text.scrollBy(0, page),
+        b: () => text.scrollBy(0, -page), PageUp: () => text.scrollBy(0, -page), ArrowDown: () => text.scrollBy(0, line()), j: () => text.scrollBy(0, line()), Enter: () => text.scrollBy(0, line()),
+        ArrowUp: () => text.scrollBy(0, -line()), k: () => text.scrollBy(0, -line()), g: () => { text.scrollTop = 0; }, Home: () => { text.scrollTop = 0; }, G: () => { text.scrollTop = text.scrollHeight; }, End: () => { text.scrollTop = text.scrollHeight; } }[k];
+      if (act) { e.preventDefault(); act(); }
+    };
+    pg.focus({ preventScroll: true });
+  }
+
   // ================================================================== TERMINAL (shared by command practice and the sandbox)
-  const KEYS_HELP = `<span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line`;
+  const KEYS_HELP = `<span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line<br>Stuck? <code>man NAME</code> · <code>NAME --help</code> · <code>apropos WORD</code> finds a command for a task · <code>help NAME</code> for builtins like cd and if · <code>man bash</code> for pipes and redirection`;
   const termHTML = cls => `<div class="term ${cls || ""}" id="term"><div class="term-out" id="termOut"></div>
     <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
   /** Wire the terminal markup to a machine. onRun(line, result) runs after every finished command; return true if it re-rendered the page.
@@ -1080,6 +1130,7 @@
       if (sh.log.length > 60000) sh.log = sh.log.slice(-50000);
       if (r.edit) return openLabEditor(sh, r.edit, () => { if (!onRun(src, r)) paint(); });
       if (!onRun(src, r)) paint();
+      if (r.pager) openPager(r.pager, sh);
     };
     inp.onkeydown = e => {
       if (e.key === "Enter") { e.preventDefault(); const line = inp.value; inp.value = ""; if (!line.trim() && sh.pending == null && onEmpty && onEmpty()) return; run(line); }

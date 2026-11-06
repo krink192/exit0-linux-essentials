@@ -109,12 +109,61 @@ t("daily review: misses return tomorrow, right answers space out", () => {
   C.recordResult(st, bank, ex, C.grade(bank, ex, now), now);
   assert.strictEqual(C.dueIds(bank, st.qstats, today).length, 0, "nothing due the same day");
   const f = C.reviewForecast(bank, st.qstats, today); assert.strictEqual(f.tomorrow, 40); assert.strictEqual(f.due, 0);
-  const r = C.buildReview(bank, st.qstats, 20, { today: today + 1, seed: 3 });
+  st.settings.review = { size: 20, fresh: 0 };
+  const r = C.buildReview(bank, st, { today: today + 1, seed: 3 });
   assert.strictEqual(r.qids.length, 20); assert.strictEqual(r.mode, "review"); assert(r.study);
   assert(r.qids.every(id => ex.qids.includes(id)));
-  assert.strictEqual(C.buildReview(bank, st.qstats, 20, { today }), null);
   const legacy = { "1.1-01": { seen: 1, right: 0, last: false }, "1.1-02": { seen: 1, right: 1, last: true, at: now } };
   assert.deepStrictEqual(C.dueIds(bank, legacy, today), ["1.1-01"]);
+});
+t("daily review is the size the learner picks, not the whole backlog", () => {
+  const now = new Date(2026, 9, 10, 12).getTime(), today = C.dayNum(now);
+  const st = C.freshState();
+  assert.deepStrictEqual(st.settings.review, { size: 20, fresh: 5 });
+  // 200 questions answered long ago: all overdue
+  bank.questions.slice(0, 200).forEach(q => { st.qstats[q.id] = { seen: 1, right: 1, last: true, at: now - 86400000 * 30, box: 1, due: today - 10 }; });
+  let d = C.dailyReview(bank, st, today);
+  assert.strictEqual(d.backlog, 200); assert.strictEqual(d.left, 20); assert.strictEqual(d.due, 15); assert.strictEqual(d.fresh, 5);
+  const s1 = C.buildReview(bank, st, { today, seed: 1 });
+  assert.strictEqual(s1.qids.length, 20); assert.strictEqual(new Set(s1.qids).size, 20);
+  assert.strictEqual(s1.qids.filter(id => !st.qstats[id]).length, 5, "five new questions mixed in");
+  // finish 12 of them: 8 left today, same mix
+  const part = Object.assign({}, s1, { answers: {} }); s1.qids.slice(0, 12).forEach(id => { const q = bank.byId[id]; part.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  C.recordResult(st, bank, part, C.grade(bank, part, now), now);
+  d = C.dailyReview(bank, st, today);
+  assert.strictEqual(d.done, 12); assert.strictEqual(d.left, 8); assert.strictEqual(d.due + d.fresh, 8);
+  const rest = C.buildReview(bank, st, { today, seed: 2 }); assert.strictEqual(rest.qids.length, 8);
+  rest.qids.forEach(id => { const q = bank.byId[id]; rest.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  C.recordResult(st, bank, rest, C.grade(bank, rest, now), now);
+  d = C.dailyReview(bank, st, today); assert.strictEqual(d.left, 0, "done for today");
+  assert.strictEqual(C.buildReview(bank, st, { today }), null);
+  assert.strictEqual(C.buildReview(bank, st, { today, count: 10, seed: 4 }).qids.length, 10, "extra on request");
+  assert.strictEqual(C.dailyReview(bank, st, today + 1).left, 20, "fresh batch tomorrow");
+  // the user's choice is kept and clamped
+  st.settings.review = { size: 10, fresh: 50 }; assert.deepStrictEqual(C.clampReview(st.settings.review), { size: 10, fresh: 10 });
+  assert.deepStrictEqual(C.clampReview({ size: 1, fresh: -3 }), { size: C.REVIEW_SIZE_MIN, fresh: 0 });
+  assert.deepStrictEqual(C.clampReview({ size: "x" }), { size: 20, fresh: 5 });
+  assert.deepStrictEqual(C.migrate({ settings: {} }).settings.review, { size: 20, fresh: 5 });
+});
+t("daily review always has something new: fills with new questions when little is due", () => {
+  const today = 20500, st = C.freshState();
+  let d = C.dailyReview(bank, st, today);
+  assert.strictEqual(d.left, 20); assert.strictEqual(d.fresh, 20, "first day: all new");
+  st.settings.review = { size: 20, fresh: 0 };
+  assert.strictEqual(C.dailyReview(bank, st, today).fresh, 20, "nothing due: new questions fill the day even at 0 new");
+  st.settings.review = { size: 20, fresh: 5 };
+  // everything seen, three due: just those three
+  bank.questions.forEach((q, i) => { st.qstats[q.id] = { seen: 1, right: 1, last: true, at: 1, box: 2, due: i < 3 ? today : today + 5 }; });
+  d = C.dailyReview(bank, st, today); assert.strictEqual(d.left, 3); assert.strictEqual(d.fresh, 0);
+});
+t("new questions spread across objectives, least-seen first, easier first", () => {
+  const ids = C.newIds(bank, {}, 19, C.rng ? C.rng(5) : Math.random);
+  assert.strictEqual(new Set(ids.map(id => bank.byId[id].obj)).size, Math.min(19, Object.keys(bank.objectives).length), "one per objective before any repeats");
+  const all = C.newIds(bank, {}, 1000, Math.random); assert.strictEqual(all.length, bank.questions.length);
+  const qs = {}; bank.byObj["1.1"].forEach(id => qs[id] = { seen: 1, right: 1 });
+  assert(!C.newIds(bank, qs, 18, Math.random).some(id => bank.byId[id].obj === "1.1"), "a fully seen objective gives none");
+  const first = bank.byId[C.newIds(bank, {}, 1, Math.random)[0]];
+  assert.strictEqual(first.level || 1, Math.min(...bank.byObj[first.obj].map(id => bank.byId[id].level || 1)));
 });
 t("xp, levels, streaks and badges come from saved progress", () => {
   const st = C.freshState();

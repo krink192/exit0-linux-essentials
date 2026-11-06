@@ -208,9 +208,10 @@
                  labs: [["labs", "Lessons"], ["commands", "Commands"], ["sandbox", "Sandbox"]] };
   const TAB_LABEL = { practice: "Practice", learn: "Learn", labs: "Labs" };
   let lastPractice = null;
-  const navCount = id => id === "practice" ? C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due : id === "labs" ? cmdDueN() : 0;
+  const qLeft = () => C.dailyReview(BANK, st).left;     // questions left in today's review (the size the learner chose)
+  const navCount = id => id === "practice" ? qLeft() + C.deckStats(CARDS, st.cards).due : id === "labs" ? cmdDueN() : 0;
   function sidebarHTML(active) {
-    const qdue = C.reviewForecast(BANK, st.qstats).due;
+    const qdue = qLeft();
     const due = C.deckStats(CARDS, st.cards).due;
     const sk = C.streak(st.days, st.settings.goal);
     const goalPct = Math.min(100, Math.round(100 * sk.today / st.settings.goal));
@@ -239,7 +240,7 @@
     const section = SECTION[active] || active;
     if (section === "practice") lastPractice = active;
     const tabs = TABS[section] && !(opts && opts.noTabs) ? `<nav class="tabs" aria-label="${TAB_LABEL[section]}">${TABS[section].map(([id, name]) => {
-      const n = id === "review" ? C.reviewForecast(BANK, st.qstats).due : id === "cards" ? C.deckStats(CARDS, st.cards).due : id === "commands" ? cmdDueN() : 0;
+      const n = id === "review" ? qLeft() : id === "cards" ? C.deckStats(CARDS, st.cards).due : id === "commands" ? cmdDueN() : 0;
       return `<a href="#${id}" class="${active === id ? "on" : ""}" ${active === id ? 'aria-current="page"' : ""}>${name}${n ? ` <span class="count">${n}</span>` : ""}</a>`; }).join("")}</nav>` : "";
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
@@ -259,7 +260,7 @@
   function go(h) { if (location.hash === "#" + h) render(); else location.hash = h; }
   function render() {
     const h = (location.hash || "#today").slice(1);
-    if (h === "practice") return go(lastPractice || (C.reviewForecast(BANK, st.qstats).due + C.deckStats(CARDS, st.cards).due ? "review" : "test"));
+    if (h === "practice") return go(lastPractice || (qLeft() + C.deckStats(CARDS, st.cards).due ? "review" : "test"));
     if (h === "learn") return go("guide");
     if (h === "exam" && st.current) return renderExam();
     if (h === "exam") return go("test");
@@ -277,8 +278,7 @@
   function begin(s) { st.current = s; confirming = false; showGrid = false; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
   function startTest() { begin(C.buildTest(BANK, st.qstats, {})); }
   function startStudy(f) { const s = C.buildStudy(BANK, st.qstats, f); if (s) begin(s); else toast("No questions match those choices"); }
-  let reviewSize = 20;
-  function startReview() { const s = C.buildReview(BANK, st.qstats, reviewSize); if (s) begin(s); else toast("Nothing is due right now"); }
+  function startReview(extra) { const s = C.buildReview(BANK, st, extra ? { count: extra } : {}); if (s) begin(s); else toast("Nothing left to review"); }
   function startDueCards() {
     const today = C.dayNum();
     const queue = C.cardQueue(CARDS, st.cards, c => st.cards[c.id] && st.cards[c.id].due <= today, today, 40);
@@ -297,7 +297,8 @@
   }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
-    $$("[data-start=review]", root).forEach(b => b.onclick = startReview);
+    $$("[data-start=review]", root).forEach(b => b.onclick = () => startReview());
+    $$("[data-start=reviewmore]", root).forEach(b => b.onclick = () => startReview(+b.dataset.n || 10));
     $$("[data-start=duecards]", root).forEach(b => b.onclick = startDueCards);
     $$("[data-start=cmddue]", root).forEach(b => b.onclick = () => startCmd({ source: "recommended", count: Math.max(5, Math.min(20, cmdDueN())) }));
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
@@ -328,13 +329,15 @@
   }
   const labName = p => partLabel(p);
   function renderToday() {
-    const f = C.reviewForecast(BANK, st.qstats), cardsDue = C.deckStats(CARDS, st.cards).due;
+    const dr = C.dailyReview(BANK, st), cardsDue = C.deckStats(CARDS, st.cards).due;
     const tests = st.tests.filter(t => t.mode === "test");
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
     const lab = nextLabPart();
     const steps = [];
-    if (f.due || cardsDue) steps.push({ ic: "repeat", eyebrow: "Daily review", title: [f.due ? plural(f.due, "question") : "", cardsDue ? plural(cardsDue, "flashcard") : ""].filter(Boolean).join(" and ") + " due",
-      desc: "Questions and cards come back on a schedule. A few minutes now keeps them from slipping.", btn: f.due ? `<button class="primary" data-start="review">Start review</button>` : `<button class="primary" data-start="duecards">Review flashcards</button>` });
+    if (dr.left) steps.push({ ic: "repeat", eyebrow: "Daily review", title: dr.done ? plural(dr.left, "question") + " left today" : "Today's " + plural(dr.left, "question"),
+      desc: reviewMixText(dr) + ". You choose how many a day on the Daily review page.", btn: `<button class="primary" data-start="review">${dr.done ? "Continue review" : "Start review"}</button>` });
+    else if (cardsDue) steps.push({ ic: "cards", eyebrow: "Flashcards", title: plural(cardsDue, "flashcard") + " due",
+      desc: "Cards come back on a schedule. A few minutes now keeps them from slipping.", btn: `<button class="primary" data-start="duecards">Review flashcards</button>` });
     const cmdDue = cmdDueN(), triedCmds = Object.keys(st.cmdstats || {}).length;
     if (cmdDue) steps.push({ ic: "terminal", eyebrow: "Command practice", title: plural(cmdDue, "command skill") + " due", desc: "Short drills on a fresh terminal, with new file names every time. Recall beats recognition.",
       btn: `<button class="primary" data-start="cmddue">Practice commands</button>` });
@@ -389,34 +392,56 @@
   }
 
   // ================================================================== DAILY REVIEW
+  // A batch of the size the learner picks, mixing due reviews with new questions. The backlog never shows as a count.
+  const REVIEW_CHOICES = [10, 15, 20, 30, 50], REVIEW_NEW_CHOICES = [0, 3, 5, 10];
+  let reviewOpen = false;
+  const reviewMixText = d => [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : ""].filter(Boolean).join(" and ") || "Nothing";
+  function reviewPickerHTML() {
+    const r = C.clampReview(st.settings.review);
+    return `<div class="stack" style="gap:10px">
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">Questions a day</span>
+        <div class="seg" id="revSize" role="group" aria-label="Questions a day">${REVIEW_CHOICES.map(n => `<button data-v="${n}" class="${r.size === n ? "on" : ""}">${n}</button>`).join("")}</div>
+        <label class="small muted row" style="gap:6px">or <input type="number" id="revSizeNum" min="${C.REVIEW_SIZE_MIN}" max="${C.REVIEW_SIZE_MAX}" step="1" inputmode="numeric" value="${REVIEW_CHOICES.indexOf(r.size) < 0 ? r.size : ""}" placeholder="${r.size}" aria-label="Custom questions a day" style="width:5.5em"></label></div>
+      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">New questions in it</span>
+        <div class="seg" id="revNew" role="group" aria-label="New questions a day">${REVIEW_NEW_CHOICES.map(n => `<button data-v="${n}" class="${r.fresh === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
+      <div class="small muted">New questions come from the topics you've seen least, easier ones first. On days with fewer reviews due, the rest are new questions, so there's always something that moves you forward. Anything else that's due waits its turn.</div></div>`;
+  }
+  function wireReviewPicker(rerender) {
+    const set = patch => { const r = C.clampReview(Object.assign({}, st.settings.review, patch)); st.settings.review = r; save(); toast(`Daily review: ${r.size} a day, ${r.fresh} new`); rerender(); };
+    $$("#revSize button").forEach(b => b.onclick = () => set({ size: +b.dataset.v }));
+    $$("#revNew button").forEach(b => b.onclick = () => set({ fresh: +b.dataset.v }));
+    const num = $("#revSizeNum"); if (!num) return;
+    num.onchange = () => { if (num.value !== "") set({ size: +num.value }); };
+    num.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (num.value !== "") set({ size: +num.value }); } };
+  }
   function renderReview() {
-    const f = C.reviewForecast(BANK, st.qstats), cardsDue = C.deckStats(CARDS, st.cards).due;
-    const started = Object.keys(st.qstats).length > 0;
-    const caught = started && !f.due && !cardsDue;
+    const d = C.dailyReview(BANK, st), cardsDue = C.deckStats(CARDS, st.cards).due;
+    const extra = Math.min(10, d.backlog + d.unseen);
     shell("review", `${resumeBanner()}
       <div class="page-head"><span class="eyebrow">Daily review · a few minutes a day</span><h1>Daily review</h1>
-        <p class="lead">Every question you answer comes back on a schedule. A miss returns tomorrow, and each right answer pushes the next review further out: 1, 2, 4, 8, then 16 days. Flashcards that are due show up here too.</p></div>
-      ${!started ? `<div class="card empty">${icon("repeat")}<b>Nothing to review yet</b>
-          <p class="muted small">Take an exam or a study session. Every question you answer gets scheduled here automatically.</p>
-          <div class="row" style="justify-content:center"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`
-        : caught ? `<div class="card celebrate">${icon("trophy")}<h2>All caught up for today</h2><p class="muted">Nothing is due. Come back tomorrow, or keep going with a study session.</p>
-          <div class="row" style="justify-content:center"><button class="primary" data-go="study">Study</button><button data-start="test">Take an exam</button></div></div>` : ""}
-      ${started ? `<div class="grid2">
+        <p class="lead">${d.size} questions a day: reviews of ones you've answered, plus ${plural(d.perDayNew, "new one")} so you keep moving through the bank. A miss comes back tomorrow; each right answer pushes it further out.
+          <button class="linkbtn" id="revEdit" aria-expanded="${reviewOpen}">${reviewOpen ? "Done" : "Change"}</button></p>
+        ${reviewOpen ? `<div class="card stack goalcard">${reviewPickerHTML()}</div>` : ""}</div>
+      <div class="grid2">
         <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
-          <div class="revn"><b>${f.due}</b> due</div>
-          <p class="small muted">${f.due ? `Oldest first, up to ${reviewSize} at a time, with hints and answers as you go.` : "No questions due today."}</p>
-          <div class="row spread"><div class="seg" id="rsize">${[10, 20, 40].map(n => `<button data-n="${n}" class="${reviewSize === n ? "on" : ""}">${n}</button>`).join("")}</div>
-            <button class="primary" data-start="review" ${f.due ? "" : "disabled"}>Review questions</button></div></div>
+          ${d.left ? `<div class="revn"><b>${d.left}</b> ${d.done ? "left today" : "today"}</div>
+            <p class="small muted">${reviewMixText(d)}, with hints and answers as you go.</p>
+            ${d.done ? `<div class="track2"><i style="width:${Math.min(100, Math.round(100 * d.done / d.size))}%;background:var(--accent)"></i></div>` : ""}
+            <div class="row" style="justify-content:flex-end"><button class="primary" data-start="review">${d.done ? "Continue review" : "Start review"}</button></div>`
+          : `<div class="revn"><b>Done</b> for today</div>
+            <p class="small muted">${d.done ? `You answered ${d.done}. ` : ""}${extra ? "Want more? Extra questions don't change tomorrow's size." : "You've seen every question and nothing is due."}</p>
+            <div class="row" style="justify-content:flex-end">${extra ? `<button data-start="reviewmore" data-n="${extra}">${extra} more</button>` : ""}</div>`}</div>
         <div class="card stack revcard"><div class="row" style="gap:10px">${icon("cards")}<span class="eyebrow">Flashcards</span></div>
           <div class="revn"><b>${cardsDue}</b> due</div>
           <p class="small muted">${cardsDue ? "Cards from both decks that are scheduled for today." : "No flashcards due today."}</p>
           <div class="row" style="justify-content:flex-end"><button data-start="duecards" ${cardsDue ? "" : "disabled"}>Review flashcards</button></div></div>
-      </div>
-      <div class="card row spread"><span class="muted">Coming up</span><span><b>${f.tomorrow}</b> ${f.tomorrow === 1 ? "question" : "questions"} tomorrow · <b>${f.week}</b> in the next 7 days</span></div>` : ""}`);
-    $$("#rsize button").forEach(b => b.onclick = () => { reviewSize = +b.dataset.n; renderReview(); });
+      </div>`);
+    $("#revEdit").onclick = () => { reviewOpen = !reviewOpen; renderReview(); };
+    wireReviewPicker(renderReview);
     wireResume();
     wireStarts($("#page"));
   }
+
 
   // ================================================================== EXAM MODE (home)
   function renderTest() {
@@ -1426,6 +1451,7 @@
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       <div class="card stack"><h2>Daily goal</h2>
         <div class="stack" style="gap:10px"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
+      <div class="card stack"><h2>Daily review</h2>${reviewPickerHTML()}</div>
       ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
           <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device${SYNC && SYNC.linked ? " and synced" : " (or synced, if you set up Sync below)"}.</p></div>
         ${installEvt ? `<div class="row"><button class="primary" id="installNow">${icon("download")}Install exit 0</button></div>`
@@ -1448,6 +1474,7 @@
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     wireGoalPicker(renderSettings);
+    wireReviewPicker(renderSettings);
     $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
     if ($("#installNow")) $("#installNow").onclick = promptInstall;
     if ($("#copy")) $("#copy").onclick = () => {

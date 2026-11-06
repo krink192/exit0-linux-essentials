@@ -45,7 +45,7 @@
       users: [], groups: [], passwords: {},
       uid: 1000, stack: [], env: {}, exported: new Set(), aliases: {}, history: [],
       cwd: "/", last: 0, args: [], scriptName: "bash", now: opts.now || Date.now(), hostname: opts.hostname || "lab",
-      sudoers: new Set(["sudo", "wheel"]), editRequest: null, distro: (opts.setup && opts.setup.distro) || "ubuntu", pid: 2301, nextPid: 2400, procs: [], locateDb: [], userInfo: {},
+      sudoers: new Set(["sudo", "wheel"]), editRequest: null, pagerRequest: null, distro: (opts.setup && opts.setup.distro) || "ubuntu", pid: 2301, nextPid: 2400, procs: [], locateDb: [], userInfo: {},
       net: { links: [{ name: "lo", flags: "LOOPBACK,UP,LOWER_UP", mtu: 65536, state: "UNKNOWN", mac: "00:00:00:00:00:00", loop: true, addrs: ["127.0.0.1/8", "::1/128"] },
                      { name: "enp0s3", flags: "BROADCAST,MULTICAST,UP,LOWER_UP", mtu: 1500, state: "UP", mac: "52:54:00:12:34:56", addrs: ["192.168.1.42/24", "fe80::5054:ff:fe12:3456/64"], dynamic: "192.168.1.42/24" }],
              routes: [{ dst: "default", via: "192.168.1.1", dev: "enp0s3", extra: "proto dhcp metric 100" }, { dst: "192.168.1.0/24", dev: "enp0s3", extra: "proto kernel scope link src 192.168.1.42" }],
@@ -592,8 +592,11 @@
         }
         m.lastOutput = ctx.out;
         const edit = m.editRequest; m.editRequest = null;
-        return { out: ctx.out, code: m.last, edit };
+        const pager = m.pagerRequest; m.pagerRequest = null;
+        return { out: ctx.out, code: m.last, edit, pager };
       },
+      /** Re-render the manual pages a pager shows for a terminal COLS characters wide. */
+      manText(pages, cols) { return pages.map(pg => renderMan(pg, cols)).join(""); },
       prompt() { const us = userById(m, m.uid); const home = m.env.HOME; let p = m.cwd; if (p === home) p = "~"; else if (home !== "/" && p.startsWith(home + "/")) p = "~" + p.slice(home.length);
         return { user: us.name, host: m.hostname, path: p, sym: m.uid === 0 ? "#" : "$" }; },
       complete(line) { return complete(m, line); },
@@ -1000,9 +1003,18 @@
     shift: "shift [N]\n    Move the positional parameters left by N (default 1): $2 becomes $1.", exec: "exec [COMMAND [ARGS ...]]\n    Replace the shell with COMMAND. The process ID stays the same.",
     kill: "kill [-s SIGSPEC | -SIGSPEC] PID ...\n    Send a signal (default SIGTERM) to processes.", source: "source FILE [ARGS]\n    Run the commands in FILE in the current shell (also: . FILE).",
     test: "test EXPR, [ EXPR ]\n    Evaluate a condition: -f FILE, -d DIR, -e PATH, -z STR, STR1 = STR2, N1 -eq N2, -ne, -lt, -le, -gt, -ge.", read: "read NAME ...\n    Read a line from standard input into variables.",
-    set: "set\n    With no arguments, print every shell variable.", help: "help [BUILTIN]\n    Describe builtin commands." };
+    set: "set\n    With no arguments, print every shell variable.", help: "help [NAME]\n    Describe a builtin command or keyword. With no NAME, list them all.",
+    printf: "printf FORMAT [ARGUMENTS ...]\n    Print ARGUMENTS under control of FORMAT: %s a string, %d a whole number, \\n a newline, \\t a tab.\n    The format is reused until every argument is printed. Example: printf '%s=%d\\n' a 1 b 2",
+    true: "true\n    Do nothing, successfully: the exit status is 0.", false: "false\n    Do nothing, unsuccessfully: the exit status is 1.",
+    logout: "logout [N]\n    Exit a login shell.", unalias: "unalias [-a] NAME ...\n    Remove each alias. -a: remove all of them.",
+    ".": ". FILE [ARGS]\n    Run the commands in FILE in the current shell, so variables and cd stay in effect. Same as source.",
+    if: "if COMMANDS; then COMMANDS; [ elif COMMANDS; then COMMANDS; ]... [ else COMMANDS; ] fi\n    Run the then-part of the first condition whose exit status is 0, otherwise the else-part.\n    The condition is any command; [ ... ] (see help test) compares values and checks files.\n    Example: if [ -f notes.txt ]; then echo found; else echo missing; fi",
+    for: "for NAME [in WORDS ...]; do COMMANDS; done\n    Run COMMANDS once for each word, with NAME set to it. Without 'in WORDS' it loops over \"$@\".\n    Example: for f in *.txt; do echo \"$f\"; done",
+    while: "while COMMANDS; do COMMANDS; done\n    Repeat the body as long as the condition's exit status is 0.\n    Example: i=1; while [ $i -le 3 ]; do echo $i; i=$((i+1)); done",
+    until: "until COMMANDS; do COMMANDS; done\n    Repeat the body as long as the condition fails (exit status not 0)." };
+  const KEYWORDS_HELP = ["if", "for", "while", "until"];
   CMDS.help = (m, args, io) => { if (args[0]) { const h = BUILTIN_HELP[args[0]] || (args[0] === "[" ? BUILTIN_HELP.test : null); if (!h) { io.err("bash: help: no help topics match `" + args[0] + "'.  Try `help help' or `man -k " + args[0] + "' or `info " + args[0] + "'.\n"); return 1; } io.out(args[0] + ": " + h + "\n"); return 0; }
-    io.out("exit 0 lab shell (simulated Bash). Builtins (help NAME): " + [...BUILTINS].sort().join(" ") + "\nCommands (man NAME): " + Object.keys(CMDS).filter(k => !BUILTINS.has(k)).sort().join(" ") + "\nEditors: nano, vi (open an editor panel)\n"); };
+    io.out("exit 0 lab shell (simulated Bash). Builtins (help NAME): " + [...BUILTINS].sort().join(" ") + "\nKeywords (help NAME): " + KEYWORDS_HELP.join(" ") + "\nCommands (man NAME): " + Object.keys(CMDS).filter(k => !BUILTINS.has(k)).sort().join(" ") + "\nEditors: nano, vi (open an editor panel)\n"); };
   CMDS.test = (m, args) => testExpr(m, args) ? 0 : 1;
   CMDS["["] = (m, args) => { if (args[args.length - 1] !== "]") throw new ShellError("bash: [: missing `]'", 2); return testExpr(m, args.slice(0, -1)) ? 0 : 1; };
   function testExpr(m, a) {
@@ -2451,23 +2463,29 @@
     if (!sec) { for (const s2 of ["1", "8", "5", "7"]) { const pg = P[name + "." + s2] || (P[name] && String(P[name].section) === s2 ? P[name] : null); if (pg) return pg; } }
     return P[name] && (!sec || String(P[name].section) === String(sec)) ? P[name] : null;
   }
-  function renderMan(pg) {
-    const head = pg.name.toUpperCase() + "(" + pg.section + ")"; const mid = SECTIONS[pg.section] || ""; const gap = Math.max(1, 78 - head.length * 2 - mid.length);
-    let out = head + " ".repeat(Math.floor(gap / 2)) + mid + " ".repeat(Math.ceil(gap / 2)) + head + "\n\nNAME\n       " + pg.name + " - " + pg.summary + "\n";
-    if (pg.synopsis) out += "\nSYNOPSIS\n" + pg.synopsis.map(x => "       " + x).join("\n") + "\n";
-    if (pg.description) out += "\nDESCRIPTION\n" + wrapText(pg.description, 70, "       ") + "\n";
-    if (pg.options && pg.options.length) out += "\nOPTIONS\n" + pg.options.map(([fl, txt]) => "       " + fl + "\n" + wrapText(txt, 64, "              ")).join("\n\n") + "\n";
-    for (const [title, text] of pg.sections || []) out += "\n" + title + "\n" + (Array.isArray(text) ? text.map(x => "       " + x).join("\n") : wrapText(text, 70, "       ")) + "\n";
-    if (pg.examples) out += "\nEXAMPLES\n" + pg.examples.map(([cmd, txt]) => "       " + cmd + "\n" + wrapText(txt, 64, "              ")).join("\n\n") + "\n";
-    if (pg.files) out += "\nFILES\n" + pg.files.map(([f, t]) => "       " + f + "\n" + wrapText(t, 64, "              ")).join("\n") + "\n";
-    if (pg.see) out += "\nSEE ALSO\n       " + pg.see.join(", ") + "\n";
-    out += "\nexit 0 lab" + " ".repeat(28) + "2026" + " ".repeat(Math.max(1, 36 - head.length)) + head + "\n";
+  /** A page as man prints it on a terminal COLS wide (78 by default; the pager passes its own width). */
+  function renderMan(pg, cols) {
+    cols = Math.max(30, Math.min(cols || 78, 100));
+    const i1 = " ".repeat(cols < 60 ? 3 : 7), i2 = " ".repeat(cols < 60 ? 6 : 14), w1 = cols - i1.length - 1, w2 = cols - i2.length;
+    const head = pg.name.toUpperCase() + "(" + pg.section + ")"; const mid = SECTIONS[pg.section] || ""; const gap = cols - head.length * 2 - mid.length;
+    let out = (gap >= 2 ? head + " ".repeat(Math.floor(gap / 2)) + mid + " ".repeat(Math.ceil(gap / 2)) + head : head + " ".repeat(Math.max(1, cols - head.length * 2)) + head) + "\n\nNAME\n" + wrapText(pg.name + " - " + pg.summary, w1, i1) + "\n";
+    if (pg.synopsis) out += "\nSYNOPSIS\n" + pg.synopsis.map(x => i1 + x).join("\n") + "\n";
+    if (pg.description) out += "\nDESCRIPTION\n" + wrapText(pg.description, w1, i1) + "\n";
+    if (pg.options && pg.options.length) out += "\nOPTIONS\n" + pg.options.map(([fl, txt]) => i1 + fl + "\n" + wrapText(txt, w2, i2)).join("\n\n") + "\n";
+    for (const [title, text] of pg.sections || []) out += "\n" + title + "\n" + (Array.isArray(text) ? text.map(x => i1 + x).join("\n") : wrapText(text, w1, i1)) + "\n";
+    if (pg.examples) out += "\nEXAMPLES\n" + pg.examples.map(([cmd, txt]) => i1 + cmd + "\n" + wrapText(txt, w2, i2)).join("\n\n") + "\n";
+    if (pg.files) out += "\nFILES\n" + pg.files.map(([f, t]) => i1 + f + "\n" + wrapText(t, w2, i2)).join("\n") + "\n";
+    if (pg.see) out += "\nSEE ALSO\n" + wrapText(pg.see.join(", "), w1, i1) + "\n";
+    const foot = cols - 10 - 4 - head.length;
+    out += "\nexit 0 lab" + (foot >= 2 ? " ".repeat(Math.floor(foot / 2)) + "2026" + " ".repeat(Math.ceil(foot / 2)) : " 2026 ") + head + "\n";
     return out;
   }
   function manHelp(name) {
-    const pg = findPage(name); if (!pg || !pg.options) return null;
-    return "Usage: " + (pg.synopsis || [name]).join("\n  or:  ") + "\n" + pg.summary.charAt(0).toUpperCase() + pg.summary.slice(1) + ".\n\n" +
-      pg.options.map(([fl, txt]) => "  " + pad(fl, 24, true) + " " + txt.split(". ")[0].replace(/\.$/, "")).join("\n") + "\n\nFull documentation: man " + name;
+    const pg = findPage(name); if (!pg || !pg.synopsis || ![1, 8].includes(+pg.section)) return null;
+    const opts = (pg.options || []).map(([fl, txt]) => "  " + pad(fl, 24, true) + " " + txt.split(". ")[0].replace(/\.$/, "")).join("\n");
+    const ex = (pg.examples || []).slice(0, 2).map(([c, t]) => "  " + c + "\n      " + t).join("\n");
+    return "Usage: " + pg.synopsis.join("\n  or:  ") + "\n" + pg.summary.charAt(0).toUpperCase() + pg.summary.slice(1) + ".\n" +
+      (opts ? "\n" + opts + "\n" : "") + (ex ? "\nExamples:\n" + ex + "\n" : "") + "\nFull documentation: man " + name;
   }
   CMDS.man = (m, args, io) => {
     if (args.includes("-k")) return CMDS.apropos(m, args.filter(a => a !== "-k"), io);
@@ -2479,9 +2497,9 @@
     for (const nm of names) {
       const pg = findPage(nm, sec);
       if (!pg) { io.err(sec ? "No entry for " + nm + " in section " + sec + " of the manual\n" : "No manual entry for " + nm + (BUILTINS.has(nm) ? "\n(lab: " + nm + " is a shell builtin, so it's documented in 'help " + nm + "' and in man bash)" : "") + "\n"); code = 16; continue; }
-      io.out(renderMan(pg));
+      io.out(renderMan(pg)); (m.manShown = m.manShown || []).push(pg);
     }
-    if (io.tty && !code) io.out("(lab: on a real system man opens in a pager: arrow keys scroll, / searches, q quits)\n");
+    if (io.tty && !code) io.out("(lab: the page opens in the pager like on a real system: / searches, n finds the next match, q quits. It stays in the scrollback too.)\n");
     return code;
   };
   CMDS.whatis = (m, args, io) => { let code = 0; const P = manpages();
@@ -2498,9 +2516,25 @@
     if (!pg) { io.err("info: No menu item '" + nm + "' in node '(dir)Top'\n"); return 1; }
     if (pg.info) { io.out(pg.info + "\n"); }
     else io.out("File: *manpages*,  Node: " + nm + ",  Up: (dir)\n\n(info has no node for " + nm + ", so it shows the manual page instead.)\n\n" + renderMan(pg));
-    if (io.tty) io.out("(lab: on a real system info is interactive: Tab moves between menu links, Enter follows one, n/p go to the next/previous node, u goes up, q quits)\n");
+    if (io.tty) io.out("(lab: a real info is interactive: Tab moves between menu links, Enter follows one, n/p go to the next/previous node, u goes up, q quits)\n");
     return 0;
   };
+  // On a terminal, man, info, less and more show their text in a pager: the app opens a reader that starts at the
+  // top and can search. The text still goes to the scrollback, and pipes and redirections behave as before.
+  function paged(fn, title) {
+    return (m, args, io) => {
+      if (!io.tty || args.includes("-k") || args.includes("-f")) return fn(m, args, io);
+      let buf = ""; const io2 = Object.assign({}, io, { out(x) { buf += x; io.out(x); } });
+      m.manShown = []; const code = fn(m, args, io2); const text = buf.replace(/^\(lab: .*\)\n/gm, "");
+      if (text.split("\n").length > 3) m.pagerRequest = { title: title(args), text, pages: m.manShown.length ? m.manShown : null };
+      m.manShown = null;
+      return code;
+    };
+  }
+  const firstName = args => args.filter(a => !a.startsWith("-") && !/^[1-9]$/.test(a))[0] || "";
+  CMDS.man = paged(CMDS.man, a => "man " + (a.find(x => /^[1-9]$/.test(x)) ? a.find(x => /^[1-9]$/.test(x)) + " " : "") + firstName(a));
+  CMDS.info = paged(CMDS.info, a => "info " + (firstName(a) || "dir"));
+  CMDS.less = paged(CMDS.less, a => "less " + firstName(a)); CMDS.more = paged(CMDS.more, a => "more " + firstName(a));
   // ---------------------------------------------------------------- locate keeps a database, like plocate: new files appear only after updatedb
   CMDS.locate = (m, args, io) => {
     const { flags: f, rest } = parseOpts(args, { name: "locate", flags: "il:n:cebAS", long: { "ignore-case": "i", limit: "l", count: "c", existing: "e", basename: "b", all: "A", statistics: "S" } });

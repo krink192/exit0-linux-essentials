@@ -217,7 +217,7 @@
       scheduleQuestion(st, res.perQ[id], dayNum(now));
       state.qstats[id] = st;
     }
-    const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct,
+    const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
                   flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]) };
     state.tests.push(rec);
@@ -255,9 +255,68 @@
     }
     return { due, tomorrow, week };
   }
-  function buildReview(bank, qstats, count, opts) {
+  // The daily review is a fixed-size batch the learner picks (settings.review), not the whole backlog.
+  // Each day's batch mixes due reviews with new questions so learners keep moving through the bank;
+  // whatever is due beyond today's size just waits its turn (oldest and missed first).
+  const REVIEW_SIZE_MIN = 5, REVIEW_SIZE_MAX = 100, REVIEW_NEW_MAX = 50;
+  /** settings.review = { on, size: questions a day, fresh: how many of them are new }. Off until the learner turns it on. */
+  function clampReview(r) {
+    r = r || {};
+    const num = (v, d) => { v = Math.round(Number(v)); return isFinite(v) ? v : d; };
+    const size = Math.max(REVIEW_SIZE_MIN, Math.min(REVIEW_SIZE_MAX, num(r.size, 20)));
+    const fresh = Math.max(0, Math.min(size, REVIEW_NEW_MAX, num(r.fresh, 5)));
+    return { on: r.on === true, size, fresh };
+  }
+  /** Questions answered in daily reviews finished today (any device, once synced). */
+  function reviewDoneToday(tests, today) {
+    return (tests || []).filter(t => t.mode === "review" && dayNum(t.date) === today)
+      .reduce((a, t) => a + (t.answered != null ? t.answered : t.total || 0), 0);
+  }
+  /** Unseen questions, spread across objectives: always take from the objective you've seen least of, easier first. */
+  function newIds(bank, qstats, n, rand) {
+    const pools = Object.keys(bank.objectives).map(o => {
+      const all = bank.byObj[o] || [];
+      const unseen = shuffle(all.filter(id => !(qstats[id] && qstats[id].seen)), rand)
+        .sort((a, b) => (bank.byId[a].level || 1) - (bank.byId[b].level || 1));
+      return { o, total: all.length, seen: all.length - unseen.length, unseen };
+    }).filter(p => p.total);
+    const out = [];
+    while (out.length < n) {
+      let best = null;
+      for (const p of pools) if (p.unseen.length && (!best || p.seen / p.total < best.seen / best.total)) best = p;
+      if (!best) break;
+      out.push(best.unseen.shift()); best.seen++;
+    }
+    return out;
+  }
+  /** Split `n` slots into due reviews and new questions in the chosen ratio; spare slots go to the other kind. */
+  function reviewMix(n, cfg, dueN, unseenN) {
+    let fresh = Math.min(unseenN, Math.round(n * cfg.fresh / cfg.size));
+    const due = Math.min(dueN, n - fresh);
+    fresh = Math.min(unseenN, n - due);
+    return { due, fresh };
+  }
+  /** Today's review: { on, size, fresh, done, left, due, fresh: new questions in what's left, backlog, unseen }. */
+  function dailyReview(bank, state, today) {
+    today = today == null ? dayNum() : today;
+    const cfg = clampReview(state.settings && state.settings.review);
+    const backlog = dueIds(bank, state.qstats, today).length;
+    const unseen = bank.questions.filter(q => !(state.qstats[q.id] && state.qstats[q.id].seen)).length;
+    const done = reviewDoneToday(state.tests, today);
+    const avail = cfg.on ? Math.min(Math.max(0, cfg.size - done), backlog + unseen) : 0;
+    const mix = reviewMix(avail, cfg, backlog, unseen);
+    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
+  }
+  /** Start today's review (what's left of the daily size), or `opts.count` extra questions in the same mix. */
+  function buildReview(bank, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
-    const ids = dueIds(bank, qstats, opts.today).slice(0, count || 20);
+    const today = opts.today == null ? dayNum() : opts.today;
+    const cfg = clampReview(state.settings && state.settings.review);
+    const due = dueIds(bank, state.qstats, today);
+    let mix;
+    if (opts.count) mix = reviewMix(opts.count, cfg, due.length, bank.questions.length);
+    else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; }
+    const ids = due.slice(0, mix.due).concat(newIds(bank, state.qstats, mix.fresh, rand));
     if (!ids.length) return null;
     return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
@@ -606,7 +665,7 @@
     const today = dayNum(now), days = dayNum(date) - today;
     const seen = Object.keys(state.qstats).filter(id => bank.byId[id] && state.qstats[id].seen).length;
     const unseen = bank.questions.length - seen;
-    const due = dueIds(bank, state.qstats, today).length;
+    const due = dailyReview(bank, state, today).due;    // reviews left in today's batch, not the whole backlog
     const studyDays = days - 2;               // keep the last two days for full exams and review
     const newPerDay = days < 0 || studyDays < 1 ? 0 : Math.ceil(unseen / studyDays);
     const phase = days < 0 ? "past" : days === 0 ? "today" : studyDays < 1 ? "final" : "learn";
@@ -619,7 +678,8 @@
                { id: "seen", label: "See every question", done: unseen === 0, progress: [seen, bank.questions.length] },
                { id: "ready", label: "Score " + TARGET + "%+ on three exams in a row", done: run >= 3, progress: [Math.min(run, 3), 3] },
                { id: "pass", label: "Pass chance of 90% or more", done: pred.chance != null && pred.chance >= 0.9, progress: null },
-               { id: "due", label: "Clear today's reviews", done: due === 0, progress: null }] };
+               { id: "due", label: "Finish today's review", done: dailyReview(bank, state, today).left === 0, progress: null }]
+               .filter(m => m.id !== "due" || clampReview(state.settings.review).on) };
   }
   /** iCalendar file: the exam as an all-day event, plus a daily study reminder until the day before. */
   function examIcs(dateStr, opts) {
@@ -805,7 +865,7 @@
   /** Daily goal: a whole number of answers, cards, lab tasks or command drills, 1 to 200. */
   function clampGoal(n) { n = Math.round(Number(n)); return isFinite(n) ? Math.max(GOAL_MIN, Math.min(GOAL_MAX, n)) : 10; }
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 10, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
+    return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
              tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, current: null };
   }
@@ -817,6 +877,7 @@
     st.settings.study = Object.assign(freshState().settings.study, had);
     st.settings.cmd = Object.assign(freshState().settings.cmd, st.settings.cmd || {});
     st.settings.goal = clampGoal(st.settings.goal);      // saved progress keeps its goal; new installs start at 10
+    st.settings.review = clampReview(st.settings.review);
     st.cmdstats = st.cmdstats || {};
     if (!had.objMode) st.settings.study.objMode = had.objs && had.objs.length ? "pick" : "all";
     if (st.settings.study.levels.length !== 1) st.settings.study.levels = [];   // one level, or all
@@ -832,7 +893,7 @@
   }
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
-           scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview,
+           scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,

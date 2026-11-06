@@ -398,7 +398,10 @@
   const reviewMixText = d => [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : ""].filter(Boolean).join(" and ") || "Nothing";
   function reviewPickerHTML() {
     const r = C.clampReview(st.settings.review);
-    return `<div class="stack" style="gap:10px">
+    const toggle = `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">Daily review</span>
+        <div class="seg" id="revOn" role="group" aria-label="Daily review">${[[false, "Off"], [true, "On"]].map(([v, n]) => `<button data-v="${v}" class="${r.on === v ? "on" : ""}">${n}</button>`).join("")}</div></div>`;
+    if (!r.on) return `<div class="stack" style="gap:10px">${toggle}<div class="small muted">Off: nothing is scheduled for you and no review counts are shown. Turn it on to get a set number of questions each day.</div></div>`;
+    return `<div class="stack" style="gap:10px">${toggle}
       <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">Questions a day</span>
         <div class="seg" id="revSize" role="group" aria-label="Questions a day">${REVIEW_CHOICES.map(n => `<button data-v="${n}" class="${r.size === n ? "on" : ""}">${n}</button>`).join("")}</div>
         <label class="small muted row" style="gap:6px">or <input type="number" id="revSizeNum" min="${C.REVIEW_SIZE_MIN}" max="${C.REVIEW_SIZE_MAX}" step="1" inputmode="numeric" value="${REVIEW_CHOICES.indexOf(r.size) < 0 ? r.size : ""}" placeholder="${r.size}" aria-label="Custom questions a day" style="width:5.5em"></label></div>
@@ -407,7 +410,9 @@
       <div class="small muted">New questions come from the topics you've seen least, easier ones first. On days with fewer reviews due, the rest are new questions, so there's always something that moves you forward. Anything else that's due waits its turn.</div></div>`;
   }
   function wireReviewPicker(rerender) {
-    const set = patch => { const r = C.clampReview(Object.assign({}, st.settings.review, patch)); st.settings.review = r; save(); toast(`Daily review: ${r.size} a day, ${r.fresh} new`); rerender(); };
+    const set = patch => { const r = C.clampReview(Object.assign({}, st.settings.review, patch)); st.settings.review = r; save(); toast(r.on ? `Daily review: ${r.size} a day, ${r.fresh} new` : "Daily review off"); rerender(); };
+    $$("#revOn button").forEach(b => b.onclick = () => set({ on: b.dataset.v === "true" }));
+    $$("[data-review-on]").forEach(b => b.onclick = () => { reviewOpen = true; set({ on: true }); });
     $$("#revSize button").forEach(b => b.onclick = () => set({ size: +b.dataset.v }));
     $$("#revNew button").forEach(b => b.onclick = () => set({ fresh: +b.dataset.v }));
     const num = $("#revSizeNum"); if (!num) return;
@@ -419,7 +424,13 @@
     const extra = Math.min(10, d.backlog + d.unseen);
     shell("review", `${resumeBanner()}
       <div class="page-head"><span class="eyebrow">Daily review · a few minutes a day</span><h1>Daily review</h1>
-        <p class="lead">${d.size} questions a day: reviews of ones you've answered, plus ${plural(d.perDayNew, "new one")} so you keep moving through the bank. A miss comes back tomorrow; each right answer pushes it further out.
+        ${!d.on ? `<p class="lead">A set number of questions each day: reviews of ones you've answered, plus some new ones so you keep moving through the bank. It's off until you turn it on, and you choose how many.</p></div>
+      <div class="grid2">
+        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
+          <div class="revn"><b>Off</b></div>
+          <p class="small muted">Nothing is scheduled and no counts are shown. You can still study any time from Study or Exam.</p>
+          <div class="row" style="justify-content:flex-end"><button class="primary" data-review-on>Turn on daily review</button></div></div>`
+        : `<p class="lead">${d.size} questions a day: reviews of ones you've answered, plus ${plural(d.perDayNew, "new one")} so you keep moving through the bank. A miss comes back tomorrow; each right answer pushes it further out.
           <button class="linkbtn" id="revEdit" aria-expanded="${reviewOpen}">${reviewOpen ? "Done" : "Change"}</button></p>
         ${reviewOpen ? `<div class="card stack goalcard">${reviewPickerHTML()}</div>` : ""}</div>
       <div class="grid2">
@@ -430,13 +441,13 @@
             <div class="row" style="justify-content:flex-end"><button class="primary" data-start="review">${d.done ? "Continue review" : "Start review"}</button></div>`
           : `<div class="revn"><b>Done</b> for today</div>
             <p class="small muted">${d.done ? `You answered ${d.done}. ` : ""}${extra ? "Want more? Extra questions don't change tomorrow's size." : "You've seen every question and nothing is due."}</p>
-            <div class="row" style="justify-content:flex-end">${extra ? `<button data-start="reviewmore" data-n="${extra}">${extra} more</button>` : ""}</div>`}</div>
+            <div class="row" style="justify-content:flex-end">${extra ? `<button data-start="reviewmore" data-n="${extra}">${extra} more</button>` : ""}</div>`}</div>`}
         <div class="card stack revcard"><div class="row" style="gap:10px">${icon("cards")}<span class="eyebrow">Flashcards</span></div>
           <div class="revn"><b>${cardsDue}</b> due</div>
           <p class="small muted">${cardsDue ? "Cards from both decks that are scheduled for today." : "No flashcards due today."}</p>
           <div class="row" style="justify-content:flex-end"><button data-start="duecards" ${cardsDue ? "" : "disabled"}>Review flashcards</button></div></div>
       </div>`);
-    $("#revEdit").onclick = () => { reviewOpen = !reviewOpen; renderReview(); };
+    if ($("#revEdit")) $("#revEdit").onclick = () => { reviewOpen = !reviewOpen; renderReview(); };
     wireReviewPicker(renderReview);
     wireResume();
     wireStarts($("#page"));

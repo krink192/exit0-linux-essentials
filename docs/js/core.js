@@ -258,13 +258,13 @@
   // Each day's batch mixes due reviews with new questions so learners keep moving through the bank;
   // whatever is due beyond today's size just waits its turn (oldest and missed first).
   const REVIEW_SIZE_MIN = 5, REVIEW_SIZE_MAX = 100, REVIEW_NEW_MAX = 50;
-  /** settings.review = { size: questions a day, fresh: how many of them are new }. */
+  /** settings.review = { on, size: questions a day, fresh: how many of them are new }. Off until the learner turns it on. */
   function clampReview(r) {
     r = r || {};
     const num = (v, d) => { v = Math.round(Number(v)); return isFinite(v) ? v : d; };
     const size = Math.max(REVIEW_SIZE_MIN, Math.min(REVIEW_SIZE_MAX, num(r.size, 20)));
     const fresh = Math.max(0, Math.min(size, REVIEW_NEW_MAX, num(r.fresh, 5)));
-    return { size, fresh };
+    return { on: r.on === true, size, fresh };
   }
   /** Questions answered in daily reviews finished today (any device, once synced). */
   function reviewDoneToday(tests, today) {
@@ -295,16 +295,16 @@
     fresh = Math.min(unseenN, n - due);
     return { due, fresh };
   }
-  /** Today's review: { size, fresh, done, left, due, fresh: new questions in what's left, backlog, unseen }. */
+  /** Today's review: { on, size, fresh, done, left, due, fresh: new questions in what's left, backlog, unseen }. */
   function dailyReview(bank, state, today) {
     today = today == null ? dayNum() : today;
     const cfg = clampReview(state.settings && state.settings.review);
     const backlog = dueIds(bank, state.qstats, today).length;
     const unseen = bank.questions.filter(q => !(state.qstats[q.id] && state.qstats[q.id].seen)).length;
     const done = reviewDoneToday(state.tests, today);
-    const avail = Math.min(Math.max(0, cfg.size - done), backlog + unseen);
+    const avail = cfg.on ? Math.min(Math.max(0, cfg.size - done), backlog + unseen) : 0;
     const mix = reviewMix(avail, cfg, backlog, unseen);
-    return { size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
+    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
   }
   /** Start today's review (what's left of the daily size), or `opts.count` extra questions in the same mix. */
   function buildReview(bank, state, opts) {
@@ -645,7 +645,8 @@
                { id: "seen", label: "See every question", done: unseen === 0, progress: [seen, bank.questions.length] },
                { id: "ready", label: "Score " + TARGET + "%+ on three exams in a row", done: run >= 3, progress: [Math.min(run, 3), 3] },
                { id: "pass", label: "Pass chance of 90% or more", done: pred.chance != null && pred.chance >= 0.9, progress: null },
-               { id: "due", label: "Finish today's review", done: dailyReview(bank, state, today).left === 0, progress: null }] };
+               { id: "due", label: "Finish today's review", done: dailyReview(bank, state, today).left === 0, progress: null }]
+               .filter(m => m.id !== "due" || clampReview(state.settings.review).on) };
   }
   /** iCalendar file: the exam as an all-day event, plus a daily study reminder until the day before. */
   function examIcs(dateStr, opts) {
@@ -831,7 +832,7 @@
   /** Daily goal: a whole number of answers, cards, lab tasks or command drills, 1 to 200. */
   function clampGoal(n) { n = Math.round(Number(n)); return isFinite(n) ? Math.max(GOAL_MIN, Math.min(GOAL_MAX, n)) : 10; }
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 10, review: { size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
+    return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
              tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, current: null };
   }

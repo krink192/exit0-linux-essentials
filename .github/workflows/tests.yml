@@ -3,12 +3,14 @@ name: Tests
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Pinned: the lab shell is compared with real Bash and GNU coreutils. ubuntu-latest moved to 26.04, whose
+    # Rust coreutils word some error messages differently ("mkdir: d: File exists").
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - run: node tools/test_core.js
       - name: Every file is under the AGPL
         run: node tools/test_license.js

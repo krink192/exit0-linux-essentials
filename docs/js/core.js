@@ -174,6 +174,16 @@
              timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
   }
 
+  /** A saved session after the bank changed: questions that no longer exist are dropped so the app still opens.
+   *  Returns the session, or null when it isn't usable. */
+  function repairSession(bank, s) {
+    if (!s || !Array.isArray(s.qids)) return null;
+    const qids = s.qids.filter(id => bank.byId[id]);
+    if (!qids.length) return null;
+    if (qids.length === s.qids.length) return s;
+    return Object.assign(s, { qids, cur: Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0)) });
+  }
+
   /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden.
    *  No two questions come from the same conflict set, so one question never gives away another. */
   function buildTest(bank, qstats, opts) {
@@ -687,7 +697,7 @@
   function passPrediction(bank, qstats) {
     const { ev, seen } = passEvidence(bank, qstats);
     const base = { seen, minSeen: PASS_MIN_SEEN, passPct: PASS_PCT };
-    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen });
+    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen, focus: [] });
     const d = distStats(scoreDist(bank, ev));
     // Where 3 more right answers would raise the pass chance most.
     const focus = Object.keys(bank.objectives).map(o => {
@@ -941,7 +951,7 @@
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
-           priority, apportion, pickWeighted, objCounts, newSession, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX,

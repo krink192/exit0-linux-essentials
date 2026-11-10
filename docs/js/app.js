@@ -129,6 +129,7 @@
     const raw = readJSON(KEY);
     return C.migrate(raw, raw ? null : { history: readJSON("le010.v2.history"), qstats: readJSON("le010.v2.qstats") });
   })();
+  st.current = C.repairSession(BANK, st.current);      // a question removed by an update must not stop the app from opening
   function save(fromSync) {
     try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ }
     if (!fromSync) scheduleSync();
@@ -1757,7 +1758,7 @@
     const pct = rec.pct, isTest = rec.mode === "test";
     const verdict = pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing";
     const wrongN = rec.qids.filter(id => !perQ[id]).length;
-    const list = rec.qids.map((id, i) => ({ id, i })).filter(({ id }) => reviewFilter === "all" || (reviewFilter === "wrong" && !perQ[id]) || (reviewFilter === "flag" && flags.has(id)));
+    const list = rec.qids.map((id, i) => ({ id, i })).filter(({ id }) => BANK.byId[id]).filter(({ id }) => reviewFilter === "all" || (reviewFilter === "wrong" && !perQ[id]) || (reviewFilter === "flag" && flags.has(id)));
     const item = ({ id, i }) => {
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;

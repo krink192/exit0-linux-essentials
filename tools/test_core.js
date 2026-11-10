@@ -39,6 +39,24 @@ t("an exam or study set never holds two questions that give each other away (sam
   assert.strictEqual(C.buildStudy(bank, {}, { ids: pair, count: pair.length }, { seed: 1 }).qids.length, pair.length);
   assert.strictEqual(C.buildStudy(bank, {}, { objs: ["4.1"], count: 10 }, { seed: 1 }).qids.length, 10);
 });
+t("pass prediction always lists focus objectives, also before there is enough data (Progress reads it)", () => {
+  const st = C.freshState(), s = C.buildStudy(bank, {}, { count: 10 }, { seed: 1 });
+  s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  C.recordResult(st, bank, s, C.grade(bank, s));
+  const p = C.passPrediction(bank, st.qstats);
+  assert.strictEqual(p.chance, null); assert.strictEqual(p.more, 20); assert.deepStrictEqual(p.focus, []);
+  assert.deepStrictEqual(C.passPrediction(bank, {}).focus, []);
+});
+t("a saved session survives a bank update that removed one of its questions", () => {
+  const s = C.buildStudy(bank, {}, { count: 5 }, { seed: 1 }), ids = s.qids.slice();
+  assert.strictEqual(C.repairSession(bank, s), s); assert.deepStrictEqual(s.qids, ids);
+  s.qids[1] = "9.9-99"; s.cur = 3;
+  const r = C.repairSession(bank, s);
+  assert.deepStrictEqual(r.qids, [ids[0], ids[2], ids[3], ids[4]]); assert.strictEqual(r.qids[r.cur], ids[3]);
+  s.qids = ["9.9-98", ids[0]]; s.cur = 0; assert.strictEqual(C.repairSession(bank, s).cur, 0);
+  assert.strictEqual(C.repairSession(bank, { qids: ["9.9-99"] }), null);
+  assert.strictEqual(C.repairSession(bank, null), null); assert.strictEqual(C.repairSession(bank, { qids: "x" }), null);
+});
 t("answer keys grade correctly; wrong answers fail; fill-in trims spaces, keeps case", () => {
   for (const q of bank.questions) {
     if (q.type === "fill") { q.accept.forEach(a => assert(C.isCorrect(q, "  " + a + " "), q.id)); assert(!C.isCorrect(q, "zzz")); }

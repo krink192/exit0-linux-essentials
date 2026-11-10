@@ -39,7 +39,7 @@ tools/                Questions t1.py–t7.py, hints.py, whys.py, cards.py, shee
   page (or `help` text for builtins and keywords), every option a solution uses is documented on that page, every
   command page has examples, and each example runs in the lab shell without a usage error.
 - `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams checked against
-  the blueprint, and checks that no hint gives away a typed answer.
+  the blueprint, Study sets of every size checked against the exam weights, and that no hint gives away a typed answer.
 - Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing, checks the `.rpm`
   signature, then installs both again from the live signed repositories.
 

@@ -21,6 +21,24 @@ t("every practice test matches the blueprint exactly", () => {
     for (const o in bank.objectives) assert.strictEqual(c[o], bank.objectives[o].weight, o);
   }
 });
+t("an exam or study set never holds two questions that give each other away (same conflict set)", () => {
+  const sets = ids => ids.map(id => bank.byId[id].conflict).filter(x => x != null);
+  const clash = ids => sets(ids).length - new Set(sets(ids)).size;
+  assert(bank.questions.filter(q => q.conflict != null).length > 100);
+  for (const q of bank.questions) if (q.conflict != null) assert(bank.questions.some(p => p !== q && p.conflict === q.conflict && p.obj === q.obj), q.id);
+  for (let seed = 1; seed <= 200; seed++) {
+    assert.strictEqual(clash(C.buildTest(bank, {}, { seed }).qids), 0, "exam, seed " + seed);
+    for (const count of [10, 20, 40]) assert.strictEqual(clash(C.buildStudy(bank, {}, { count }, { seed }).qids), 0, "study " + count + ", seed " + seed);
+    assert.strictEqual(clash(C.buildStudy(bank, {}, { objs: ["3.1"], count: 5 }, { seed }).qids), 0, "one objective, seed " + seed);
+  }
+  // still true when most of the bank has been seen and only a few unseen questions are left to prefer
+  const qs = {}; bank.questions.forEach((q, i) => { if (i % 7) qs[q.id] = { seen: 2, right: i % 3 ? 2 : 1, last: !!(i % 3) }; });
+  for (let seed = 1; seed <= 100; seed++) assert.strictEqual(clash(C.buildTest(bank, qs, { seed }).qids), 0);
+  // when only conflicting questions are left, they are used rather than coming up short
+  const pair = bank.questions.filter(q => q.conflict === bank.questions.find(x => x.conflict != null).conflict).map(q => q.id);
+  assert.strictEqual(C.buildStudy(bank, {}, { ids: pair, count: pair.length }, { seed: 1 }).qids.length, pair.length);
+  assert.strictEqual(C.buildStudy(bank, {}, { objs: ["4.1"], count: 10 }, { seed: 1 }).qids.length, 10);
+});
 t("answer keys grade correctly; wrong answers fail; fill-in trims spaces, keeps case", () => {
   for (const q of bank.questions) {
     if (q.type === "fill") { q.accept.forEach(a => assert(C.isCorrect(q, "  " + a + " "), q.id)); assert(!C.isCorrect(q, "zzz")); }
@@ -46,17 +64,69 @@ t("perfect test scores 100, history and activity recorded", () => {
   C.recordResult(st, bank, s, r); assert.strictEqual(st.tests.length, 1);
   assert.strictEqual(st.days[C.dayKey()], 40); assert.strictEqual(C.readiness(st.tests), 100);
 });
-t("weak drill uses missed questions first", () => {
+t("weak objectives are found from missed answers", () => {
   const st = C.freshState(); const s = C.buildTest(bank, {}, { seed: 4 });
   C.recordResult(st, bank, s, C.grade(bank, s));           // nothing answered: all missed
-  const w = C.buildWeak(bank, st.qstats, 20, { seed: 5 });
-  assert.strictEqual(w.qids.length, 20); assert(w.qids.every(id => s.qids.includes(id))); assert(w.study);
   assert(C.weakObjectives(bank, st.qstats).length > 0);
-  assert.strictEqual(C.buildWeak(bank, {}, 20), null);
+  assert.strictEqual(C.missedIds(bank, st.qstats).length, 40);
 });
-t("objective drill stays inside chosen objectives", () => {
-  const d = C.buildDrill(bank, {}, ["5.3", "5.4"], 10, { seed: 2 });
-  assert.strictEqual(d.qids.length, 10); assert(d.qids.every(id => ["5.3", "5.4"].includes(bank.byId[id].obj)));
+// ---- every set that mixes objectives follows the exam's weights (weight = questions on the real exam)
+const W = o => bank.objectives[o].weight, OBJS = Object.keys(bank.objectives);
+t("study sets that mix objectives follow the exam weights: exact at 40 and 80, within one question otherwise", () => {
+  for (const count of [5, 10, 20, 30, 40, 80, 100]) {
+    const mean = {};
+    for (let seed = 1; seed <= 300; seed++) {
+      const s = C.buildStudy(bank, {}, { count }, { seed }), c = C.objCounts(bank, s.qids);
+      assert.strictEqual(s.qids.length, count); assert.strictEqual(new Set(s.qids).size, count);
+      for (const o of OBJS) {
+        const share = count * W(o) / 40, k = c[o] || 0; mean[o] = (mean[o] || 0) + k / 300;
+        assert(k >= Math.floor(share) && k <= Math.ceil(share), `${count} questions: ${o} got ${k}, share is ${share}`);
+      }
+    }
+    // short sets can't hold every objective, so the weights hold on average: no objective is favoured or left out
+    for (const o of OBJS) assert(Math.abs(mean[o] - count * W(o) / 40) < 0.12, `${count} questions: ${o} averages ${mean[o].toFixed(2)}, share is ${count * W(o) / 40}`);
+  }
+});
+t("the weights apply inside any choice of objectives, difficulty or source", () => {
+  const two = C.objCounts(bank, C.buildStudy(bank, {}, { objs: ["3.3", "1.3"], count: 10 }, { seed: 1 }).qids);
+  assert.deepStrictEqual(two, { "1.3": 2, "3.3": 8 });                       // weights 1 and 4
+  const topic2 = C.objCounts(bank, C.buildStudy(bank, {}, { objs: ["2.1", "2.2", "2.3", "2.4"], count: 18 }, { seed: 2 }).qids);
+  assert.deepStrictEqual(topic2, { "2.1": 6, "2.2": 4, "2.3": 4, "2.4": 4 });  // weights 3, 2, 2, 2
+  for (let seed = 1; seed <= 50; seed++) {                                   // one difficulty level: fewer questions per objective to draw on
+    const s = C.buildStudy(bank, {}, { levels: [3], count: 40 }, { seed });
+    assert.strictEqual(s.qids.length, 40); assert(s.qids.every(id => bank.byId[id].level === 3));
+    const c = C.objCounts(bank, s.qids);
+    for (const o of OBJS) assert(c[o] === bank.byObj[o].filter(id => bank.byId[id].level === 3).length || c[o] >= W(o), o + " is short of its share while it has questions left");
+  }
+  // missed questions: an objective with too few misses gives all it has and the rest goes to the others by weight
+  const qs = {}; const miss = (o, n) => bank.byObj[o].slice(0, n).forEach(id => { qs[id] = { seen: 1, right: 0, last: false }; });
+  miss("1.3", 1); miss("3.3", 10); miss("4.3", 10);
+  for (let seed = 1; seed <= 50; seed++) {
+    const c = C.objCounts(bank, C.buildStudy(bank, qs, { source: "missed", count: 8 }, { seed }).qids);
+    assert.strictEqual((c["1.3"] || 0) + c["3.3"] + c["4.3"], 8);
+    assert(c["3.3"] >= 4 && c["3.3"] <= 5 && c["4.3"] >= 3 && c["4.3"] <= 4, JSON.stringify(c));   // shares: 1, 4 and 3 out of 8
+  }
+  assert.strictEqual(C.buildStudy(bank, qs, { source: "missed", count: 40 }, { seed: 1 }).qids.length, 21);   // fewer than asked: all of them
+});
+t("apportion: totals, caps and leftovers", () => {
+  const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+  const items = OBJS.map(o => ({ key: o, weight: W(o), cap: bank.byObj[o].length }));
+  for (let n = 0; n <= 400; n += 7) for (const seed of [1, 2, 3]) {
+    const out = C.apportion(n, items, C.rng(seed));
+    assert.strictEqual(sum(out), n); items.forEach(x => assert(out[x.key] >= 0 && out[x.key] <= x.cap));
+  }
+  assert.deepStrictEqual(C.apportion(40, items, C.rng(1)), Object.fromEntries(OBJS.map(o => [o, W(o)])));
+  assert.deepStrictEqual(C.apportion(10, [{ key: "a", weight: 3, cap: 1 }, { key: "b", weight: 1, cap: 50 }], C.rng(1)), { a: 1, b: 9 });
+  assert.deepStrictEqual(C.apportion(10, [{ key: "a", weight: 1, cap: 2 }, { key: "b", weight: 1, cap: 3 }], C.rng(1)), { a: 2, b: 3 });   // asks for more than there is
+  assert.deepStrictEqual(C.apportion(5, [{ key: "a", weight: 2, cap: 0 }, { key: "b", weight: 1, cap: 9 }], C.rng(1)), { a: 0, b: 5 });
+  assert.deepStrictEqual(C.apportion(0, items, C.rng(1)), Object.fromEntries(OBJS.map(o => [o, 0])));
+});
+t("daily review: new questions cover the bank in step with the exam weights (never more than one question off)", () => {
+  const c = {};
+  C.newIds(bank, {}, bank.questions.length, C.rng(1)).forEach((id, i) => {
+    const o = bank.byId[id].obj; c[o] = (c[o] || 0) + 1;
+    for (const x of OBJS) assert(Math.abs((c[x] || 0) - (i + 1) * W(x) / 40) <= 1, `after ${i + 1} new questions ${x} has ${c[x] || 0}`);
+  });
 });
 t("study mode filters by objective, difficulty and source", () => {
   const s = C.buildStudy(bank, {}, { objs: ["3.3"], levels: [3], count: 5 }, { seed: 9 });

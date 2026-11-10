@@ -513,9 +513,10 @@
     const pool = sp.objMode === "pick" && !objs.length ? [] : C.studyPool(BANK, st.qstats, Object.assign({}, sp, { objs }));
     const n = sp.count ? Math.min(sp.count, pool.length) : pool.length;
     const lv = sp.levels.length === 1 ? sp.levels[0] : 0;
-    const objNote = sp.objMode === "all" ? "Questions from every objective."
-      : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.`
-      : sel.size ? `${plural(sel.size, "objective")} selected.` : "Tick the objectives you want below.";
+    const byWeight = " Split like the real exam: heavier objectives get more questions.";
+    const objNote = sp.objMode === "all" ? "Questions from every objective." + byWeight
+      : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
+      : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
     shell("study", `${resumeBanner()}
       <div class="page-head"><span class="eyebrow">Study mode · learn as you go</span><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
@@ -843,7 +844,7 @@
           <li><b>Fill in the blank:</b> type a command, option or path exactly. Case matters: <code>-R</code> and <code>-r</code> are different options.</li></ul>
           <div class="callout"><b>Shortest command, no extras</b><p>Like the real exam, assume you're a regular user, the files named are in your current directory, and you have permission to them. Leave out <code>sudo</code> unless the task needs root, such as installing software, managing users and groups, or changing a file's owner.</p></div></section>
         <section class="card stack" id="g-blueprint"><h2>Exam blueprint</h2>
-          <p class="muted small">An objective's weight equals its number of questions, and every exam in this app follows this table.${started ? " Your accuracy is next to each one, so you can see where the points are." : " Your accuracy shows up here once you start answering."}</p>
+          <p class="muted small">An objective's weight equals its number of questions. Every exam in this app follows this table exactly, and Study sets that mix objectives are split in the same proportions.${started ? " Your accuracy is next to each one, so you can see where the points are." : " Your accuracy shows up here once you start answering."}</p>
           <div class="bphead"><span>Objective</span><span class="n">Questions</span><span class="n">You</span><span></span></div>
           <div class="bplist">${bp}<div class="bptotal"><b>Total</b><b class="n">40</b><span></span><span></span></div></div>
           <p class="small muted">Each Lesson link opens LPI's free online lesson; <a href="${LPI_PDF}" target="_blank" rel="noopener">the whole book is also a PDF</a>.</p></section>
@@ -861,7 +862,7 @@
             <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></section></div>
         <section class="card stack guide" id="g-sources"><h2>Official sources</h2><ul>
           <li><a href="https://www.lpi.org/our-certifications/linux-essentials-overview/" target="_blank" rel="noopener">Linux Essentials overview</a></li>
-          <li><a href="https://www.lpi.org/our-certifications/exam-010-objectives/" target="_blank" rel="noopener">Exam 010 objectives (v1.6)</a></li>
+          <li><a href="https://wiki.lpi.org/wiki/LinuxEssentials_Objectives_V1.6" target="_blank" rel="noopener">Exam 010-160 objectives (v1.6, on the LPI wiki)</a></li>
           <li><a href="https://www.lpi.org/about-lpi/frequently-asked-questions/" target="_blank" rel="noopener">LPI FAQ: scoring, delivery and results</a></li>
           <li><a href="https://learning.lpi.org/en/learning-materials/010-160/" target="_blank" rel="noopener">Free LPI learning materials</a> (online, one page per lesson)</li>
           <li><a href="${LPI_PDF}" target="_blank" rel="noopener">The same learning materials as one PDF book</a> (download, print or read offline)</li></ul></section>

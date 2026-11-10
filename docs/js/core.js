@@ -94,10 +94,72 @@
     if (s.last === false) return 1 + s.right / s.seen;
     return 3 + s.right / s.seen;
   }
-  function pickBy(ids, qstats, n, rand) {
+  // `set(id)` names a question's conflict set (questions that test the same narrow fact or give each other away):
+  // a pick holds one question per set, and takes a second one only when nothing else is left.
+  function pickBy(ids, qstats, n, rand, set) {
     const tagged = shuffle(ids, rand).map(id => ({ id, p: Math.floor(priority(qstats, id)) }));
     tagged.sort((x, y) => x.p - y.p);
-    return tagged.slice(0, n).map(t => t.id);
+    if (!set) return tagged.slice(0, n).map(t => t.id);
+    const out = [], spare = [], used = new Set();
+    for (const t of tagged) {
+      if (out.length >= n) break;
+      const g = set(t.id);
+      if (g != null && used.has(g)) { spare.push(t.id); continue; }
+      if (g != null) used.add(g);
+      out.push(t.id);
+    }
+    return out.concat(spare).slice(0, Math.max(0, n));
+  }
+  const conflictSet = bank => id => bank.byId[id].conflict;
+
+  // ------------------------------------------------------------- exam weights
+  // An objective's weight is its number of questions on the real exam. Every set that mixes objectives is split in
+  // those proportions, so practice time goes where the exam's points are.
+  /**
+   * Split `n` slots across `items` ([{ key, weight, cap }]) in proportion to weight. No item gets more than its
+   * cap (the questions it has to offer); what it can't take goes to the others, still by weight. Whole shares are
+   * handed out first. Each leftover slot is then drawn with a chance equal to the item's fractional share, so a
+   * short set matches the blueprint on average (light objectives still turn up) and a set whose shares are whole
+   * numbers, like 40 questions over every objective, matches it exactly. Returns { key: count }.
+   */
+  function apportion(n, items, rand) {
+    rand = rand || Math.random;
+    const out = {}; items.forEach(x => { out[x.key] = 0; });
+    const w = x => x.weight > 0 ? x.weight : 1;
+    let live = items.filter(x => x.cap > 0);
+    let left = Math.max(0, Math.min(Math.floor(n) || 0, live.reduce((a, x) => a + x.cap, 0)));
+    const share = {};
+    for (;;) {                               // objectives with fewer questions than their share are used up first
+      const W = live.reduce((a, x) => a + w(x), 0);
+      const full = live.filter(x => left * w(x) / W >= x.cap);
+      if (!full.length) { live.forEach(x => { share[x.key] = left * w(x) / W; }); break; }
+      full.forEach(x => { out[x.key] = x.cap; left -= x.cap; });
+      live = live.filter(x => full.indexOf(x) < 0);
+    }
+    let spare = left;
+    live.forEach(x => { out[x.key] = Math.floor(share[x.key] + 1e-9); spare -= out[x.key]; });
+    const frac = x => Math.max(0, share[x.key] - Math.floor(share[x.key] + 1e-9));
+    // systematic sampling: one random offset, then a slot each time the running total of fractions passes a whole number
+    const order = shuffle(live, rand), u = rand(), got = new Set(); let cum = 0, picks = 0;
+    for (const x of order) { cum += frac(x); if (picks < spare && cum > u + picks) { out[x.key]++; picks++; got.add(x.key); } }
+    for (const x of order.slice().sort((a, b) => frac(b) - frac(a))) {     // rounding left one over: largest fraction first
+      if (picks >= spare) break;
+      if (!got.has(x.key) && out[x.key] < x.cap) { out[x.key]++; picks++; }
+    }
+    return out;
+  }
+  /** Pick `n` of `ids` with the exam's weights: each objective gets its share, filled by priority (unseen, missed,
+   *  the rest) and with one question per conflict set while others are left. */
+  function pickWeighted(bank, ids, qstats, n, rand) {
+    const by = {}; for (const id of ids) { const o = bank.byId[id].obj; (by[o] = by[o] || []).push(id); }
+    const objs = Object.keys(by);
+    if (n >= ids.length || objs.length < 2) return pickBy(ids, qstats, n, rand, conflictSet(bank));
+    const take = apportion(n, objs.map(o => ({ key: o, weight: (bank.objectives[o] || {}).weight, cap: by[o].length })), rand);
+    return [].concat(...objs.map(o => pickBy(by[o], qstats, take[o], rand, conflictSet(bank))));
+  }
+  /** How many questions of each objective a list holds: { "1.1": 2, ... }. */
+  function objCounts(bank, ids) {
+    const c = {}; for (const id of ids) { const o = bank.byId[id].obj; c[o] = (c[o] || 0) + 1; } return c;
   }
 
   function newSession(bank, mode, label, qids, opts) {
@@ -112,22 +174,24 @@
              timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
   }
 
-  /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden. */
+  /** A saved session after the bank changed: questions that no longer exist are dropped so the app still opens.
+   *  Returns the session, or null when it isn't usable. */
+  function repairSession(bank, s) {
+    if (!s || !Array.isArray(s.qids)) return null;
+    const qids = s.qids.filter(id => bank.byId[id]);
+    if (!qids.length) return null;
+    if (qids.length === s.qids.length) return s;
+    return Object.assign(s, { qids, cur: Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0)) });
+  }
+
+  /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden.
+   *  No two questions come from the same conflict set, so one question never gives away another. */
   function buildTest(bank, qstats, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
     let ids = [];
-    for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand));
+    for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand, conflictSet(bank)));
     const label = opts.study ? "Practice test · answers shown" : "Exam";
     return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now });
-  }
-
-  function buildDrill(bank, qstats, objs, count, opts) {
-    opts = opts || {}; const rand = rng(opts.seed);
-    const pool = [].concat(...objs.map(o => bank.byObj[o] || []));
-    const ids = pickBy(pool, qstats || {}, count || pool.length, rand);
-    const label = objs.length === 1 ? "Drill · " + objs[0] + " " + bank.objectives[objs[0]].name
-      : "Drill · " + objs.length + " objectives";
-    return newSession(bank, "drill", label, shuffle(ids, rand), { study: opts.study !== false, seed: opts.seed });
   }
 
   /** Study mode filters. objs/levels empty = all. source: "mix" (everything), "unseen" or "missed". */
@@ -141,12 +205,13 @@
     else if (f.source === "unseen") ids = ids.filter(id => !qstats[id] || !qstats[id].seen);
     return ids;
   }
-  /** Study session: answers, hints and explanations as you go. Returns null when nothing matches. */
+  /** Study session: answers, hints and explanations as you go. A set that mixes objectives follows the exam's
+   *  weights (see apportion). Returns null when nothing matches. */
   function buildStudy(bank, qstats, f, opts) {
     f = f || {}; opts = opts || {}; const rand = rng(opts.seed);
     const pool = studyPool(bank, qstats, f);
     if (!pool.length) return null;
-    const ids = pickBy(pool, qstats || {}, f.count || pool.length, rand);
+    const ids = pickWeighted(bank, pool, qstats || {}, f.count || pool.length, rand);
     const all = Object.keys(bank.objectives).length;
     const objs = f.objs && f.objs.length && f.objs.length < all ? f.objs : null;
     const what = !objs ? "All objectives" : objs.length === 1 ? objs[0] + " " + bank.objectives[objs[0]].name : objs.length + " objectives";
@@ -179,16 +244,6 @@
 
   function missedIds(bank, qstats) {
     return Object.keys(qstats).filter(id => bank.byId[id] && qstats[id].last === false);
-  }
-
-  function buildWeak(bank, qstats, count, opts) {
-    opts = opts || {}; const rand = rng(opts.seed); count = count || 20;
-    const missed = shuffle(missedIds(bank, qstats), rand);
-    const extraPool = [].concat(...weakObjectives(bank, qstats, 6).map(o => bank.byObj[o])).filter(id => missed.indexOf(id) < 0);
-    const extra = pickBy(extraPool, qstats, extraPool.length, rand);
-    const ids = missed.concat(extra).slice(0, count);
-    if (!ids.length) return null;
-    return newSession(bank, "weak", "Weak-area drill", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
 
   // ------------------------------------------------------------- results
@@ -642,7 +697,7 @@
   function passPrediction(bank, qstats) {
     const { ev, seen } = passEvidence(bank, qstats);
     const base = { seen, minSeen: PASS_MIN_SEEN, passPct: PASS_PCT };
-    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen });
+    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen, focus: [] });
     const d = distStats(scoreDist(bank, ev));
     // Where 3 more right answers would raise the pass chance most.
     const focus = Object.keys(bank.objectives).map(o => {
@@ -844,7 +899,8 @@
     }
     return own;
   }
-  /** Copy a merged view into the app state, keeping this device's local settings and any session in progress. */
+  /** Copy a merged view into the app state, keeping this device's local settings and any session in progress.
+   *  The progress maps are replaced, not updated in place: don't keep state.labs[id] and the like across a sync. */
   function applyMerged(state, view) {
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
     state.badges = view.badges; state.labs = view.labs;
@@ -895,7 +951,7 @@
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
-           priority, newSession, buildTest, buildStudy, studyPool, buildDrill, buildWeak, objectiveStats, weakObjectives, missedIds, grade,
+           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX,

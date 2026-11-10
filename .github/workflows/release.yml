@@ -22,18 +22,25 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04      # pinned like tests.yml: the lab shell is compared with real Bash and GNU coreutils
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
       - name: Test exam logic and question bank
         run: node tools/test_core.js
+      - name: Every file is under the AGPL
+        run: node tools/test_license.js
       - name: Sync merges progress correctly
         run: node tools/test_sync.js
       - name: Test the lab shell and labs
         run: node tools/test_shell.js
+      - name: Type-the-command questions, command drills and the lab's man pages
+        run: |
+          node tools/test_questions.js
+          node tools/test_drills.js
+          node tools/test_man.js
 
   windows:
     needs: test

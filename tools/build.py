@@ -144,6 +144,18 @@ def build():
     _, viol = assign_forms(out)
     for grp in viol:
         print("WARN conflict set shares a form:", grp)
+    # Mark each conflict set on its questions, so the app never puts two of them in the same exam or study set.
+    by_id = {q["id"]: q for q in out}
+    for n, grp in enumerate(CONFLICTS, 1):
+        if len({i.rsplit("-", 1)[0] for i in grp}) != 1:
+            errors.append(f"CONFLICTS: {grp} spans more than one objective")
+        for i in grp:
+            if i not in by_id:
+                errors.append(f"CONFLICTS: {i} is not a question ID")
+            elif "conflict" in by_id[i]:
+                errors.append(f"CONFLICTS: {i} is in two sets")
+            else:
+                by_id[i]["conflict"] = n
 
     # blueprint checks
     for o, (_, w) in OBJ.items():
@@ -165,7 +177,8 @@ def build():
 
 
 # Questions in the same set test the same narrow fact or give each other away,
-# so the optimizer keeps them in different forms.
+# so the optimizer keeps them in different forms, and the app (core.js pickBy) never
+# puts two of them in one exam or study set. A set stays inside one objective.
 CONFLICTS = [
     ["1.1-05", "1.1-06"], ["1.1-03", "1.1-12", "1.1-08"], ["1.2-05", "1.2-06"], ["1.2-01", "1.2-11"], ["1.2-02", "1.2-04"],
     ["1.4-02", "1.4-05", "1.4-12"], ["1.4-08", "1.4-09"],

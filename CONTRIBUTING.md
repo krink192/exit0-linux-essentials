@@ -25,7 +25,7 @@ F("2.3", "Type the command that prints the current working directory.",
 - `F(...)` is a fill-in question. List every answer that should be accepted, and remember that case matters.
 - `run`/`expect` (optional but encouraged) is a shell check. `expect="OPT"` means the output must equal the
   correct option. In `F` questions, `{A}` is replaced by each accepted answer in turn.
-- Each objective must have **9 × its LPI weight** questions (nine 40-question sets), so add questions in groups
+- Each objective must have **10 × its LPI weight** questions (ten 40-question sets), so add questions in groups
   that keep that true, or replace existing ones.
 - Write the wrong options so they are plausible, and keep them about as long as the correct one.
 - Every question needs a hint in `tools/hints.py`, keyed by its ID (for example `"3.2-07"`). A hint points to the

@@ -65,7 +65,7 @@ The app isn't code-signed yet. Click **More info → Run anyway**.
 
 - **400 practice questions** in ten blueprint-matched sets, each with a hint, an explanation and a note on why every wrong option is wrong
 - **Exam mode:** 40 questions, 60 minutes, weighted exactly like the real exam
-- **Study mode:** pick objectives and difficulty, or jump straight to your misses and weak spots
+- **Study mode:** pick objectives and difficulty, or jump straight to your misses and weak spots. Sets that mix objectives are split by the exam's weights too
 - **Hands-on labs** for every LPI lesson that teaches commands, plus six troubleshooting scenarios, in a simulated terminal that works offline and on phones
 - **Command drills and a sandbox** to practise commands with fresh files every run
 - **Flashcards, daily review and a daily goal**, all on spaced repetition

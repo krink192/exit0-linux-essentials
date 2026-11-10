@@ -994,8 +994,9 @@
     const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
+    // A sync swaps st.labs for merged copies, so the handlers below read this part's progress fresh each time.
     const evaluate = () => {
-      const fresh = [];
+      const ls = labState(id), fresh = [];
       lab.tasks.forEach((t, i) => { if (!ls.done.includes(i) && sh.check(t.check)) { ls.done.push(i); fresh.push(i); } });
       if (!fresh.length) return false;
       ls.done.sort((a, b) => a - b); C.addActivity(st, fresh.length);
@@ -1007,7 +1008,7 @@
     };
     // Coaching: the first unfinished task whose known mistakes match what was typed and printed.
     const coach = (line, output, code) => {
-      const before = coachTip[id]; delete coachTip[id];
+      const ls = labState(id), before = coachTip[id]; delete coachTip[id];
       for (let i = 0; i < lab.tasks.length; i++) { if (ls.done.includes(i)) continue;
         for (const mk of lab.tasks[i].mistakes || []) {
           if ((mk.cmd == null || new RegExp(mk.cmd).test(line)) && (mk.out == null || new RegExp(mk.out).test(output)) && (mk.cmd != null || mk.out != null)) { coachTip[id] = { task: i, say: mk.say }; return true; }
@@ -1045,6 +1046,7 @@
     // A command that turns a task from "doable" into "not doable" (like moving away the file it needs): find the first such task.
     function findStuck(snap, src) {
       if (!sh.canComplete) return null;
+      const ls = labState(id);
       for (let i = 0; i < lab.tasks.length; i++) { if (ls.done.includes(i)) continue; const t = lab.tasks[i];
         if (sh.canComplete(t.check, t.solution)) continue;
         const was = window.LEShell.createMachine({ setup: lab.setup }); was.restore(snap);

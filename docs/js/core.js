@@ -844,7 +844,8 @@
     }
     return own;
   }
-  /** Copy a merged view into the app state, keeping this device's local settings and any session in progress. */
+  /** Copy a merged view into the app state, keeping this device's local settings and any session in progress.
+   *  The progress maps are replaced, not updated in place: don't keep state.labs[id] and the like across a sync. */
   function applyMerged(state, view) {
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
     state.badges = view.badges; state.labs = view.labs;

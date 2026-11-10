@@ -31,6 +31,7 @@ function fakeServer() {
     if (!dev) return json(401, { error: "Sign in again." });
     if (p === "/v1/logout") { delete S.tokens[auth]; return json(200, { ok: true }); }
     if ((m = /^\/v1\/packs\/le010\?since=(\d+)$/.exec(p))) {
+      if (S.during) { const fn = S.during; S.during = null; fn(); }     // something the learner does while the request is in flight
       const since = +m[1];
       const reps = Object.entries(S.replicas).filter(([, r]) => r.seq > since).sort((a, c) => a[1].seq - c[1].seq)
         .map(([device, r]) => ({ device, seq: r.seq, updatedAt: 0, doc: JSON.parse(r.doc) }));
@@ -197,6 +198,42 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     const snap = JSON.stringify(b.st.current);
     a.answer(Q.slice(0, 3), true, T0); await a.sync.syncNow(); await b.sync.syncNow();
     assert.strictEqual(JSON.stringify(b.st.current), snap);
+  });
+
+  await t("progress made while a sync request is in flight is kept and reaches the other devices", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery"); await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    b.answer(Q.slice(0, 5), true, T0); await b.sync.syncNow();
+    a.answer(Q.slice(5, 8), true, T0 + 1000);
+    srv.during = () => {                       // A's pull is on the wire: the learner finishes a set, a flashcard and a lab task
+      a.answer(Q.slice(8, 12), false, T0 + 2000); a.cardReview(cards[0].id, true, T0 + 2000);
+      a.st.labs.part1 = { done: [0, 1] }; a.st.settings.goal = 30;
+    };
+    await a.sync.syncNow();
+    assert.strictEqual(totals(a.st).seen, 12); assert.strictEqual(totals(a.st).tests, 3);
+    assert.strictEqual(a.st.cards[cards[0].id].seen, 1); assert.deepStrictEqual(a.st.labs.part1.done, [0, 1]);
+    assert.strictEqual(a.st.days[C.dayKey(T0 + 2000)], 5 + 3 + 4 + 1);
+    await a.sync.syncNow(); await b.sync.syncNow();
+    assert.strictEqual(progressOf(a.st), progressOf(b.st));
+    assert.deepStrictEqual(totals(b.st), totals(a.st)); assert.strictEqual(b.st.settings.goal, 30);
+    // the same during a pull that finds the account was reset on another device
+    await b.sync.resetEverywhere();
+    srv.during = () => { a.answer(Q.slice(20, 22), true, T0 + 3000); };      // lands before the reset is seen: wiped with the rest
+    await a.sync.syncNow();
+    assert.strictEqual(totals(a.st).seen, 0);
+    a.answer(Q.slice(30, 33), true, T0 + 4000); await a.sync.syncNow(); await b.sync.syncNow();
+    assert.strictEqual(totals(b.st).seen, 3); assert.strictEqual(progressOf(a.st), progressOf(b.st));
+  });
+
+  await t("a remote change to command practice or settings alone is reported to the app", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery"); await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    await a.sync.syncNow(); await b.sync.syncNow(); const was = a.changes;
+    C.recordDrill(b.st, "skill-x", true, T0); b.st.days = {};                // only cmdstats differs
+    await b.sync.syncNow(); await a.sync.syncNow();
+    assert.strictEqual(a.st.cmdstats["skill-x"].seen, 1); assert.strictEqual(a.changes, was + 1);
+    b.st.settings.examDate = "2027-01-20"; await b.sync.syncNow(); await a.sync.syncNow();
+    assert.strictEqual(a.st.settings.examDate, "2027-01-20"); assert.strictEqual(a.changes, was + 2);
   });
 
   await t("revoked token: sync stops quietly and asks to sign in again", async () => {

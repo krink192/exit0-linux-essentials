@@ -104,34 +104,41 @@
       return running;
     }
 
+    // What onChange compares to decide whether remote changes altered anything the app shows.
+    const shown = st => JSON.stringify([st.tests.length, st.qstats, st.cards, st.cmdstats, st.days, st.labs, st.badges, C.syncedSettings(st.settings)]);
+
     async function once() {
       if (!meta.token || meta.pending) return;
-      const st = opts.getState();
-      const t = now();
-      // 1. This device's share, measured against what the other devices had contributed before this pull.
-      const stamped = C.stampSettings(st.settings, meta.settingsSnap, meta.settingsTs, t);
-      meta.settingsSnap = stamped.snap; meta.settingsTs = stamped.ts;
-      let own = C.ownPart(st, othersView(), meta.settingsTs);
       try {
-        // 2. Pull.
+        // 1. Pull. The learner can keep answering while the request is in flight, so nothing is read from the live
+        //    state until it returns.
+        let base = othersView();                // what the other devices had contributed before this pull
         let remote = await call("GET", `/v1/packs/${PACK}?since=${meta.cursor}`, undefined, meta.token);
+        let wiped = false;
         if (meta.epoch != null && remote.epoch !== meta.epoch) {
           // Progress was reset on another device: start over here too.
-          opts.resetProgress();
+          opts.resetProgress(); wiped = true;
           meta.others = {}; meta.ownSeq = 0; meta.cursor = 0; meta.pushed = null;
-          own = C.ownPart(opts.getState(), C.mergeStates([]), meta.settingsTs);
+          base = C.mergeStates([]);
           remote = await call("GET", `/v1/packs/${PACK}?since=0`, undefined, meta.token);
         }
+        // 2. This device's share: the live state minus what the others had contributed. Measured here, after the
+        //    pull and with no await before the merge, so answers given during the request are part of it.
+        const st = opts.getState();
+        const stamped = C.stampSettings(st.settings, meta.settingsSnap, meta.settingsTs, now());
+        meta.settingsSnap = stamped.snap; meta.settingsTs = stamped.ts;
+        const own = C.ownPart(st, base, meta.settingsTs);
         meta.epoch = remote.epoch;
-        let changed = false;
+        let changed = wiped;
         for (const r of remote.replicas) {
           if (r.device === meta.device.id) { meta.ownSeq = r.seq; continue; }
           meta.others[r.device] = r.doc; changed = true;
         }
         meta.cursor = remote.seq;
         // 3. Merge everything into the live state.
-        const before = changed ? JSON.stringify([st.tests.length, st.qstats, st.cards, st.days, st.labs, st.badges]) : null;
-        C.applyMerged(opts.getState(), C.mergeStates([own].concat(Object.values(meta.others))));
+        const before = changed ? shown(st) : null;
+        C.applyMerged(st, C.mergeStates([own].concat(Object.values(meta.others))));
+        const differs = changed && (wiped || before !== shown(st));
         // 4. Push this device's share if it changed since the last push.
         const doc = JSON.stringify(own);
         if (doc !== meta.pushed) {
@@ -147,8 +154,7 @@
         }
         meta.lastSync = now(); meta.lastError = null;
         persist();
-        const st2 = opts.getState();
-        if (changed && before !== JSON.stringify([st2.tests.length, st2.qstats, st2.cards, st2.days, st2.labs, st2.badges]) && opts.onChange) opts.onChange({ remote: true });
+        if (differs && opts.onChange) opts.onChange({ remote: true });
       } catch (e) {
         meta.lastError = e.message;
         if (e.status === 401) { meta.token = null; meta.lastError = "Signed out. Sign in again to keep syncing."; }

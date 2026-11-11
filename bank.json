@@ -2334,6 +2334,43 @@
     "rm -Rf old_logs",
     "rm --recursive old_logs"
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "~/old_logs/sub/a.log",
+       "data": "old\n"
+      },
+      {
+       "path": "~/old_logs/app.log",
+       "data": "old\n"
+      },
+      {
+       "path": "~/keep.txt",
+       "data": "keep\n"
+      }
+     ]
+    },
+    "check": {
+     "type": "all",
+     "checks": [
+      {
+       "type": "absent",
+       "path": "/home/student/old_logs"
+      },
+      {
+       "type": "exists",
+       "path": "/home/student/keep.txt"
+      }
+     ]
+    },
+    "reject": [
+     "rmdir old_logs",
+     "rm old_logs",
+     "rm -r old_logs/*",
+     "rm -r *"
+    ]
+   },
    "level": 3,
    "hint": "rm needs an option to go into a directory and delete everything inside.",
    "conflict": 19
@@ -2442,6 +2479,30 @@
     "bzip2 --decompress notes.txt.bz2",
     "bunzip2 -v notes.txt.bz2"
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "~/notes.txt",
+       "data": "meeting at ten\n"
+      }
+     ],
+     "run": [
+      "bzip2 notes.txt"
+     ]
+    },
+    "check": {
+     "type": "contains",
+     "path": "/home/student/notes.txt",
+     "text": "meeting at ten"
+    },
+    "reject": [
+     "gunzip notes.txt.bz2",
+     "bzip2 notes.txt.bz2",
+     "unzip notes.txt.bz2",
+     "bunzip2 notes.txt"
+    ]
+   },
    "level": 3,
    "hint": "The b-zip tool has a decompress twin, or a -d option.",
    "conflict": 22
@@ -2485,6 +2546,43 @@
     "unzip -q photos.zip",
     "unzip photos.zip -d ."
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "~/pics/a.jpg",
+       "data": "a\n"
+      },
+      {
+       "path": "~/pics/b.jpg",
+       "data": "b\n"
+      }
+     ],
+     "run": [
+      "zip -rq photos.zip pics",
+      "rm -r pics"
+     ]
+    },
+    "check": {
+     "type": "all",
+     "checks": [
+      {
+       "type": "exists",
+       "path": "/home/student/pics/a.jpg"
+      },
+      {
+       "type": "exists",
+       "path": "/home/student/pics/b.jpg"
+      }
+     ]
+    },
+    "reject": [
+     "zip photos.zip",
+     "unzip -l photos.zip",
+     "gunzip photos.zip",
+     "tar -xf photos.zip"
+    ]
+   },
    "level": 3,
    "hint": "The extraction partner of zip.",
    "conflict": 23
@@ -2607,6 +2705,35 @@
     "zip -rq site.zip www",
     "zip -r -q site.zip www"
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "~/www/index.html",
+       "data": "<h1>hi</h1>\n"
+      },
+      {
+       "path": "~/www/css/s.css",
+       "data": "h1{}\n"
+      }
+     ]
+    },
+    "check": {
+     "type": "archive",
+     "path": "/home/student/site.zip",
+     "format": "zip",
+     "has": [
+      "www/index.html",
+      "www/css/s.css"
+     ]
+    },
+    "reject": [
+     "zip site.zip www",
+     "tar -cf site.zip www",
+     "zip -r www site.zip",
+     "gzip -r www"
+    ]
+   },
    "level": 3,
    "hint": "zip needs a recursive option to include a directory's contents.",
    "conflict": 23
@@ -5732,6 +5859,28 @@
     "ln --symbolic /var/log/app.log latest",
     "ln -sv /var/log/app.log latest"
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "/var/log/app.log",
+       "data": "started\n",
+       "owner": "root"
+      }
+     ]
+    },
+    "check": {
+     "type": "link",
+     "path": "/home/student/latest",
+     "target": "/var/log/app.log"
+    },
+    "reject": [
+     "ln /var/log/app.log latest",
+     "ln -s latest /var/log/app.log",
+     "cp /var/log/app.log latest",
+     "ln -s app.log latest"
+    ]
+   },
    "level": 3,
    "hint": "ln makes hard links unless you add the option for symbolic. The target comes first and the link name second.",
    "conflict": 52
@@ -6543,6 +6692,20 @@
     "export GREETING=\"hello\"",
     "export GREETING='hello'"
    ],
+   "lab": {
+    "setup": {},
+    "check": {
+     "type": "env",
+     "name": "GREETING",
+     "value": "hello"
+    },
+    "reject": [
+     "GREETING=hello",
+     "export GREETING",
+     "set GREETING=hello",
+     "export GREETING = hello"
+    ]
+   },
    "level": 2,
    "hint": "One builtin can assign the value and mark it for child processes in the same command."
   },
@@ -7152,6 +7315,36 @@
     "xz -v big.log",
     "xz -9 big.log"
    ],
+   "lab": {
+    "setup": {
+     "files": [
+      {
+       "path": "~/big.log",
+       "data": "line\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\nline\n"
+      }
+     ]
+    },
+    "check": {
+     "type": "all",
+     "checks": [
+      {
+       "type": "compressed",
+       "path": "/home/student/big.log.xz",
+       "kind": "xz"
+      },
+      {
+       "type": "absent",
+       "path": "/home/student/big.log"
+      }
+     ]
+    },
+    "reject": [
+     "gzip big.log",
+     "bzip2 big.log",
+     "xz -k big.log",
+     "xz -d big.log"
+    ]
+   },
    "level": 2,
    "hint": "Like gzip and bzip2, the xz command compresses in place."
   },

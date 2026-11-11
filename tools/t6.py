@@ -2,7 +2,7 @@
 """Harder pack: 120 questions (three more 40-question forms), weighted toward
 Apply (level 2) and Analyze (level 3) items: reading output, tracing scripts and
 choosing exact syntax."""
-from common import S, F
+from common import S, F, lab, HOME
 
 # ---------------- 1.1 Linux Evolution and Popular Operating Systems (6) ----------------
 S("1.1-13", "A company wants an enterprise Linux distribution for its servers with paid vendor support, long maintenance and certified hardware. Which is the best fit?",
@@ -136,7 +136,9 @@ S("2.1-24", "Which command reruns `cd /var/log`?",
 F("2.1-25", "Type a single command that sets the variable GREETING to hello and makes it available to programs started from this shell.",
   ["export GREETING=hello", "export GREETING=\"hello\"", "export GREETING='hello'"],
   "`export NAME=value` assigns the variable and marks it for export in one step. Without export, the variable exists only in the current shell, and child processes such as scripts don't see it.",
-  run="{A}; bash -c 'echo $GREETING'", expect="hello", level=2)
+  run="{A}; bash -c 'echo $GREETING'", expect="hello", level=2,
+  lab=lab({}, {"type": "env", "name": "GREETING", "value": "hello"},
+          ["GREETING=hello", "export GREETING", "set GREETING=hello", "export GREETING = hello"]))
 S("2.1-26", "What does this command output?",
   ["✔Two lines: a and b separated by a tab, then c", "One line: a\\tb\\nc exactly as typed", "Three lines: a, then b, then c (the tab becomes a newline)", "One line: a b c"],
   "`echo -e` interprets backslash escapes, so `\\t` becomes a tab and `\\n` a newline. Without -e, Bash's echo prints the backslashes literally. `echo -n` suppresses the final newline.",
@@ -256,7 +258,10 @@ S("3.1-15", "You run `tar -xzf backup.tar.gz` from /tmp. Where does notes.txt en
 F("3.1-16", "Type the complete command that compresses big.log with xz, replacing it with big.log.xz.",
   ["xz big.log", "xz -z big.log", "xz --compress big.log", "xz -v big.log", "xz -9 big.log"],
   "Like gzip and bzip2, xz replaces the original file with a compressed one and adds .xz. `unxz` or `xz -d` reverses it, and `-k` keeps the original.",
-  run="echo hi > big.log; {A} 2>/dev/null; ls", expect="big.log.xz", level=2)
+  run="echo hi > big.log; {A} 2>/dev/null; ls", expect="big.log.xz", level=2,
+  lab=lab({"files": [{"path": "~/big.log", "data": "line\n" * 20}]},
+          {"type": "all", "checks": [{"type": "compressed", "path": HOME + "/big.log.xz", "kind": "xz"}, {"type": "absent", "path": HOME + "/big.log"}]},
+          ["gzip big.log", "bzip2 big.log", "xz -k big.log", "xz -d big.log"]))
 S("3.1-17", "Which command decompresses archive.tar.xz and extracts its files in one step?",
   ["✔tar -xJf archive.tar.xz", "tar -xjf archive.tar.xz", "unxz -x archive.tar.xz", "tar -cJf archive.tar.xz"],
   "Uppercase `-J` selects xz and `-x` extracts. Lowercase `-j` is bzip2, `-c` would create (overwrite) the archive, and unxz has no extract option, since it only decompresses.",

@@ -2011,7 +2011,8 @@
   const EXT = { gzip: ".gz", bzip2: ".bz2", xz: ".xz" };
   function compressor(kind, prog) {
     return (m, args, io) => {
-      const { flags: f, rest } = parseOpts(args, { name: prog, digitFlags: true, flags: "dkcfvqr0123456789zt", num: false, long: { decompress: "d", keep: "k", stdout: "c", force: "f", recursive: "r" } });
+      if (kind === "gzip" && args.includes("--compress")) throw new ShellError(prog + ": unrecognized option '--compress'\nTry `" + prog + " --help' for more information.", 1);   // only bzip2 and xz have it
+      const { flags: f, rest } = parseOpts(args, { name: prog, digitFlags: true, flags: "dkcfvqr0123456789zt", num: false, long: { decompress: "d", uncompress: "d", compress: "z", keep: "k", stdout: "c", force: "f", recursive: "r", verbose: "v", quiet: "q" } });
       const decomp = f.d || /^(gunzip|bunzip2|unxz|zcat|bzcat|xzcat)$/.test(prog);
       const toStdout = f.c || /cat$/.test(prog);
       let code = 0;

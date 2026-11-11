@@ -875,7 +875,7 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
 .scorebar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin-top: 12px; }
 .scorebar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .scorebar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-.weak { display: flex; flex-direction: column; margin: 0 -10px; }
+.today-side .weak { display: flex; flex-direction: column; margin: 0 -10px; }
 .weak-head, .weak-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.5em 3.5em; gap: 12px; align-items: center; padding: 0 10px; }
 .weak-head { align-items: baseline; padding-bottom: 8px; font-size: var(--fs-sm); color: var(--muted); }
 .weak-head h2 { color: var(--ink); }
@@ -1033,3 +1033,16 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outlin
 .term:focus-within { border-color: var(--term-user); }
 .searchbox input:focus-visible { outline: 0; }
 .qmeta .qpos { font-weight: 600; color: var(--ink); }
+
+/* ---------- Commands: legend swatches match the tiles; quick starts stack on phones instead of scrolling sideways */
+.clegend { gap: 8px 18px; }
+.lg { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.lg.new { background: var(--surface); }
+.ctile.t-new { background: var(--surface); border-style: solid; border-color: var(--line); }
+@media (max-width: 560px) {
+  .cquick { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); gap: 0; overflow: hidden; padding-bottom: 0;
+    border: 1px solid var(--line); border-radius: var(--r); scroll-snap-type: none; }
+  .cq, .cq.primary-soft { border: 0; border-radius: 0; }
+  .cq + .cq { border-top: 1px solid var(--line); }
+  .cq:focus-visible { outline-offset: -2px; }
+}

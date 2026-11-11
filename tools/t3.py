@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from common import S, F
+from common import S, F, lab, HOME
 
 # ---------------- 3.1 Archiving Files on the Command Line (12) ----------------
 S("3.1-01", "Which command creates a gzip-compressed archive of the ~/docs directory?",
@@ -9,14 +9,20 @@ S("3.1-01", "Which command creates a gzip-compressed archive of the ~/docs direc
 F("3.1-02", "Type a complete command that decompresses notes.txt.bz2, restoring notes.txt.",
   ["bunzip2 notes.txt.bz2", "bzip2 -d notes.txt.bz2", "bzip2 --decompress notes.txt.bz2", "bunzip2 -v notes.txt.bz2"],
   "`bunzip2` (or `bzip2 -d`) decompresses .bz2 files. The matching pairs are gzip/gunzip for .gz, xz/unxz for .xz, and zip/unzip for .zip.",
-  run="echo hi > notes.txt; bzip2 notes.txt; {A} 2>/dev/null; cat notes.txt", expect="hi")
+  run="echo hi > notes.txt; bzip2 notes.txt; {A} 2>/dev/null; cat notes.txt", expect="hi",
+  lab=lab({"files": [{"path": "~/notes.txt", "data": "meeting at ten\n"}], "run": ["bzip2 notes.txt"]},
+          {"type": "contains", "path": HOME + "/notes.txt", "text": "meeting at ten"},
+          ["gunzip notes.txt.bz2", "bzip2 notes.txt.bz2", "unzip notes.txt.bz2", "bunzip2 notes.txt"]))
 S("3.1-03", "Which command lists the files inside backup.tar without extracting them?",
   ["✔tar -tf backup.tar", "tar -xf backup.tar", "tar -cf backup.tar", "tar -rf backup.tar"],
   "`-t` lists the contents, `-x` extracts, and `-c` creates (here it would overwrite the archive). `-r` appends files. Add `-v` for detail and `-z`, `-j` or `-J` for archives compressed with gzip, bzip2 or xz.",
   run="touch a b; tar -cf backup.tar a b; rm a b; tar -tf backup.tar | tr '\\n' ' '; ls | tr '\\n' ' '", expect="a b backup.tar ")
 F("3.1-04", "Type the complete command that extracts the contents of photos.zip into the current directory.",
   ["unzip photos.zip", "unzip -o photos.zip", "unzip -q photos.zip", "unzip photos.zip -d ."],
-  "`unzip` extracts .zip archives and `zip` creates them, for example `zip -r photos.zip Pictures/`. Unlike tar, the zip format archives and compresses in one step, and it is the format Windows users expect.")
+  "`unzip` extracts .zip archives and `zip` creates them, for example `zip -r photos.zip Pictures/`. Unlike tar, the zip format archives and compresses in one step, and it is the format Windows users expect.",
+  lab=lab({"files": [{"path": "~/pics/a.jpg", "data": "a\n"}, {"path": "~/pics/b.jpg", "data": "b\n"}], "run": ["zip -rq photos.zip pics", "rm -r pics"]},
+          {"type": "all", "checks": [{"type": "exists", "path": HOME + "/pics/a.jpg"}, {"type": "exists", "path": HOME + "/pics/b.jpg"}]},
+          ["zip photos.zip", "unzip -l photos.zip", "gunzip photos.zip", "tar -xf photos.zip"]))
 S("3.1-05", "After running `gzip report.txt`, what is left in the directory?",
   ["✔Only report.txt.gz", "report.txt and report.txt.gz", "report.tar.gz", "report.zip"],
   "gzip, bzip2 and xz replace the original file with the compressed one by default. Use `-k` to keep the original, or `gzip -c report.txt > report.txt.gz` to write to standard output. gunzip reverses the process and removes the .gz file.",
@@ -39,7 +45,10 @@ S("3.1-08", "Which statement about archiving and compression is true?",
 F("3.1-09", "Type the complete command that creates site.zip containing the directory www and everything inside it.",
   ["zip -r site.zip www", "zip -r site.zip www/", "zip -r site www", "zip -r site www/", "zip -rq site.zip www", "zip -r -q site.zip www"],
   "`zip -r` recurses into directories. Without `-r`, zip adds only an empty directory entry for www. zip adds the .zip extension automatically if you leave it off.",
-  run="mkdir -p www/css; touch www/css/s.css; {A} >/dev/null; unzip -l site.zip | grep -c 'www/css/s.css'", expect="1")
+  run="mkdir -p www/css; touch www/css/s.css; {A} >/dev/null; unzip -l site.zip | grep -c 'www/css/s.css'", expect="1",
+  lab=lab({"files": [{"path": "~/www/index.html", "data": "<h1>hi</h1>\n"}, {"path": "~/www/css/s.css", "data": "h1{}\n"}]},
+          {"type": "archive", "path": HOME + "/site.zip", "format": "zip", "has": ["www/index.html", "www/css/s.css"]},
+          ["zip site.zip www", "tar -cf site.zip www", "zip -r www site.zip", "gzip -r www"]))
 S("3.1-10", "Which gzip option gives the best (but slowest) compression?",
   ["✔-9", "-1", "-c", "-d"],
   "Compression levels run from `-1` (fastest, least compression) to `-9` (slowest, smallest output). The default for gzip is 6. `-c` writes to standard output, and `-d` decompresses.")

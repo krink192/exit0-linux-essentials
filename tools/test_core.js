@@ -263,6 +263,33 @@ t("search finds questions and flashcards by every word", () => {
   assert.deepStrictEqual(C.search(bank, cards, "3.2-07").questions, ["3.2-07"]);
   assert(C.search(bank, cards, "the", 5).questions.length === 5 && C.search(bank, cards, "the", 5).more);
 });
+t("hands-on questions: well-formed, checked correctly, picked by exam weight", () => {
+  require(path.join(__dirname, "../docs/data/handson.js")); const H = window.LE_HANDSON;
+  assert(H.length >= 30); assert.strictEqual(new Set(H.map(x => x.id)).size, H.length);
+  for (const it of H) {
+    assert(bank.objectives[it.obj] && it.id.startsWith("ix-" + it.obj + "-"), it.id); assert(it.q && it.ex, it.id);
+    assert(!bank.byId[it.id], it.id + " must not collide with the exam bank");
+    if (it.type === "match") {
+      assert(it.left.length === it.key.length && it.key.every(k => k >= 0 && k < it.right.length), it.id);
+      assert(C.checkHandson(it, it.key).ok, it.id);
+      const wrong = it.key.slice(); wrong[0] = (wrong[0] + 1) % it.right.length;
+      const r = C.checkHandson(it, wrong); assert(!r.ok && r.right === r.total - 1 && r.rows[0] === false, it.id);
+      assert(!C.checkHandson(it, it.left.map(() => -1)).ok && !C.checkHandson(it, null).ok);
+      assert.deepStrictEqual(C.layoutHandson(it, C.rng(1)).choices.slice().sort((a, b) => a - b), it.right.map((_, i) => i));
+    } else {
+      assert.strictEqual(it.type, "order"); const key = it.items.map((_, i) => i);
+      assert(C.checkHandson(it, key).ok); assert(!C.checkHandson(it, key.slice().reverse()).ok, it.id);
+      for (let seed = 1; seed <= 40; seed++) { const o = C.layoutHandson(it, C.rng(seed)).order; assert(!C.checkHandson(it, o).ok, it.id + " starts out solved"); assert.deepStrictEqual(o.slice().sort((a, b) => a - b), key); }
+    }
+  }
+  for (let seed = 1; seed <= 100; seed++) { const p = C.pickHandson(bank, H, {}, 10, C.rng(seed)); assert.strictEqual(new Set(p.map(x => x.id)).size, 10); }
+  const stats = {}; H.forEach((it, i) => { if (i % 3) stats[it.id] = { seen: 1, right: i % 2, last: !!(i % 2) }; });
+  const fresh = H.filter(it => !stats[it.id]).map(it => it.id), p = C.pickHandson(bank, H, stats, 10, C.rng(3)).map(x => x.id);
+  assert(p.filter(id => fresh.includes(id)).length >= 6, "never-tried items come first");
+  assert.strictEqual(C.pickHandson(bank, H, {}, 500, C.rng(1)).length, H.length);
+  const st = C.freshState(); C.recordDrill(st, H[0].id, true, 1.7e12);
+  assert.strictEqual(C.migrate(JSON.parse(JSON.stringify(st))).cmdstats[H[0].id].seen, 1, "results are saved and survive a reload");
+});
 t("daily review: new questions cover the bank in step with the exam weights (never more than one question off)", () => {
   const c = {};
   C.newIds(bank, {}, bank.questions.length, C.rng(1)).forEach((id, i) => {

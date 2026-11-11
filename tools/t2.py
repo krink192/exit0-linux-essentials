@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from common import S, F
+from common import S, F, lab, HOME
 
 # ---------------- 2.1 Command Line Basics (18) ----------------
 S("2.1-01", "What does this command print?",
@@ -219,7 +219,10 @@ S("2.4-08", "A directory contains resolv.conf, .hidden.conf, conf.bak, nginx.con
 F("2.4-09", "Type the complete command that deletes the directory old_logs, in your current directory, and everything inside it.",
   ["rm -r old_logs", "rm -rf old_logs", "rm -R old_logs", "rm -fr old_logs", "rm -r old_logs/", "rm -rf old_logs/", "rm -Rf old_logs", "rm --recursive old_logs"],
   "`rm -r` removes a directory tree recursively, and adding `-f` suppresses prompts and errors, so double-check before using it. `rmdir` only removes empty directories.",
-  run="mkdir -p old_logs/sub; touch old_logs/sub/a; {A}; ls | wc -l", expect="0")
+  run="mkdir -p old_logs/sub; touch old_logs/sub/a; {A}; ls | wc -l", expect="0",
+  lab=lab({"files": [{"path": "~/old_logs/sub/a.log", "data": "old\n"}, {"path": "~/old_logs/app.log", "data": "old\n"}, {"path": "~/keep.txt", "data": "keep\n"}]},
+          {"type": "all", "checks": [{"type": "absent", "path": HOME + "/old_logs"}, {"type": "exists", "path": HOME + "/keep.txt"}]},
+          ["rmdir old_logs", "rm old_logs", "rm -r old_logs/*", "rm -r *"]))
 S("2.4-10", "What happens when you run `mv a.txt b.txt` and b.txt already exists?",
   ["✔b.txt is replaced by a.txt without any prompt", "mv refuses because b.txt already exists",
    "Both are kept, and the old b.txt becomes b.txt~", "The contents of a.txt are appended to b.txt"],

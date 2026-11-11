@@ -793,3 +793,19 @@ button.marked { background: var(--accent-soft); border-color: var(--accent); col
 .srow .o { font-family: var(--mono); font-size: .82rem; color: var(--muted); }
 .srow .stext { display: flex; flex-direction: column; gap: 2px; }
 @media (max-width: 640px) { .formgrid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .quick { grid-template-columns: 1fr; } }
+
+/* Hands-on: matching and ordering */
+.hq { font-size: 1.35rem; line-height: 1.35; }
+.hmatch, .horder { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.hrow { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); }
+.horder .hrow { grid-template-columns: minmax(0, 1fr) auto; counter-increment: step; }
+.horder { counter-reset: step; }
+.horder .hleft::before { content: counter(step) ". "; color: var(--muted); font-family: var(--mono); }
+.hrow.ok { border-color: var(--good); } .hrow.no { border-color: var(--bad); }
+.hpick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.hrow > * { min-width: 0; }
+.hpick select { flex: 1 1 0; width: 0; min-width: 0; max-width: 100%; text-overflow: ellipsis; padding: .55rem .6rem; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; }
+.hmove { display: flex; gap: 6px; } .hmove button { padding: .35rem .7rem; min-width: 40px; }
+.hmark { font-weight: 700; } .hmark.ok { color: var(--good); } .hmark.no { color: var(--bad); }
+.hfix { flex-basis: 100%; font-size: .88rem; color: var(--muted); } .hfix ol { margin: 6px 0 0 1.2rem; }
+@media (max-width: 640px) { .hmatch .hrow { grid-template-columns: 1fr; } }

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from common import S, F
+from common import S, F, lab, HOME
 
 # ---------------- 5.1 Basic Security and Identifying User Types (12) ----------------
 S("5.1-01", "What is the user ID (UID) of the root account?",
@@ -162,7 +162,10 @@ S("5.4-01", "`ls -ld /tmp` shows the output below. What does the final `t` mean?
 F("5.4-02", "Type the complete command that creates a symbolic link named latest in the current directory, pointing to /var/log/app.log.",
   ["ln -s /var/log/app.log latest", "ln -s /var/log/app.log ./latest", "ln --symbolic /var/log/app.log latest", "ln -sv /var/log/app.log latest"],
   "The syntax is `ln -s TARGET LINK_NAME`, with the target first. Without `-s`, ln creates a hard link, which cannot cross filesystems or point to a directory. An absolute target path keeps the link working if the link itself is moved.",
-  run="{A} >/dev/null; readlink latest", expect="/var/log/app.log")
+  run="{A} >/dev/null; readlink latest", expect="/var/log/app.log",
+  lab=lab({"files": [{"path": "/var/log/app.log", "data": "started\n", "owner": "root"}]},
+          {"type": "link", "path": HOME + "/latest", "target": "/var/log/app.log"},
+          ["ln /var/log/app.log latest", "ln -s latest /var/log/app.log", "cp /var/log/app.log latest", "ln -s app.log latest"]))
 S("5.4-03", "Which directory is meant for temporary files that should survive a reboot?",
   ["✔/var/tmp", "/tmp", "/run", "/dev/shm"],
   "Under the Filesystem Hierarchy Standard, /tmp may be (and often is) cleared at boot, while /var/tmp is preserved between reboots. /run holds runtime data such as PID files and is always cleared at boot. /dev/shm is memory-backed. Both /tmp and /var/tmp have the sticky bit set.",

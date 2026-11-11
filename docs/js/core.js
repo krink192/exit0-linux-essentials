@@ -51,8 +51,11 @@
   function extraSudo(q, a) {
     if (!q || q.type !== "fill" || a == null || isCorrect(q, a)) return false;
     const n = norm(a); if (!/^sudo /.test(n)) return false;
-    return q.accept.some(x => norm(x) === n.slice(5));
+    if (q.accept.some(x => norm(x) === n.slice(5))) return true;
+    const r = needlessSudo(q, a) ? runLab(q, n.slice(5)) : null; return !!(r && r.ok);
   }
+  /** A leading sudo on a question none of whose listed answers uses sudo: the task doesn't need root. */
+  function needlessSudo(q, a) { return /^sudo /.test(norm(a)) && !q.accept.some(x => /^sudo /.test(norm(x))); }
   function answered(q, a) { return q.type === "fill" ? norm(a) !== "" : Array.isArray(a) && a.length > 0; }
   // Type-the-command questions with a `lab` block ({ setup, check }) are also graded by running the answer in the lab
   // shell (shell.js) on a fresh simulated machine: any command that leaves the machine in the checked state counts,
@@ -81,7 +84,11 @@
     return res;
   }
   function isCorrect(q, a) {
-    if (q.type === "fill") { if (a == null) return false; if (q.accept.some(x => norm(x) === norm(a))) return true; const r = runLab(q, a); return !!(r && r.ok); }
+    if (q.type === "fill") {
+      if (a == null) return false; if (q.accept.some(x => norm(x) === norm(a))) return true;
+      if (needlessSudo(q, a)) return false;           // the "no extra sudo" rule holds for lab-checked questions too
+      const r = runLab(q, a); return !!(r && r.ok);
+    }
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
   }
@@ -263,6 +270,36 @@
   function buildQotd(bank, opts) {
     opts = opts || {};
     return newSession(bank, "qotd", "Question of the day", [questionOfDay(bank, opts.today)], { study: true, seed: opts.seed, now: opts.now });
+  }
+
+  // ------------------------------------------------------------- hands-on questions (matching and ordering)
+  // Not part of the exam bank: the real exam has no such questions. Results are kept like command drills
+  // (state.cmdstats[item.id]), so they are scheduled, synced and count toward the daily goal.
+  /** Check an answer. match: `ans[i]` is the index of the right-hand choice picked for left item i.
+   *  order: `ans` is the items' original indexes in the order the learner put them. Returns per-row results. */
+  function checkHandson(it, ans) {
+    ans = Array.isArray(ans) ? ans : [];
+    const rows = it.type === "match" ? it.left.map((_, i) => ans[i] === it.key[i]) : it.items.map((_, i) => ans[i] === i);
+    const right = rows.filter(Boolean).length;
+    return { rows, right, total: rows.length, ok: right === rows.length };
+  }
+  /** How an item is first shown: choices in a shuffled order; an ordering question never starts out solved. */
+  function layoutHandson(it, rand) {
+    rand = rand || Math.random;
+    if (it.type === "match") return { choices: shuffle(it.right.map((_, i) => i), rand) };
+    let order = shuffle(it.items.map((_, i) => i), rand);
+    if (order.every((v, i) => v === i)) order = order.slice(1).concat(order[0]);
+    return { order };
+  }
+  /** Pick `n` items by exam weight: never-tried first, then the ones missed last time, then the rest. */
+  function pickHandson(bank, items, stats, n, rand) {
+    stats = stats || {}; rand = rand || Math.random;
+    const rank = it => { const s = stats[it.id]; return !s || !s.seen ? 0 : s.last === false ? 1 : 2; };
+    const by = {}; for (const it of items) (by[it.obj] = by[it.obj] || []).push(it);
+    const objs = Object.keys(by);
+    const take = apportion(Math.min(n, items.length), objs.map(o => ({ key: o, weight: (bank.objectives[o] || {}).weight, cap: by[o].length })), rand);
+    const out = [].concat(...objs.map(o => shuffle(by[o], rand).sort((a, b) => rank(a) - rank(b)).slice(0, take[o])));
+    return shuffle(out, rand);
   }
 
   // ------------------------------------------------------------- bookmarks and notes
@@ -1127,7 +1164,7 @@
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
-           setMark, markOf, markedIds, search, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,

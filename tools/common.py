@@ -26,6 +26,15 @@ BANK = []
 MARK = "✔"
 
 
+HOME = "/home/student"
+
+
+def lab(setup, check, reject=()):
+    """A lab-shell check for a fill question: the machine to start from, what must be true afterwards, and
+    plausible wrong commands that CI proves are rejected."""
+    return {"setup": setup, "check": check, "reject": list(reject)}
+
+
 def S(id, q, opts, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, why=None, form=None):
     BANK.append(dict(id=id, o=id.rsplit("-", 1)[0], kind="choice", q=q, opts=opts, ex=ex, code=code,
                      run=run, expect=expect, user=user, level=level, hint=hint, why=why, form=form))

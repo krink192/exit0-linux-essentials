@@ -204,7 +204,7 @@
   // Four places to go, plus reference material and settings. Practice and Learn pages share a tab bar.
   const NAV = [["today", "Today", "target"], ["practice", "Practice", "test"], ["labs", "Labs", "terminal"], ["progress", "Progress", "progress"]];
   const NAV2 = [["learn", "Learn", "guide"], ["settings", "Settings", "settings"]];
-  const SECTION = { review: "practice", test: "practice", study: "practice", search: "practice", cards: "practice", guide: "learn", sheets: "learn", commands: "labs", sandbox: "labs", cmdrun: "labs" };
+  const SECTION = { review: "practice", test: "practice", study: "practice", search: "practice", handson: "practice", cards: "practice", guide: "learn", sheets: "learn", commands: "labs", sandbox: "labs", cmdrun: "labs" };
   const TABS = { practice: [["review", "Daily review"], ["test", "Exam"], ["study", "Study"], ["cards", "Flashcards"]], learn: [["guide", "Exam guide"], ["sheets", "Cheat sheets"]],
                  labs: [["labs", "Lessons"], ["commands", "Commands"], ["sandbox", "Sandbox"]] };
   const TAB_LABEL = { practice: "Practice", learn: "Learn", labs: "Labs" };
@@ -270,7 +270,7 @@
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
     if (h === "cmdrun" && !cp) return go("commands");
     const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
-                    guide: renderGuide, settings: renderSettings, search: renderSearch };
+                    guide: renderGuide, settings: renderSettings, search: renderSearch, handson: renderHandson };
     (pages[h] || renderToday)();
   }
   window.addEventListener("hashchange", render);
@@ -317,6 +317,7 @@
     $$("[data-start=levelup]", root).forEach(b => b.onclick = () => startBuilt(C.buildLevelUp(BANK, st)));
     $$("[data-start=qotd]", root).forEach(b => b.onclick = () => startBuilt(C.buildQotd(BANK)));
     $$("[data-start=marked]", root).forEach(b => b.onclick = startMarked);
+    $$("[data-start=handson]", root).forEach(b => b.onclick = () => startHandson());
     $$("[data-form]", root).forEach(b => b.onclick = () => startForm(b.dataset.form));
     $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
     $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
@@ -535,6 +536,7 @@
     const lv = sp.levels.length === 1 ? sp.levels[0] : 0;
     const byWeight = " Split like the real exam: heavier objectives get more questions.";
     const lad = C.ladder(st.tests), nMarked = C.markedIds(BANK, st).length;
+    const hoStats = HANDSON.map(it => st.cmdstats[it.id]).filter(x => x && x.seen), hoTried = hoStats.length, hoRight = hoStats.filter(x => x.last).length;
     const objNote = sp.objMode === "all" ? "Questions from every objective." + byWeight
       : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
       : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
@@ -550,6 +552,7 @@
           <span class="row"><button data-start="timed" data-min="5">5 min</button><button data-start="timed" data-min="10">10 min</button></span></div>
         <button class="qs" data-start="levelup" ${lad.finished ? "disabled" : ""}>${icon("trophy")}<b>Level Up</b><span>${lad.finished ? "All " + lad.steps + " steps done" : `Step ${lad.next} of ${lad.steps}: ${["", "Recall", "Apply", "Analyze"][lad.next <= 2 ? 1 : lad.next <= 5 ? 2 : 3]} questions. ${lad.size * lad.pass / 100} of ${lad.size} right moves you up`}</span></button>
         <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("flag")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
+        <button class="qs" data-start="handson" ${HANDSON.length ? "" : "disabled"}>${icon("terminal")}<b>Hands-on</b><span>Match and put in order: ${HANDSON.length} questions that make you do more than pick an answer${hoTried ? ` · ${hoRight} of ${hoTried} right last time` : ""}</span></button>
         <a class="qs" href="#search">${icon("guide")}<b>Search</b><span>Find any question or flashcard by a word or command</span></a>
       </div>
       <div class="card stack builder"><h2>Build a session</h2>
@@ -1836,6 +1839,60 @@
     wireStarts($("#page"));
     $$("[data-f]").forEach(b => b.onclick = () => { reviewFilter = b.dataset.f; const y = $("#review").offsetTop; renderResults(rec); scrollTo(0, y - 16); });
     wireMarks($("#page"), () => { const y = scrollY; renderResults(rec); scrollTo(0, y); });
+  }
+
+  // ================================================================== HANDS-ON (matching and ordering)
+  // Kept apart from the exam bank: the real exam has no such questions. Results are saved like command drills.
+  const HANDSON = window.LE_HANDSON || [];
+  let hs = null;      // { items, i, lay, ans, res, score: [ok per item] }
+  const plain = t => String(t).replace(/`/g, "").replace(/\*\*/g, "");
+  function startHandson(n) {
+    const items = C.pickHandson(BANK, HANDSON, st.cmdstats, n || 10);
+    if (!items.length) return toast("No hands-on questions yet");
+    hs = { items, i: 0, score: [] }; hsOpen(); if ((location.hash || "").slice(1) === "handson") renderHandson(); else go("handson");
+  }
+  function hsOpen() { const it = hs.items[hs.i]; hs.lay = C.layoutHandson(it); hs.res = null; hs.ans = it.type === "match" ? it.left.map(() => -1) : hs.lay.order.slice(); }
+  function renderHandson() {
+    if (!hs) return go("study");
+    if (hs.i >= hs.items.length) return renderHandsonDone();
+    const it = hs.items[hs.i], n = hs.items.length, res = hs.res, tick = ok => `<span class="hmark ${ok ? "ok" : "no"}">${ok ? "✓" : "✗"}</span>`;
+    let body;
+    if (it.type === "match") {
+      body = `<div class="hmatch">${it.left.map((l, i) => `<div class="hrow ${res ? (res.rows[i] ? "ok" : "no") : ""}"><span class="hleft">${rich(l)}</span>
+        <span class="hpick"><select data-pick="${i}" aria-label="Match for ${esc(plain(l))}" ${res ? "disabled" : ""}><option value="-1">Choose…</option>${hs.lay.choices.map(c =>
+          `<option value="${c}" ${hs.ans[i] === c ? "selected" : ""}>${esc(plain(it.right[c]))}</option>`).join("")}</select>${res ? tick(res.rows[i]) : ""}
+          ${res && !res.rows[i] ? `<span class="hfix">Answer: ${rich(it.right[it.key[i]])}</span>` : ""}</span></div>`).join("")}</div>`;
+    } else {
+      body = `<ol class="horder">${hs.ans.map((idx, pos) => `<li class="hrow ${res ? (res.rows[pos] ? "ok" : "no") : ""}" data-item="${idx}"><span class="hleft">${rich(it.items[idx])}</span>
+        <span class="hmove">${res ? tick(res.rows[pos]) : `<button class="ghost" data-up="${pos}" ${pos ? "" : "disabled"} aria-label="Move up">↑</button><button class="ghost" data-down="${pos}" ${pos < hs.ans.length - 1 ? "" : "disabled"} aria-label="Move down">↓</button>`}</span></li>`).join("")}</ol>
+        ${res && !res.ok ? `<div class="hfix"><b>Correct order</b><ol>${it.items.map(x => `<li>${rich(x)}</li>`).join("")}</ol></div>` : ""}`;
+    }
+    const ready = it.type !== "match" || hs.ans.every(a => a >= 0);
+    shell("study", `<div class="page-head"><span class="eyebrow">Hands-on · ${it.type === "match" ? "match each item" : "put in order"} · ${it.obj} ${esc(OBJ[it.obj].name)}</span>
+        <h1 class="hq">${rich(it.q)}</h1><p class="small muted">Question ${hs.i + 1} of ${n}. Practice only: the real exam is multiple choice and fill-in.</p></div>
+      <div class="card stack">${body}
+        ${res ? `<div class="feedback ${res.ok ? "ok" : "no"}"><h3>${res.ok ? "Correct" : `${res.right} of ${res.total} right`}</h3><div>${rich(it.ex)}</div>
+          <div class="studyref"><a href="${OBJ[it.obj].lesson}" target="_blank" rel="noopener">${icon("guide")}LPI lesson ${it.obj}: ${esc(OBJ[it.obj].name)}</a></div></div>` : ""}
+        <div class="nav-row"><button class="ghost" id="hsQuit">End session</button>
+          ${res ? `<button class="primary" id="hsNext">${hs.i < n - 1 ? "Next" : "Finish"}</button>` : `<button class="primary" id="hsCheck" ${ready ? "" : "disabled"}>Check answer</button>`}</div></div>`);
+    const redraw = () => { const y = scrollY; renderHandson(); scrollTo(0, y); };
+    $$("[data-pick]").forEach(sel => sel.onchange = () => { hs.ans[+sel.dataset.pick] = +sel.value; const b = $("#hsCheck"); if (b) b.disabled = !hs.ans.every(a => a >= 0); });
+    const swap = (a, b) => { const t = hs.ans[a]; hs.ans[a] = hs.ans[b]; hs.ans[b] = t; redraw(); const f = $(`[data-${b < a ? "up" : "down"}="${b}"]:not([disabled])`) || $(`[data-up="${b}"]:not([disabled])`) || $(`[data-down="${b}"]`); if (f) f.focus(); };
+    $$("[data-up]").forEach(b => b.onclick = () => swap(+b.dataset.up, +b.dataset.up - 1));
+    $$("[data-down]").forEach(b => b.onclick = () => swap(+b.dataset.down, +b.dataset.down + 1));
+    const chk = $("#hsCheck"); if (chk) chk.onclick = () => { hs.res = C.checkHandson(it, hs.ans); hs.score[hs.i] = hs.res.ok; C.recordDrill(st, it.id, hs.res.ok); save(); celebrate(); redraw(); };
+    const nx = $("#hsNext"); if (nx) nx.onclick = () => { hs.i++; if (hs.i < n) hsOpen(); renderHandson(); scrollTo(0, 0); };
+    $("#hsQuit").onclick = () => { if (hs.score.length) { hs.items = hs.items.slice(0, hs.score.length); hs.i = hs.items.length; renderHandson(); } else { hs = null; go("study"); } };
+  }
+  function renderHandsonDone() {
+    const right = hs.score.filter(Boolean).length, n = hs.score.length, missed = hs.items.filter((_, i) => i < n && !hs.score[i]);
+    shell("study", `<div class="page-head"><span class="eyebrow">Hands-on · results</span><h1>${right} of ${n} right</h1>
+        <p class="lead">${right === n ? "Every one right." : "The ones you missed come back first next time."}</p></div>
+      ${missed.length ? `<div class="card stack"><h2>To look at again</h2><div class="slist">${missed.map(it => `<div class="srow"><span class="o">${it.obj}</span><span class="stext">${rich(it.q)}
+        <a class="small" href="${OBJ[it.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${it.obj}</a></span></div>`).join("")}</div></div>` : ""}
+      <div class="row"><button class="primary" id="hsAgain">Ten more</button><button data-go="study">Back to Study</button></div>`);
+    $("#hsAgain").onclick = () => startHandson();
+    wireStarts($("#page"));
   }
 
   // ================================================================== SEARCH

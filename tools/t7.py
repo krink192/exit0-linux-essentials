@@ -6,14 +6,9 @@ The aim is depth, not more of the same: scenarios to diagnose, output to read, a
 that the lab shell checks by running them (lab=...), so any command that does the job counts. Objectives that
 had the least Analyze-level coverage (1.1, 1.4, 4.1, 4.2, 4.3) get scenario questions here.
 Hints and "why that's wrong" notes are inline (hint=, why=). Shell checks (run/expect) run in real Bash via verify.py."""
-from common import S, F
+from common import S, F, lab, HOME
 
 J = "J"
-HOME = "/home/student"
-
-
-def lab(setup, check, reject=()):
-    return {"setup": setup, "check": check, "reject": list(reject)}
 
 
 # ------------------------------------------------------------------------------------------ 1.1 (2)

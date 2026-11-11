@@ -27,6 +27,9 @@ F("2.3", "Type the command that prints the current working directory.",
   correct option. In `F` questions, `{A}` is replaced by each accepted answer in turn.
 - Each objective must have **10 × its LPI weight** questions (ten 40-question sets), so add questions in groups
   that keep that true, or replace existing ones.
+- Every question has a permanent ID as its first argument (`"3.2-07"`: objective, then a number). Saved progress,
+  hints, "why not" notes and conflict sets refer to it, so never renumber or reuse an ID. A new question takes the
+  next free number of its objective.
 - Write the wrong options so they are plausible, and keep them about as long as the correct one.
 - Every question needs a hint in `tools/hints.py`, keyed by its ID (for example `"3.2-07"`). A hint points to the
   right idea without giving the answer away. The build fails without one.

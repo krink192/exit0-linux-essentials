@@ -10,6 +10,10 @@ run/expect: optional shell check used by verify.py.
   - expect is a str  -> stdout must equal it.
   - for fill questions, "{A}" in run is replaced by every accepted answer in turn.
 
+The first argument is the question's ID: "<objective>-<number>", for example "3.2-07". IDs are permanent. Saved
+progress, hints.py, whys.py and the conflict sets in build.py all refer to questions by ID, so never renumber or
+reuse one: a new question takes the next free number of its objective, wherever it sits in the files.
+
 Optional extras (used by the targeted set in t7.py, which is fixed to form J):
   hint / why   the hint and the "why that's wrong" notes inline, instead of in hints.py / whys.py
   lab          fill questions only: {"setup": ..., "check": ..., "reject": [...]} in the lab-shell format
@@ -22,11 +26,11 @@ BANK = []
 MARK = "✔"
 
 
-def S(o, q, opts, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, why=None, form=None):
-    BANK.append(dict(o=o, kind="choice", q=q, opts=opts, ex=ex, code=code,
+def S(id, q, opts, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, why=None, form=None):
+    BANK.append(dict(id=id, o=id.rsplit("-", 1)[0], kind="choice", q=q, opts=opts, ex=ex, code=code,
                      run=run, expect=expect, user=user, level=level, hint=hint, why=why, form=form))
 
 
-def F(o, q, acc, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, lab=None, form=None):
-    BANK.append(dict(o=o, kind="fill", q=q, acc=acc, ex=ex, code=code,
+def F(id, q, acc, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, lab=None, form=None):
+    BANK.append(dict(id=id, o=id.rsplit("-", 1)[0], kind="fill", q=q, acc=acc, ex=ex, code=code,
                      run=run, expect=expect, user=user, level=level, hint=hint, lab=lab, form=form))

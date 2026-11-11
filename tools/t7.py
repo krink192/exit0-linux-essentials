@@ -17,7 +17,7 @@ def lab(setup, check, reject=()):
 
 
 # ------------------------------------------------------------------------------------------ 1.1 (2)
-S("1.1", "A vendor ships its tool only as `tool-2.4-1.x86_64.rpm`. On which systems can it be installed with the distribution's own package tools? (Choose TWO.)",
+S("1.1-19", "A vendor ships its tool only as `tool-2.4-1.x86_64.rpm`. On which systems can it be installed with the distribution's own package tools? (Choose TWO.)",
   ["✔CentOS", "✔openSUSE", "Debian", "Ubuntu"],
   "RPM is the package format of the Red Hat family (Red Hat Enterprise Linux, CentOS, Fedora) and also of SUSE (openSUSE, SUSE Linux Enterprise), "
   "even though SUSE isn't part of the Red Hat family. Debian and its derivatives such as Ubuntu use .deb packages with dpkg and apt.",
@@ -25,7 +25,7 @@ S("1.1", "A vendor ships its tool only as `tool-2.4-1.x86_64.rpm`. On which syst
   why={"Debian": "Debian uses .deb packages (dpkg, apt), not RPM.",
        "Ubuntu": "Ubuntu is based on Debian and uses .deb packages."}, level=3, form=J)
 
-S("1.1", "Why can't you install the usual 64-bit PC (x86-64) edition of a distribution on a Raspberry Pi?",
+S("1.1-20", "Why can't you install the usual 64-bit PC (x86-64) edition of a distribution on a Raspberry Pi?",
   ["✔The Pi has an ARM processor, so it needs an ARM build such as Raspbian",
    "The Pi has no USB ports, so it can't boot from any installer media",
    "Linux can't run on a computer that has no internal hard disk",
@@ -39,7 +39,7 @@ S("1.1", "Why can't you install the usual 64-bit PC (x86-64) edition of a distri
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 1.2 (2)
-S("1.2", "On Ubuntu, `sudo dpkg -i app.deb` stops with \"dependency problems\". What's the usual fix?",
+S("1.2-19", "On Ubuntu, `sudo dpkg -i app.deb` stops with \"dependency problems\". What's the usual fix?",
   ["✔Run `sudo apt-get install -f` so apt fetches the missing packages",
    "Install the same file again with `sudo rpm -i app.deb` instead",
    "Run `sudo yum install app.deb` to resolve the dependencies",
@@ -52,7 +52,7 @@ S("1.2", "On Ubuntu, `sudo dpkg -i app.deb` stops with \"dependency problems\". 
        "Delete the /var/lib/dpkg directory and then run dpkg -i once more": "That deletes the database of installed packages and would break the system."},
   level=3, form=J)
 
-S("1.2", "A designer needs to retouch photos and a clerk needs an email client with a calendar, both with open source software on Linux. Which pair fits?",
+S("1.2-20", "A designer needs to retouch photos and a clerk needs an email client with a calendar, both with open source software on Linux. Which pair fits?",
   ["✔GIMP and Thunderbird", "LibreOffice Impress and Firefox", "Apache HTTPD and MariaDB", "Nextcloud and Samba"],
   "GIMP is the open source raster image editor. Thunderbird is Mozilla's email client, with a built-in calendar.",
   hint="One image editor, one mail program.",
@@ -62,7 +62,7 @@ S("1.2", "A designer needs to retouch photos and a clerk needs an email client w
   level=2, form=J)
 
 # ------------------------------------------------------------------------------------------ 1.3 (1)
-S("1.3", "A photographer wants others to share and adapt her photos as long as they credit her and don't use them commercially. "
+S("1.3-10", "A photographer wants others to share and adapt her photos as long as they credit her and don't use them commercially. "
   "She doesn't mind how adaptations are licensed. Which license fits best?",
   ["✔CC BY-NC (Attribution-NonCommercial)", "CC BY-SA (Attribution-ShareAlike)", "CC0 (Creative Commons public domain dedication)", "GNU GPL version 3"],
   "Creative Commons licenses combine conditions: BY requires attribution, NC forbids commercial use, SA requires adaptations to use the same "
@@ -74,7 +74,7 @@ S("1.3", "A photographer wants others to share and adapt her photos as long as t
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 1.4 (2)
-S("1.4", "A user's old laptop with 2 GB of RAM feels slow in the GNOME desktop. They still want a full graphical desktop. What's the best change?",
+S("1.4-19", "A user's old laptop with 2 GB of RAM feels slow in the GNOME desktop. They still want a full graphical desktop. What's the best change?",
   ["✔Switch to a lightweight desktop environment such as Xfce",
    "Remove the X Window System to free memory",
    "Switch to KDE Plasma, since it always uses less memory than GNOME",
@@ -87,7 +87,7 @@ S("1.4", "A user's old laptop with 2 GB of RAM feels slow in the GNOME desktop. 
        "Work only in a text console from now on": "That gives up the graphical desktop the user wants to keep."},
   level=3, form=J)
 
-S("1.4", "A small business wants web-based email, calendars and office documents. It doesn't want to install, run or update any of the software itself. Which cloud service model is this?",
+S("1.4-20", "A small business wants web-based email, calendars and office documents. It doesn't want to install, run or update any of the software itself. Which cloud service model is this?",
   ["✔Software as a Service (SaaS)", "Infrastructure as a Service (IaaS)", "Platform as a Service (PaaS)", "Virtualization on its own server"],
   "In SaaS the provider runs the whole application and users just use it, usually in a browser. With IaaS you rent virtual machines and manage "
   "their operating systems; with PaaS you deploy your own code and the provider runs the platform underneath.",
@@ -98,7 +98,7 @@ S("1.4", "A small business wants web-based email, calendars and office documents
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 2.1 (3)
-S("2.1", "What does `ls` show after these commands, run in an empty directory?",
+S("2.1-28", "What does `ls` show after these commands, run in an empty directory?",
   ["✔Two files: `my` and `notes.txt`", "One file: `my notes.txt`", "One file: `$file`", "Nothing, because touch fails without quotes"],
   "Without quotes, the shell splits the variable's value at the space, so touch gets two arguments and creates two files. "
   "`touch \"$file\"` keeps the value together as one name.",
@@ -110,7 +110,7 @@ S("2.1", "What does `ls` show after these commands, run in an empty directory?",
        "Nothing, because touch fails without quotes": "touch works, it just receives two names instead of one."},
   level=3, form=J)
 
-S("2.1", "What does the `bash -c` command print?",
+S("2.1-29", "What does the `bash -c` command print?",
   ["✔`[]`, because city wasn't exported to the child shell", "`[Paris]`, because shell variables are visible to every program",
    "`[$city]`, because the variable isn't expanded inside quotes", "An error, because city is only defined in the parent"],
   "A variable set without `export` is a shell variable: only the current shell has it. A program or child shell started from it gets only the "
@@ -123,7 +123,7 @@ S("2.1", "What does the `bash -c` command print?",
        "An error, because city is only defined in the parent": "An undefined variable expands to nothing; it isn't an error."},
   level=3, form=J)
 
-F("2.1", "Type a command that adds the directory /opt/tools/bin to the END of your search path, keeping every directory already in it.",
+F("2.1-30", "Type a command that adds the directory /opt/tools/bin to the END of your search path, keeping every directory already in it.",
   ["PATH=$PATH:/opt/tools/bin", "export PATH=$PATH:/opt/tools/bin", 'PATH="$PATH:/opt/tools/bin"', 'export PATH="$PATH:/opt/tools/bin"'],
   "`$PATH` expands to the current list, and a colon separates directories. PATH is already exported, so plain `PATH=...` changes the "
   "environment of programs you start too. Putting the new directory first instead (`/opt/tools/bin:$PATH`) would let it override system commands.",
@@ -133,7 +133,7 @@ F("2.1", "Type a command that adds the directory /opt/tools/bin to the END of yo
   level=2, form=J)
 
 # ------------------------------------------------------------------------------------------ 2.2 (2)
-S("2.2", "Based on this excerpt from the tar man page, which commands extract backup.tar into /srv? (Choose TWO.)",
+S("2.2-19", "Based on this excerpt from the tar man page, which commands extract backup.tar into /srv? (Choose TWO.)",
   ["✔`tar -xf backup.tar -C /srv`", "✔`tar -xf backup.tar --directory=/srv`", "`tar -xf backup.tar /srv`", "`tar -xf backup.tar -directory /srv`"],
   "The OPTIONS section lists a short form and a long form for the same option. `-C DIR` and `--directory=DIR` are equivalent. "
   "A plain path after the archive name means \"extract only this member\", and long options need two dashes.",
@@ -143,7 +143,7 @@ S("2.2", "Based on this excerpt from the tar man page, which commands extract ba
        "`tar -xf backup.tar -directory /srv`": "Long options take two dashes; one dash would be read as the short options -d -i -r ..."},
   level=3, form=J)
 
-S("2.2", "You're reading `man ls`, which opens in the pager less. How do you find each place where the word `sort` appears?",
+S("2.2-20", "You're reading `man ls`, which opens in the pager less. How do you find each place where the word `sort` appears?",
   ["✔Type `/sort`, press Enter, then `n` for each next match", "Press `Ctrl+F`, type `sort` and press Enter to search",
    "Type `:find sort` and press Enter to jump to each match", "Quit and run `man ls sort`"],
   "In less (and so in man), `/pattern` searches forward, `?pattern` searches backward, `n` repeats the search and `N` goes the other way. "
@@ -155,7 +155,7 @@ S("2.2", "You're reading `man ls`, which opens in the pager less. How do you fin
   level=2, form=J)
 
 # ------------------------------------------------------------------------------------------ 2.3 (2)
-S("2.3", "A directory contains the hidden file `.bashrc`, the file `notes.txt` and the subdirectory `old`. What does `ls -a` list?",
+S("2.3-19", "A directory contains the hidden file `.bashrc`, the file `notes.txt` and the subdirectory `old`. What does `ls -a` list?",
   ["✔`.  ..  .bashrc  notes.txt  old`", "`.bashrc  notes.txt  old`", "`notes.txt  old`", "`.  ..  notes.txt  old`"],
   "`-a` (all) shows hidden entries, whose names start with a dot, including `.` (this directory) and `..` (the parent). "
   "`-A` (almost all) shows hidden files but leaves out `.` and `..`, and plain `ls` shows neither.",
@@ -166,7 +166,7 @@ S("2.3", "A directory contains the hidden file `.bashrc`, the file `notes.txt` a
        "`.  ..  notes.txt  old`": "-a shows all hidden files, so .bashrc is listed too."},
   level=3, form=J)
 
-S("2.3", "`ls -l docs` prints only `total 0`. What does that tell you?",
+S("2.3-20", "`ls -l docs` prints only `total 0`. What does that tell you?",
   ["✔docs is an empty directory; ls -l lists what's inside it", "docs is a regular file that's empty (0 bytes long)",
    "You don't have permission to read the contents of docs", "docs doesn't exist, so ls has nothing to show"],
   "Given a directory, ls lists its contents; `total` is the space used by them, and an empty directory has none. "
@@ -179,7 +179,7 @@ S("2.3", "`ls -l docs` prints only `total 0`. What does that tell you?",
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 2.4 (2)
-F("2.4", "Using a single command, copy every file whose name ends in `.conf` from /etc/app into the existing directory backup in your home directory. Type the full command.",
+F("2.4-19", "Using a single command, copy every file whose name ends in `.conf` from /etc/app into the existing directory backup in your home directory. Type the full command.",
   ["cp /etc/app/*.conf ~/backup/", "cp /etc/app/*.conf ~/backup", "cp /etc/app/*.conf /home/student/backup/", "cp /etc/app/*.conf /home/student/backup"],
   "The shell expands `*.conf` to every matching name before cp runs. With more than one source, cp's last argument must be a directory, "
   "and the copies go inside it.",
@@ -191,7 +191,7 @@ F("2.4", "Using a single command, copy every file whose name ends in `.conf` fro
           ["cp /etc/app/* ~/backup/", "cp /etc/app/.conf ~/backup/", "cp /etc/app/main.conf ~/backup/"]),
   level=2, form=J)
 
-S("2.4", "In a directory holding only the files a.txt, b.txt and c.txt, what happens when you run `mv a.txt b.txt c.txt`?",
+S("2.4-20", "In a directory holding only the files a.txt, b.txt and c.txt, what happens when you run `mv a.txt b.txt c.txt`?",
   ["✔An error, since the last argument must be a directory; nothing moves",
    "a.txt and b.txt are joined together into a single file named c.txt",
    "b.txt replaces c.txt and a.txt stays where it is, so two files remain",
@@ -206,7 +206,7 @@ S("2.4", "In a directory holding only the files a.txt, b.txt and c.txt, what hap
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 3.1 (2)
-F("3.1", "Create a bzip2-compressed tar archive named logs.tar.bz2 that contains the directory logs. Type the full command.",
+F("3.1-19", "Create a bzip2-compressed tar archive named logs.tar.bz2 that contains the directory logs. Type the full command.",
   ["tar -cjf logs.tar.bz2 logs", "tar cjf logs.tar.bz2 logs", "tar -cjvf logs.tar.bz2 logs", "tar -cjf logs.tar.bz2 logs/"],
   "`-c` creates, `-j` compresses with bzip2 and `-f` names the archive file, so `f` comes right before the name. "
   "`-z` would use gzip and `-J` xz.",
@@ -216,7 +216,7 @@ F("3.1", "Create a bzip2-compressed tar archive named logs.tar.bz2 that contains
           ["tar -czf logs.tar.bz2 logs", "tar -cf logs.tar.bz2 logs", "bzip2 logs"]),
   level=2, form=J)
 
-S("3.1", "After `tar -cf docs.tar docs`, ls shows that docs.tar is slightly larger than all the files in docs added together. Why?",
+S("3.1-20", "After `tar -cf docs.tar docs`, ls shows that docs.tar is slightly larger than all the files in docs added together. Why?",
   ["✔tar adds headers to bundle files and only compresses with -z, -j or -J",
    "tar always stores two copies of each file in case one is damaged",
    "The archive is corrupt, so it has to be deleted and created again",
@@ -230,7 +230,7 @@ S("3.1", "After `tar -cf docs.tar docs`, ls shows that docs.tar is slightly larg
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 3.2 (3)
-S("3.2", "users.csv contains the four lines shown. What does the command print?",
+S("3.2-28", "users.csv contains the four lines shown. What does the command print?",
   ["✔dev", "ops", "dept", "adam"],
   "`tail -n +2` prints from line 2 on, skipping the header. `cut -d, -f2` keeps the second comma-separated field (dept), `sort` puts "
   "dev, dev, ops in order, and `head -n 1` keeps the first line: dev.",
@@ -242,7 +242,7 @@ S("3.2", "users.csv contains the four lines shown. What does the command print?"
        "adam": "cut keeps field 2, the department, not the name."},
   level=3, form=J)
 
-F("3.2", "Save every line of /var/log/app.log that contains ERROR into the file errors.txt in your current directory, replacing any old errors.txt. Type the full command.",
+F("3.2-29", "Save every line of /var/log/app.log that contains ERROR into the file errors.txt in your current directory, replacing any old errors.txt. Type the full command.",
   ["grep ERROR /var/log/app.log > errors.txt", "grep 'ERROR' /var/log/app.log > errors.txt", 'grep "ERROR" /var/log/app.log > errors.txt'],
   "grep prints the matching lines and `>` redirects standard output into a file, creating it or replacing its contents. "
   "`>>` would append instead, and `cat file | grep ERROR > errors.txt` works too, with one extra process.",
@@ -253,7 +253,7 @@ F("3.2", "Save every line of /var/log/app.log that contains ERROR into the file 
            "grep -c ERROR /var/log/app.log > errors.txt"]),
   level=2, form=J)
 
-S("3.2", "notes.txt has two lines. What is the difference between the two outputs?",
+S("3.2-30", "notes.txt has two lines. What is the difference between the two outputs?",
   ["✔The second shows just the number: wc reads stdin and never sees the name",
    "The second counts the words in the file instead of the lines",
    "The second shows 0, because wc can't read anything from a redirection",
@@ -269,7 +269,7 @@ S("3.2", "notes.txt has two lines. What is the difference between the two output
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 3.3 (4)
-S("3.3", "check.sh contains the lines shown. What does `./check.sh /no/such/file; echo $?` print?",
+S("3.3-37", "check.sh contains the lines shown. What does `./check.sh /no/such/file; echo $?` print?",
   ["✔2", "0", "1", "ok, then 0"],
   "`[ -f \"$1\" ]` fails because the file doesn't exist, so the command after `||` runs: `exit 2` ends the script with status 2. "
   "`echo $?` prints the status of the last command, the script.",
@@ -281,7 +281,7 @@ S("3.3", "check.sh contains the lines shown. What does `./check.sh /no/such/file
        "ok, then 0": "`exit 2` stops the script before the echo line."},
   level=3, form=J)
 
-S("3.3", "What does this script print?",
+S("3.3-38", "What does this script print?",
   ["✔found, then 0", "found, then 1", "missing, then 1", "found, and nothing else"],
   "`grep -q` prints nothing but exits 0 when it finds a match; root is always in /etc/passwd, so `then` runs. The exit status of an if "
   "statement is that of the last command it ran (`echo found`, which succeeds), so `$?` is 0.",
@@ -293,7 +293,7 @@ S("3.3", "What does this script print?",
        "found, and nothing else": "The last line echoes $? after the if statement."},
   level=3, form=J)
 
-F("3.3", "Make the script deploy.sh in the current directory executable for its owner only, without changing any other permission. Type the full command.",
+F("3.3-39", "Make the script deploy.sh in the current directory executable for its owner only, without changing any other permission. Type the full command.",
   ["chmod u+x deploy.sh", "chmod 744 deploy.sh"],
   "`u+x` adds execute for the user (owner) and leaves group and other alone, so `rw-r--r--` becomes `rwxr--r--` (744). "
   "`chmod +x` would add execute for everyone.",
@@ -303,7 +303,7 @@ F("3.3", "Make the script deploy.sh in the current directory executable for its 
           ["chmod +x deploy.sh", "chmod 755 deploy.sh", "chmod a+x deploy.sh", "chmod 700 deploy.sh"]),
   level=2, form=J)
 
-S("3.3", "greet.sh contains the lines shown. How many lines does `./greet.sh Ana \"Bo Li\"` print?",
+S("3.3-40", "greet.sh contains the lines shown. How many lines does `./greet.sh Ana \"Bo Li\"` print?",
   ["✔2", "3", "1", "0"],
   "`\"$@\"` expands to every argument as a separate word, keeping each one exactly as given. \"Bo Li\" was quoted on the command line, so it "
   "is one argument: the loop runs twice and prints `Hello Ana` and `Hello Bo Li`. An unquoted `$@` would split it into Bo and Li.",
@@ -316,7 +316,7 @@ S("3.3", "greet.sh contains the lines shown. How many lines does `./greet.sh Ana
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 4.1 (1)
-S("4.1", "A company's desktops must get security fixes for years without surprise feature changes, and its accounting software is certified only for specific distribution versions. Which kind of release fits?",
+S("4.1-10", "A company's desktops must get security fixes for years without surprise feature changes, and its accounting software is certified only for specific distribution versions. Which kind of release fits?",
   ["✔An enterprise or long-term support (LTS) release", "A rolling release that always ships the newest versions",
    "The current beta, so fixes arrive sooner", "Any release, as long as updates are switched off"],
   "LTS and enterprise releases keep the same versions for years and only receive fixes, which is what vendors certify against. "
@@ -328,7 +328,7 @@ S("4.1", "A company's desktops must get security fixes for years without surpris
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 4.2 (2)
-S("4.2", "A USB stick is plugged in. The kernel names the disk sdb and finds one partition on it. Which device file is the partition you would mount?",
+S("4.2-19", "A USB stick is plugged in. The kernel names the disk sdb and finds one partition on it. Which device file is the partition you would mount?",
   ["✔/dev/sdb1", "/dev/sdb", "/dev/usb1", "/sys/block/sdb"],
   "Disks appear as /dev/sda, /dev/sdb, ... and their partitions add a number: /dev/sdb1 is the first partition on the second disk. "
   "/dev/sdb is the whole disk, and /sys holds information about devices rather than device files to mount.",
@@ -338,7 +338,7 @@ S("4.2", "A USB stick is plugged in. The kernel names the disk sdb and finds one
        "/sys/block/sdb": "/sys shows device information from the kernel; you mount the device file in /dev."},
   level=2, form=J)
 
-S("4.2", "A network card works in Windows but doesn't show up after installing Linux on the same computer. The hardware is fine. What is most likely missing?",
+S("4.2-20", "A network card works in Windows but doesn't show up after installing Linux on the same computer. The hardware is fine. What is most likely missing?",
   ["✔A Linux driver (kernel module) for that card", "A swap partition big enough for the card's buffers", "The X Window System, which detects network hardware", "A newer version of the bash shell"],
   "Hardware works only when the kernel has a driver for it. Most drivers ship with the kernel as modules, but very new or unusual hardware may "
   "need a newer kernel or a driver package (sometimes firmware) from the distribution or the vendor.",
@@ -349,7 +349,7 @@ S("4.2", "A network card works in Windows but doesn't show up after installing L
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 4.3 (3)
-S("4.3", "What can you conclude from these kernel messages, which appeared right after a USB drive was plugged in?",
+S("4.3-28", "What can you conclude from these kernel messages, which appeared right after a USB drive was plugged in?",
   ["✔A 32 GB USB disk was detected as /dev/sdc, with two partitions",
    "The drive was mounted automatically on /media/sdc by the kernel",
    "The drive failed its checks and the kernel disconnected it again",
@@ -364,7 +364,7 @@ S("4.3", "What can you conclude from these kernel messages, which appeared right
        "This is the fourth USB disk, so it's named /dev/sd4": "\"device number 4\" is the USB bus number; the disk is named sdc."},
   level=3, form=J)
 
-S("4.3", "An administrator wants to change the SSH server's settings, and then find out why it failed to start yesterday. Where should they look?",
+S("4.3-29", "An administrator wants to change the SSH server's settings, and then find out why it failed to start yesterday. Where should they look?",
   ["✔/etc for the settings, then /var/log for the logs", "/var/log for the settings, then /etc for the logs",
    "/proc for the settings, then /boot for the logs", "/usr/bin for the settings, then /dev for the logs"],
   "System-wide configuration lives in /etc (for SSH, /etc/ssh/sshd_config). Logs are written under /var/log (such as /var/log/auth.log or "
@@ -375,7 +375,7 @@ S("4.3", "An administrator wants to change the SSH server's settings, and then f
        "/usr/bin for the settings, then /dev for the logs": "/usr/bin holds programs and /dev holds device files."},
   level=2, form=J)
 
-S("4.3", "Which statements about this output are true? (Choose TWO.)",
+S("4.3-30", "Which statements about this output are true? (Choose TWO.)",
   ["✔ana is logged in remotely from 192.168.1.20", "✔root's session ended because the system went down without a clean shutdown",
    "ana is logged in at the physical console", "root is still logged in on tty1"],
   "last reads the login records in /var/log/wtmp. A host address in the third column means a remote (network) login, and `pts/0` is a "
@@ -388,7 +388,7 @@ S("4.3", "Which statements about this output are true? (Choose TWO.)",
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 4.4 (2)
-S("4.4", "`ping 8.8.8.8` gets replies, but `ping example.com` says \"Temporary failure in name resolution\". Which file do you check first?",
+S("4.4-19", "`ping 8.8.8.8` gets replies, but `ping example.com` says \"Temporary failure in name resolution\". Which file do you check first?",
   ["✔/etc/resolv.conf", "/etc/hostname", "/etc/passwd", "/etc/network/interfaces"],
   "Reaching an address proves the network and the gateway work; failing on a name points at DNS. /etc/resolv.conf lists the name servers "
   "(`nameserver` lines) the resolver asks. /etc/hosts is the other place names are looked up.",
@@ -398,7 +398,7 @@ S("4.4", "`ping 8.8.8.8` gets replies, but `ping example.com` says \"Temporary f
        "/etc/network/interfaces": "That configures network interfaces, and the network already works: 8.8.8.8 answers."},
   level=3, form=J)
 
-S("4.4", "SSH and the website on this server work from other computers, but a remote client can't reach the database on port 3306. Based on the output, why?",
+S("4.4-20", "SSH and the website on this server work from other computers, but a remote client can't reach the database on port 3306. Based on the output, why?",
   ["✔The database listens only on 127.0.0.1, so only local clients can connect",
    "Nothing on this server is listening on TCP port 3306 at the moment",
    "The database uses UDP, and ss -tln never shows UDP sockets at all",
@@ -414,7 +414,7 @@ S("4.4", "SSH and the website on this server work from other computers, but a re
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 5.1 (2)
-S("5.1", "Which accounts in this part of /etc/passwd belong to people rather than to services? (Choose TWO.)",
+S("5.1-19", "Which accounts in this part of /etc/passwd belong to people rather than to services? (Choose TWO.)",
   ["✔ana", "✔bob", "root", "www-data"],
   "On most distributions regular users get UIDs from 1000 up and a real login shell. root (UID 0) is the administrator account, and system "
   "accounts such as www-data and sshd have low UIDs and a shell like /usr/sbin/nologin, so nobody can log in as them.",
@@ -425,7 +425,7 @@ S("5.1", "Which accounts in this part of /etc/passwd belong to people rather tha
        "www-data": "UID 33 and the nologin shell mark a system account used by the web server."},
   level=3, form=J)
 
-S("5.1", "On an Ubuntu system, which statements follow from this output? (Choose TWO.)",
+S("5.1-20", "On an Ubuntu system, which statements follow from this output? (Choose TWO.)",
   ["✔ana may run commands as root with sudo", "✔ana can read many log files in /var/log through the adm group",
    "ana is the root user", "ana's primary group is sudo"],
   "id shows the user, the primary group (gid) and all groups. On Debian and Ubuntu, members of the sudo group may use sudo, and the adm "
@@ -437,7 +437,7 @@ S("5.1", "On an Ubuntu system, which statements follow from this output? (Choose
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 5.2 (2)
-F("5.2", "Create the group auditors and then add the existing user kim to it, keeping her current groups. Do both in one line, running the second command only if the first succeeds.",
+F("5.2-19", "Create the group auditors and then add the existing user kim to it, keeping her current groups. Do both in one line, running the second command only if the first succeeds.",
   ["sudo groupadd auditors && sudo usermod -aG auditors kim", "sudo groupadd auditors && sudo usermod -a -G auditors kim"],
   "`&&` runs the second command only if the first one exits with status 0. usermod's `-aG` appends a supplementary group; `-G` alone would "
   "replace all of kim's groups. `sudo gpasswd -a kim auditors` adds her too.",
@@ -447,7 +447,7 @@ F("5.2", "Create the group auditors and then add the existing user kim to it, ke
           ["sudo groupadd auditors && sudo usermod -G auditors kim", "groupadd auditors && usermod -aG auditors kim", "sudo groupadd auditors"]),
   level=3, form=J)
 
-S("5.2", "An employee has left, and an administrator ran `sudo userdel sam`. What is left on the system?",
+S("5.2-20", "An employee has left, and an administrator ran `sudo userdel sam`. What is left on the system?",
   ["✔sam's home directory and its files, because userdel doesn't delete them without -r",
    "Nothing: userdel always removes the account, the home directory and every file sam owned",
    "Only sam's entry in /etc/passwd",
@@ -461,7 +461,7 @@ S("5.2", "An employee has left, and an administrator ran `sudo userdel sam`. Wha
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 5.3 (2)
-F("5.3", "Give the directory site and everything inside it to the user www-data and the group www-data, using one command. You have sudo.",
+F("5.3-19", "Give the directory site and everything inside it to the user www-data and the group www-data, using one command. You have sudo.",
   ["sudo chown -R www-data:www-data site", "sudo chown -R www-data:www-data site/", "sudo chown --recursive www-data:www-data site"],
   "chown sets the owner and, after a colon, the group; `-R` applies it to the directory and everything below it.",
   hint="chown takes OWNER:GROUP, and one option makes it recursive.",
@@ -471,7 +471,7 @@ F("5.3", "Give the directory site and everything inside it to the user www-data 
           ["sudo chown www-data:www-data site", "sudo chown -R www-data site", "chown -R www-data:www-data site"]),
   level=2, form=J)
 
-S("5.3", "bob doesn't own the directory shared and isn't in the group staff. The file info.txt inside shared has mode 644. What can bob do?",
+S("5.3-20", "bob doesn't own the directory shared and isn't in the group staff. The file info.txt inside shared has mode 644. What can bob do?",
   ["✔Read info.txt by its path, but not list shared", "List the names in shared, but not read info.txt",
    "Nothing at all, because others have no r on shared", "Delete info.txt, since the file is readable by others"],
   "For others the directory has only `x`: bob may pass through it and open a file whose name he knows, but without `r` he can't list the "
@@ -484,7 +484,7 @@ S("5.3", "bob doesn't own the directory shared and isn't in the group staff. The
   level=3, form=J)
 
 # ------------------------------------------------------------------------------------------ 5.4 (1)
-F("5.4", "In the current directory, create a hard link named copy.txt for the file data.txt. Type the full command.",
+F("5.4-10", "In the current directory, create a hard link named copy.txt for the file data.txt. Type the full command.",
   ["ln data.txt copy.txt"],
   "Without -s, ln makes a hard link: a second name for the same inode, so both names show the same data and `ls -li` shows the same inode "
   "number and a link count of 2. `ln -s` would make a symbolic link instead.",

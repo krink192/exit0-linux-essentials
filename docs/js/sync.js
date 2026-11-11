@@ -23,7 +23,12 @@
     let running = null, again = false;
 
     function load() {
-      try { return Object.assign(blank(), JSON.parse(storage.getItem(META_KEY)) || {}); } catch (e) { return blank(); }
+      try {
+        const m = Object.assign(blank(), JSON.parse(storage.getItem(META_KEY)) || {});
+        const others = {}; for (const id in m.others || {}) others[id] = C.cleanDoc(m.others[id]);     // replicas saved by an older version
+        m.others = others;
+        return m;
+      } catch (e) { return blank(); }
     }
     function blank() { return { url: "", username: "", token: null, device: null, epoch: null, cursor: 0, ownSeq: 0, others: {},
                                 settingsSnap: null, settingsTs: {}, pushed: null, lastSync: null, lastError: null, pending: null }; }
@@ -69,7 +74,7 @@
       // The first device on an empty account sets the account's settings.
       meta.settingsSnap = C.syncedSettings(st.settings); meta.settingsTs = {};
       if (!remote.replicas.length) for (const k in meta.settingsSnap) meta.settingsTs[k] = now();
-      const remoteView = C.mergeStates(remote.replicas.map(x => x.doc));
+      const remoteView = C.mergeStates(remote.replicas.map(x => C.cleanDoc(x.doc)));
       if (remote.replicas.length && C.hasProgress(st)) {
         meta.pending = { copied: C.looksCopied(st, remoteView) };
         persist();
@@ -132,7 +137,7 @@
         let changed = wiped;
         for (const r of remote.replicas) {
           if (r.device === meta.device.id) { meta.ownSeq = r.seq; continue; }
-          meta.others[r.device] = r.doc; changed = true;
+          meta.others[r.device] = C.cleanDoc(r.doc); changed = true;      // never trust a replica's contents: rebuild it field by field
         }
         meta.cursor = remote.seq;
         // 3. Merge everything into the live state.

@@ -74,7 +74,7 @@
   const lvChip = q => `<span class="chip lvl lvl${q.level || 1}" title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>`;
   function levelBars(byLevel) {
     return `<div class="bars">${[1, 2, 3].map(lv => { const [r, n] = byLevel[lv] || [0, 0]; const p = n ? Math.round(100 * r / n) : 0;
-      return `<div class="bar"><div class="lbl"><span><b style="font-weight:700">${C.LEVELS[lv][0]}</b> <span class="muted small">${C.LEVELS[lv][1]}</span></span><b>${n ? r + "/" + n + " · " + p + "%" : "—"}</b></div>
+      return `<div class="bar"><div class="lbl"><span><b class="u-fw7">${C.LEVELS[lv][0]}</b> <span class="muted small">${C.LEVELS[lv][1]}</span></span><b>${n ? r + "/" + n + " · " + p + "%" : "—"}</b></div>
         <div class="track2"><i style="width:${p}%;background:${ocol(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div>`;
   }
 
@@ -112,17 +112,10 @@
     down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
     ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     chevron: '<path d="M9 6l6 6-6 6"/>',
+    search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 
-  function ring(pct, size, stroke, label, sub, color) {
-    const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, pct || 0)) / 100);
-    return `<div class="ring" style="width:${size}px;height:${size}px"><svg width="${size}" height="${size}">
-      <circle class="track" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${stroke}"/>
-      <circle class="val" cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke-width="${stroke}" stroke-linecap="round"
-        style="stroke:${color || "var(--accent)"}" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
-      <div class="lbl" style="font-size:${Math.round(size / 4.2)}px">${label}${sub ? `<small>${sub}</small>` : ""}</div></div>`;
-  }
   const toastQueue = [];          // one toast at a time, so several at once don't pile up on top of each other
   function toast(msg) {
     toastQueue.push(msg); if (toastQueue.length > 1) return;
@@ -233,9 +226,9 @@
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
-          ${ring(goalPct, 46, 5, `<span style="font-size:11px">${sk.today}</span>`, "", sk.metToday ? "var(--good)" : "var(--accent)")}
           <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
-            <div class="t2">${sk.metToday ? "Today's goal done" : `${Math.max(0, st.settings.goal - sk.today)} to today's goal`}</div></div>
+            <div class="t2">${sk.metToday ? `Today's goal done, ${sk.today} of ${st.settings.goal}` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
+            <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
         ${canInstall() ? `<button class="ghost small install-btn" id="installSide">${icon("download")}Install app</button>` : ""}
         <div class="theme-row"><span class="small muted">Theme</span>
@@ -392,7 +385,7 @@
               : `<div class="scorebar" role="img" aria-label="Predicted score ${pred} percent. The target is ${T} percent."><i style="width:${pred}%"></i><span class="mark" style="left:${T}%"></span></div>`}</section>
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
-              : `<p class="muted small" style="padding:0 10px">Nothing is below ${T}% yet. Once you've answered a few questions, the objectives you score lowest on are listed here.</p>`}</section>
+              : `<p class="u-pad-x muted small">Nothing is below ${T}% yet. Once you've answered a few questions, the objectives you score lowest on are listed here.</p>`}</section>
         </div></div>
       <div id="plan">${planCard()}</div>`, { cls: "today-page" });
     $("#goalEdit").onclick = () => { goalOpen = !goalOpen; renderToday(); };
@@ -407,9 +400,9 @@
   const GOAL_TEXT = "Questions answered, flashcards reviewed, lab tasks finished and command drills all count. Meeting the goal keeps your streak going. Pick what fits your day; a small goal you keep beats a big one you skip.";
   function goalPickerHTML() {
     const g = st.settings.goal, custom = GOAL_CHOICES.indexOf(g) < 0;
-    return `<div class="row goalpick" style="gap:10px;flex-wrap:wrap;align-items:center"><div class="seg" id="goalSeg" role="group" aria-label="Daily goal">${GOAL_CHOICES.map(n =>
+    return `<div class="u-g10 u-wrap u-aic row goalpick"><div class="seg" id="goalSeg" role="group" aria-label="Daily goal">${GOAL_CHOICES.map(n =>
         `<button data-v="${n}" class="${g === n ? "on" : ""}">${n}</button>`).join("")}</div>
-      <label class="small muted row" style="gap:6px">or <input type="number" id="goalNum" min="${C.GOAL_MIN}" max="${C.GOAL_MAX}" step="1" inputmode="numeric" value="${custom ? g : ""}" placeholder="${g}" aria-label="Custom daily goal" style="width:5.5em"> a day</label></div>`;
+      <label class="u-g6 small muted row">or <input type="number" id="goalNum" min="${C.GOAL_MIN}" max="${C.GOAL_MAX}" step="1" inputmode="numeric" value="${custom ? g : ""}" placeholder="${g}" aria-label="Custom daily goal" class="u-w55"> a day</label></div>`;
   }
   function wireGoalPicker(rerender) {
     const set = v => { const n = C.clampGoal(v); if (n === st.settings.goal) return; st.settings.goal = n; save(); toast("Daily goal: " + n); rerender(); };
@@ -426,14 +419,14 @@
   const reviewMixText = d => [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : ""].filter(Boolean).join(" and ") || "Nothing";
   function reviewPickerHTML() {
     const r = C.clampReview(st.settings.review);
-    const toggle = `<div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">Daily review</span>
+    const toggle = `<div class="u-g10 u-wrap u-aic row"><span class="u-mw9 small">Daily review</span>
         <div class="seg" id="revOn" role="group" aria-label="Daily review">${[[false, "Off"], [true, "On"]].map(([v, n]) => `<button data-v="${v}" class="${r.on === v ? "on" : ""}">${n}</button>`).join("")}</div></div>`;
-    if (!r.on) return `<div class="stack" style="gap:10px">${toggle}<div class="small muted">Off: nothing is scheduled for you and no review counts are shown. Turn it on to get a set number of questions each day.</div></div>`;
-    return `<div class="stack" style="gap:10px">${toggle}
-      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">Questions a day</span>
+    if (!r.on) return `<div class="u-g10 stack">${toggle}<div class="small muted">Off: nothing is scheduled for you and no review counts are shown. Turn it on to get a set number of questions each day.</div></div>`;
+    return `<div class="u-g10 stack">${toggle}
+      <div class="u-g10 u-wrap u-aic row"><span class="u-mw9 small">Questions a day</span>
         <div class="seg" id="revSize" role="group" aria-label="Questions a day">${REVIEW_CHOICES.map(n => `<button data-v="${n}" class="${r.size === n ? "on" : ""}">${n}</button>`).join("")}</div>
-        <label class="small muted row" style="gap:6px">or <input type="number" id="revSizeNum" min="${C.REVIEW_SIZE_MIN}" max="${C.REVIEW_SIZE_MAX}" step="1" inputmode="numeric" value="${REVIEW_CHOICES.indexOf(r.size) < 0 ? r.size : ""}" placeholder="${r.size}" aria-label="Custom questions a day" style="width:5.5em"></label></div>
-      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><span class="small" style="min-width:9em">New questions in it</span>
+        <label class="u-g6 small muted row">or <input type="number" id="revSizeNum" min="${C.REVIEW_SIZE_MIN}" max="${C.REVIEW_SIZE_MAX}" step="1" inputmode="numeric" value="${REVIEW_CHOICES.indexOf(r.size) < 0 ? r.size : ""}" placeholder="${r.size}" aria-label="Custom questions a day" class="u-w55"></label></div>
+      <div class="u-g10 u-wrap u-aic row"><span class="u-mw9 small">New questions in it</span>
         <div class="seg" id="revNew" role="group" aria-label="New questions a day">${REVIEW_NEW_CHOICES.map(n => `<button data-v="${n}" class="${r.fresh === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
       <div class="small muted">New questions come from the topics you've seen least, easier ones first. On days with fewer reviews due, the rest are new questions, so there's always something that moves you forward. Anything else that's due waits its turn.</div></div>`;
   }
@@ -454,26 +447,26 @@
       <div class="page-head"><h1>Daily review</h1>
         ${!d.on ? `<p class="lead">A set number of questions each day: reviews of ones you've answered, plus some new ones so you keep moving through the bank. It's off until you turn it on, and you choose how many.</p></div>
       <div class="grid2">
-        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
+        <div class="card stack revcard"><div class="u-g10 row">${icon("repeat")}<span class="eyebrow">Questions</span></div>
           <div class="revn"><b>Off</b></div>
           <p class="small muted">Nothing is scheduled and no counts are shown. You can still study any time from Study or Exam.</p>
-          <div class="row" style="justify-content:flex-end"><button class="primary" data-review-on>Turn on daily review</button></div></div>`
+          <div class="u-jend row"><button class="primary" data-review-on>Turn on daily review</button></div></div>`
         : `<p class="lead">${d.size} questions a day: reviews of ones you've answered, plus ${plural(d.perDayNew, "new one")} so you keep moving through the bank. A miss comes back tomorrow; each right answer pushes it further out.
           <button class="linkbtn" id="revEdit" aria-expanded="${reviewOpen}">${reviewOpen ? "Done" : "Change"}</button></p>
         ${reviewOpen ? `<div class="card stack goalcard">${reviewPickerHTML()}</div>` : ""}</div>
       <div class="grid2">
-        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
+        <div class="card stack revcard"><div class="u-g10 row">${icon("repeat")}<span class="eyebrow">Questions</span></div>
           ${d.left ? `<div class="revn"><b>${d.left}</b> ${d.done ? "left today" : "today"}</div>
             <p class="small muted">${reviewMixText(d)}, with hints and answers as you go.</p>
             ${d.done ? `<div class="track2"><i style="width:${Math.min(100, Math.round(100 * d.done / d.size))}%;background:var(--accent)"></i></div>` : ""}
-            <div class="row" style="justify-content:flex-end"><button class="primary" data-start="review">${d.done ? "Continue review" : "Start review"}</button></div>`
+            <div class="u-jend row"><button class="primary" data-start="review">${d.done ? "Continue review" : "Start review"}</button></div>`
           : `<div class="revn"><b>Done</b> for today</div>
             <p class="small muted">${d.done ? `You answered ${d.done}. ` : ""}${extra ? "Want more? Extra questions don't change tomorrow's size." : "You've seen every question and nothing is due."}</p>
-            <div class="row" style="justify-content:flex-end">${extra ? `<button data-start="reviewmore" data-n="${extra}">${extra} more</button>` : ""}</div>`}</div>`}
-        <div class="card stack revcard"><div class="row" style="gap:10px">${icon("cards")}<span class="eyebrow">Flashcards</span></div>
+            <div class="u-jend row">${extra ? `<button data-start="reviewmore" data-n="${extra}">${extra} more</button>` : ""}</div>`}</div>`}
+        <div class="card stack revcard"><div class="u-g10 row">${icon("cards")}<span class="eyebrow">Flashcards</span></div>
           <div class="revn"><b>${cardsDue}</b> due</div>
           <p class="small muted">${cardsDue ? "Cards from both decks that are scheduled for today." : "No flashcards due today."}</p>
-          <div class="row" style="justify-content:flex-end"><button data-start="duecards" ${cardsDue ? "" : "disabled"}>Review flashcards</button></div></div>
+          <div class="u-jend row"><button data-start="duecards" ${cardsDue ? "" : "disabled"}>Review flashcards</button></div></div>
       </div>`);
     if ($("#revEdit")) $("#revEdit").onclick = () => { reviewOpen = !reviewOpen; renderReview(); };
     wireReviewPicker(renderReview);
@@ -499,10 +492,10 @@
     const os = C.objectiveStats(BANK, st.qstats);
     let next = "";
     if (last) {
-      next = weak ? `<div class="card banner"><div class="grow"><div class="eyebrow" style="margin-bottom:6px">Suggested next step</div>
+      next = weak ? `<div class="card banner"><div class="grow"><div class="u-mb6 eyebrow">Suggested next step</div>
           <b>Study ${esc(weak)} ${esc(OBJ[weak].name)}</b><div class="small muted">Your accuracy there is ${os[weak].pct}%. Ten questions with hints, answers and the lesson to read.</div></div>
           <button data-study="${weak}">Study it</button></div>`
-        : `<div class="card banner"><div class="grow"><div class="eyebrow" style="margin-bottom:6px">Suggested next step</div>
+        : `<div class="card banner"><div class="grow"><div class="u-mb6 eyebrow">Suggested next step</div>
           <b>Review flashcards</b><div class="small muted">No weak objectives right now. Keep definitions fresh with a quick card session.</div></div>
           <button data-go="cards">Open flashcards</button></div>`;
     }
@@ -619,8 +612,8 @@
         if (opts.select) return `<label class="orow" for="sel${o}"><input type="checkbox" id="sel${o}" data-obj="${o}" ${opts.sel.has(o) ? "checked" : ""}>
             <span class="o">${o}</span><span>${esc(OBJ[o].name)} <span class="small muted">· ${s.total} Qs</span></span><span class="chip lv-${s.level}">${LV[s.level]}</span></label>`;
         return `<div class="orow"><span class="o">${o}</span><span>${esc(OBJ[o].name)}</span>
-            <span class="row" style="gap:12px"><span class="chip lv-${s.level} hide-sm">${LV[s.level]}</span><span class="pct" style="color:${s.pct == null ? "var(--muted)" : col(s.pct)}">${pct}</span></span>
-            <button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`;
+            <span class="u-g12 row"><span class="chip lv-${s.level} hide-sm">${LV[s.level]}</span><span class="pct" style="color:${s.pct == null ? "var(--muted)" : col(s.pct)}">${pct}</span></span>
+            <button class="u-pad-s ghost small" data-study="${o}">Study</button></div>`;
       }).join("")).join("")}</div>`;
   }
   // ================================================================== PASS CHANCE + EXAM PLAN
@@ -655,8 +648,8 @@
       ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
     return `<section class="card readyhero">
-      <div class="hero-nums"><div class="stack" style="gap:2px"><span class="small muted">Readiness</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No exams taken yet" : "Average of your last 3 exams"}</span></div>
-        <div class="stack" style="gap:2px">${passBlock}</div></div>
+      <div class="hero-nums"><div class="u-g2 stack"><span class="small muted">Readiness</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No exams taken yet" : "Average of your last 3 exams"}</span></div>
+        <div class="u-g2 stack">${passBlock}</div></div>
       <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
         <details class="small muted"><summary>How are these worked out?</summary><p>Readiness is the average of your last three exams. ${passWhy(p)}</p></details></div></section>`;
   }
@@ -701,26 +694,26 @@
 
   function planCard() {
     const s = st.settings, plan = C.examPlan(st, BANK);
-    if (!plan || planEdit) return `<div class="card stack plancard"><div class="row" style="gap:10px">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
+    if (!plan || planEdit) return `<div class="card stack plancard"><div class="u-g10 row">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
       <p>${plan ? "Change your exam date." : "Booked your exam, or picking a date? Set it here for a countdown, a daily target and calendar reminders."}</p>
-      <div class="row" style="gap:10px;flex-wrap:wrap"><input type="date" id="examDate" min="${todayStr()}" value="${esc(s.examDate || "")}" aria-label="Exam date">
+      <div class="u-g10 u-wrap row"><input type="date" id="examDate" min="${todayStr()}" value="${esc(s.examDate || "")}" aria-label="Exam date">
         <button id="setDate">Save date</button>${plan ? `<button class="ghost" id="cancelDate">Cancel</button>` : ""}</div>
       <p class="small muted">Book the real exam through LPI with Pearson VUE, at a test centre or online.</p></div>`;
     const head = plan.phase === "past" ? `<b>Your exam date has passed.</b> How did it go? Set a new date if you're retaking it.`
       : plan.phase === "today" ? `<b>Exam day. Good luck!</b> Skip new material. A light flashcard review is plenty.`
       : `<span class="countdown"><b>${plan.days}</b> ${plan.days === 1 ? "day" : "days"} to go</span>`;
     const when = `<div class="small muted">${esc(longDate(plan.date))}</div>`;
-    const today = plan.phase === "learn" ? `<div class="stack" style="gap:6px"><div class="row spread"><span>Today's target</span><b>${plan.doneToday}/${plan.target}</b></div>
+    const today = plan.phase === "learn" ? `<div class="u-g6 stack"><div class="row spread"><span>Today's target</span><b>${plan.doneToday}/${plan.target}</b></div>
         <div class="track2"><i style="width:${plan.target ? Math.min(100, Math.round(100 * plan.doneToday / plan.target)) : 100}%;background:var(--accent)"></i></div>
         <span class="small muted">${[plan.newPerDay ? plural(plan.newPerDay, "new question") + " a day sees the whole bank by " + (plan.days - 2 === 1 ? "tomorrow" : "two days out") : "You've seen every question",
           plan.due ? plural(plan.due, "review") + " due today" : ""].filter(Boolean).join(", plus ")}.${plan.newPerDay > 60 ? " That's a lot per day: focus on the objectives under Pass chance first." : ""}</span></div>`
       : plan.phase === "final" ? `<p class="small">Final stretch: take a full exam, review flashcards and your misses, and skip new material.</p>` : "";
-    return `<div class="card stack plancard"><div class="row spread"><div class="row" style="gap:10px">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
+    return `<div class="card stack plancard"><div class="row spread"><div class="u-g10 row">${icon("calendar")}<span class="eyebrow">Exam day</span></div>
         <button class="ghost small" id="editDate">Change date</button></div>
       <div>${head}${when}</div>${today}
       ${plan.phase === "past" ? "" : `<ul class="milestones">${plan.milestones.map(m => `<li class="${m.done ? "done" : ""}">${icon(m.done ? "check" : "dot")}<span>${esc(m.label)}${m.progress && !m.done ? ` <span class="muted">(${m.progress[0]}/${m.progress[1]})</span>` : ""}</span></li>`).join("")}</ul>
-      <div class="row" style="gap:10px;flex-wrap:wrap;align-items:center"><button id="ics">${icon("download")}Add to calendar</button>
-        <label class="small muted row" style="gap:6px">Daily reminder at <input type="time" id="remindAt" value="${esc(s.remindAt || "19:00")}"></label></div>
+      <div class="u-g10 u-wrap u-aic row"><button id="ics">${icon("download")}Add to calendar</button>
+        <label class="u-g6 small muted row">Daily reminder at <input type="time" id="remindAt" value="${esc(s.remindAt || "19:00")}"></label></div>
       <p class="small muted">Downloads an .ics file with the exam day and a daily study reminder until the day before. It opens in Google Calendar, Outlook, Apple Calendar and GNOME Calendar.</p>`}</div>`;
   }
 
@@ -750,7 +743,7 @@
     const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
       shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your readiness, pass chance and weak objectives show up here.</p>
-        <div class="row" style="justify-content:center"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`);
+        <div class="u-jc row"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`);
       return wireStarts($("#page"));
     }
     const os = C.objectiveStats(BANK, st.qstats);
@@ -765,10 +758,10 @@
       </div>
       ${badgesCard()}
       <details class="card histcard"><summary><h2>History</h2><span class="small muted">${plural(st.tests.length, "session")}</span></summary>
-        <div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th style="text-align:right">Score</th><th style="text-align:right">Time</th><th></th></tr></thead><tbody>
+        <div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th class="u-tr">Score</th><th class="u-tr">Time</th><th></th></tr></thead><tbody>
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
           <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
-          <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${esc(t.id)}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
+          <td class="u-tr">${t.qids ? `<button class="u-pad-s ghost small" data-review="${esc(t.id)}">Review</button>` : ""}</td></tr>`).join("")}
         </tbody></table></div></details>
       ${SYNC && !SYNC.linked ? `<p class="small muted">Studying on more than one device? <a href="#settings">Set up sync</a> with your own exit0-sync server to keep this progress in step.</p>` : ""}`);
     wireStarts($("#page"));
@@ -792,14 +785,14 @@
           <span class="ds">${desc}</span><span class="stackbar"><i style="width:${100 * s.mastered / s.total}%"></i><i style="width:${100 * s.learning / s.total}%"></i></span>
           <span class="ds">${s.mastered} mastered · ${s.learning} learning · ${s.fresh} new</span></button>`; }).join("")}</div>
       <div class="card row spread">
-        <div class="row" style="gap:16px"><select id="ctopic" aria-label="Topic"><option value="all">All topics</option>${Object.keys(TOP).map(t => `<option value="${t}" ${cardTopic === t ? "selected" : ""}>${t}. ${esc(TOP[t])}</option>`).join("")}</select>
+        <div class="u-g16 row"><select id="ctopic" aria-label="Topic"><option value="all">All topics</option>${Object.keys(TOP).map(t => `<option value="${t}" ${cardTopic === t ? "selected" : ""}>${t}. ${esc(TOP[t])}</option>`).join("")}</select>
           <div class="seg" id="csize">${[10, 20, 40].map(n => `<button data-n="${n}" class="${cardSize === n ? "on" : ""}">${n}</button>`).join("")}</div></div>
         <button class="primary" id="cstart" ${nextN ? "" : "disabled"}>${nextN ? `Study ${nextN} cards` : "All caught up"}</button></div>
       ${nextN ? "" : `<p class="small muted">Every card in this selection is scheduled for later. Come back tomorrow, or browse the list below.</p>`}
-      <div class="stack" style="gap:10px"><div class="row spread"><h2>Browse ${pool.length} cards</h2><label class="switch"><input type="checkbox" id="cbrowse" ${browse ? "checked" : ""}> Show list</label></div>
+      <div class="u-g10 stack"><div class="row spread"><h2>Browse ${pool.length} cards</h2><label class="switch"><input type="checkbox" id="cbrowse" ${browse ? "checked" : ""}> Show list</label></div>
         ${browse ? `<input class="search" id="cq" type="search" placeholder="Search terms and definitions…" value="${esc(query)}" aria-label="Search cards">
         <div class="glossary">${list.map(c => `<div class="gitem ${c.deck === "commands" ? "cmd" : ""}"><div class="gf">${esc(c.front)}</div>
-          <div><span class="small muted">${c.obj}</span> ${rich(c.back)}${c.ex ? `<pre class="code" style="margin-top:6px">${esc(c.ex)}</pre>` : ""}</div></div>`).join("") || `<p class="muted small" style="padding:12px 4px">No cards match.</p>`}</div>` : ""}</div>`);
+          <div><span class="small muted">${c.obj}</span> ${rich(c.back)}${c.ex ? `<pre class="u-mt6 code">${esc(c.ex)}</pre>` : ""}</div></div>`).join("") || `<p class="u-pad-row muted small">No cards match.</p>`}</div>` : ""}</div>`);
     $$("[data-deck]").forEach(b => b.onclick = () => { deck = b.dataset.deck; st.settings.deck = deck; save(); renderCards(); });
     $("#ctopic").onchange = e => { cardTopic = e.target.value; renderCards(); };
     $$("#csize button").forEach(b => b.onclick = () => { cardSize = +b.dataset.n; renderCards(); });
@@ -815,23 +808,23 @@
     if (cs.i >= cs.queue.length) {
       shell("cards", `<div class="card celebrate">${icon("trophy")}<h2>Session complete</h2>
         <p class="muted">You knew ${cs.knew} of ${cs.done} cards. Cards you missed will come back first next time.</p>
-        <div class="row" style="justify-content:center"><button class="primary" id="again">Study more</button><button id="back">Back to decks</button></div></div>`);
+        <div class="u-jc row"><button class="primary" id="again">Study more</button><button id="back">Back to decks</button></div></div>`);
       $("#again").onclick = () => { cs = null; $("#cstart") || renderCards(); const b = $("#cstart"); if (b && !b.disabled) b.click(); };
       $("#back").onclick = () => { cs = null; renderCards(); };
       return;
     }
     const c = cs.queue[cs.i];
     const isCmd = c.deck === "commands";
-    shell("cards", `<div class="row spread"><div><span class="eyebrow">${isCmd ? "Commands & files" : "Concepts"}</span><div class="qnum" style="margin-top:4px"><b>${cs.i + 1}</b> / ${cs.queue.length}</div></div>
+    shell("cards", `<div class="row spread"><div class="qnum">Card <b>${cs.i + 1}</b> of ${cs.queue.length} · ${isCmd ? "Commands & files" : "Concepts"}</div>
         <button class="ghost" id="cend">End session</button></div>
-      <div class="progress" style="border-radius:9px"><i style="width:${100 * cs.i / cs.queue.length}%"></i></div>
+      <div class="u-r9 progress"><i style="width:${100 * cs.i / cs.queue.length}%"></i></div>
       <div class="flash-wrap"><div class="flash ${cs.flipped ? "flipped" : ""}" id="flash" tabindex="0" role="button" aria-label="Flip card">
         <div class="face ${isCmd ? "cmd" : ""}"><div class="meta"><span>${c.obj} · ${esc(OBJ[c.obj].name)}</span><span>Term</span></div>
           <div class="front-t">${esc(c.front)}</div><div class="hint">Click or press <span class="kbd">Space</span> to flip</div></div>
         <div class="face back"><div class="meta"><span>${esc(c.front)}</span><span>Definition</span></div>
           <div class="back-t">${rich(c.back)}</div>${c.ex ? `<pre>${esc(c.ex)}</pre>` : ""}<div class="hint">Did you know it?</div></div></div></div>
-      ${cs.flipped ? `<div class="grade-row"><button class="again" id="again">Still learning <span class="kbd">1</span></button><button class="knew" id="knew">Got it <span class="kbd">2</span></button></div>`
-        : `<button class="primary" id="flipBtn" style="padding:1rem">Show answer <span class="kbd" style="color:inherit;border-color:currentColor">Space</span></button>`}`);
+      ${cs.flipped ? `<div class="grade-row"><button class="again" id="again">${icon("repeat")}Still learning <span class="kbd">1</span></button><button class="knew" id="knew">${icon("check")}Got it <span class="kbd">2</span></button></div>`
+        : `<button class="u-pad-l primary" id="flipBtn">Show answer <span class="u-inherit u-bcur kbd">Space</span></button>`}`);
     const flip = () => { cs.flipped = !cs.flipped; renderCardSession(); };
     $("#flash").onclick = flip;
     if ($("#flipBtn")) $("#flipBtn").onclick = flip;
@@ -958,15 +951,15 @@
     shell("labs", `<div class="page-head row spread progress-head"><div><h1>Labs</h1><p class="lead">One lab per LPI lesson, in short parts. Each task is checked as you type. It's simulated, so nothing can break.</p></div>
         <div class="row pills"><span class="pill"><b>${doneParts} / ${LABS.length}</b> parts</span><span class="pill"><b>${doneLessons} / ${LESSONS.length}</b> lessons</span></div></div>
       ${next ? `<section class="card continue"><div class="cic">${icon("terminal")}</div>
-        <div class="stack grow" style="gap:6px"><p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
-          <div class="row" style="gap:10px;align-items:center">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
+        <div class="u-g6 stack grow"><p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
+          <div class="u-g10 u-aic row">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
-      : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
+      : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="u-jc row"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
       <section class="card stack objcard labscard"><div class="row spread"><h2>Lessons</h2>
           <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
         <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
         <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
-      ${trouble.length ? `<details class="card troublecard"><summary><div class="stack" style="gap:2px"><b>Troubleshooting · ${plural(trouble.length, "scenario")}${tDone ? ` · ${tDone}/${tParts.length} parts done` : ""}</b>
+      ${trouble.length ? `<details class="card troublecard"><summary><div class="u-g2 stack"><b>Troubleshooting · ${plural(trouble.length, "scenario")}${tDone ? ` · ${tDone}/${tParts.length} parts done` : ""}</b>
           <span class="small muted">Something's broken: find out why and fix it, using only exam commands. Best after the lessons each one uses.</span></div><span class="tlink">Show scenarios</span></summary>
         <div class="tbody flat">${trouble.filter(keep).map(row).join("") || `<p class="muted small">All scenarios finished.</p>`}</div></details>` : ""}`);
     $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
@@ -997,9 +990,9 @@
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
     const tip = coachTip[id];
     const fi = typeof focusTask[id] === "number" ? focusTask[id] : (stuck[id] ? stuck[id].task : tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
-    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(lab.title)}</h1><span class="eyebrow" style="margin-top:8px">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span><p class="lead">${rich(lab.intro)}</p>
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(lab.title)}</h1><span class="u-mt8 eyebrow">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span><p class="lead">${rich(lab.intro)}</p>
         <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
-      ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<div><b>Part complete.</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
+      ${ls.completedAt ? `<div class="card banner done-banner"><div class="u-g10 row">${icon("trophy")}<div><b>Part complete.</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
         <div class="row">${related.length ? `<button class="primary" id="labQs">${icon("drill")}Answer ${plural(Math.min(10, related.length), "related question")}</button>` : ""}
         ${next ? `<a class="btn ${related.length ? "" : "primary"}" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : next.track === TROUBLE ? "Next: troubleshooting " + esc(next.lesson) : "Next lesson: " + esc(next.lesson)}${icon("right", "after")}</a>` : `<a class="btn" href="#labs">All labs</a>`}</div></div>` : ""}
       <div class="labwrap ${focusTask[id] === "all" ? "" : "one"}">
@@ -1009,21 +1002,21 @@
             <button class="ghost small" data-tp="1" ${fi >= lab.tasks.length - 1 ? "disabled" : ""} aria-label="Next task">${icon("right")}</button><span class="grow"></span>
             <button class="linkbtn" id="allTasks">${focusTask[id] === "all" ? "One at a time" : "All tasks"}</button></div>
           ${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
-          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
+          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="u-g10 u-ais row"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
             ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>` : `
             ${stuck[id] && stuck[id].task === i ? `<div class="coach stuck" role="alert"><b>Heads-up:</b> after <code>${esc(stuck[id].line)}</code> this task can't be finished the usual way.${/^\s*sudo\s/.test(stuck[id].line) ? " (Without <code>sudo</code> the system would have stopped that with “Permission denied”: in your own home folder you never need it.)" : ""}
-              <div class="row" style="gap:10px;margin-top:8px"><button class="small primary" data-undo>Undo last command</button><button class="small ghost" data-restart>Restart part</button></div></div>` : ""}
+              <div class="u-g10 u-mt8 row"><button class="small primary" data-undo>Undo last command</button><button class="small ghost" data-restart>Restart part</button></div></div>` : ""}
             ${tip && tip.task === i ? `<div class="coach" role="status"><b>Coach:</b> ${rich(tip.say)}</div>` : ""}
             ${t.hints.slice(0, shown).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
-            <div class="row small" style="gap:12px;margin-top:6px">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
+            <div class="u-g12 u-mt6 row small">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
             <pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
-          <div class="row small hide-one" style="gap:14px"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span>${undoSnap[id] ? `<button class="ghost small" data-undo title="Undo: ${esc(undoSnap[id].line)}">Undo last command</button>` : ""}<button class="ghost small" id="labReset">Restart part</button></div></div>
+          <div class="u-g14 row small hide-one"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span>${undoSnap[id] ? `<button class="ghost small" data-undo title="Undo: ${esc(undoSnap[id].line)}">Undo last command</button>` : ""}<button class="ghost small" id="labReset">Restart part</button></div></div>
         <div class="term" id="term"><div class="term-out" id="termOut"></div>
           <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>
       </div>
       <div class="labfoot stack small">
         <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
-        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
+        <div class="u-g16 u-wrap row"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
       <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
@@ -1120,8 +1113,8 @@
   function openLabEditor(sh, req, after) {
     const wrap = document.createElement("div"); wrap.className = "editor-wrap";
     wrap.innerHTML = `<div class="editor card"><div class="row spread"><b class="mono">${esc(req.editor)}: ${esc(req.path)}</b><span class="small muted">Ctrl+S save · Ctrl+X save and close · Esc cancel</span></div>
-      <textarea id="edText" spellcheck="false" autocapitalize="off"></textarea><div class="small" id="edMsg" style="color:var(--bad)"></div>
-      <div class="row" style="justify-content:flex-end"><button id="edCancel">Cancel</button><button class="primary" id="edSave">Save and close</button></div></div>`;
+      <textarea id="edText" spellcheck="false" autocapitalize="off"></textarea><div class="u-bad small" id="edMsg"></div>
+      <div class="u-jend row"><button id="edCancel">Cancel</button><button class="primary" id="edSave">Save and close</button></div></div>`;
     document.body.appendChild(wrap);
     const ta = wrap.querySelector("#edText"); ta.value = sh.readFileForEdit(req.path);
     if (req.editor !== "nano") ta.placeholder = "This panel stands in for vi: type normally, then save. (In real vi: i to insert, Esc, then :wq.)";
@@ -1303,24 +1296,24 @@
       return `<li class="${mark[1]}"><span class="mk" aria-hidden="true">${mark[0]}</span><span class="grow">${esc(sk.label)}</span><span class="small muted">${mark[2]}${due ? " · due" : ""}</span></li>`; }).join("");
     const link = (href, ic, label, sub, attrs) => `<a class="plink" href="${href}" ${attrs || ""}>${icon(ic)}<span class="grow"><b>${label}</b>${sub ? `<span class="small muted">${sub}</span>` : ""}</span>${icon("chevron")}</a>`;
     return `<div class="cpanel-in">
-      <div class="row spread" style="align-items:flex-start;flex-wrap:nowrap"><div class="stack" style="gap:4px;min-width:0"><h2 class="mono cname">${esc(c.cmd)}</h2><span class="eyebrow">${esc(o)} ${esc((OBJ[o] || {}).name || "")}</span></div>
+      <div class="u-ais u-nowrap row spread"><div class="u-g4 u-mw0 stack"><h2 class="mono cname">${esc(c.cmd)}</h2><span class="eyebrow">${esc(o)} ${esc((OBJ[o] || {}).name || "")}</span></div>
         <button class="ghost small cclose" id="cclose" aria-label="Close">${icon("x")}</button></div>
       <span class="chip lv-${c.level}">${LVN[c.level]}${c.pct != null ? " · " + c.pct + "% right" : ""}</span>
       ${summary ? `<p>${rich(summary)}</p>` : ""}
       ${syn.length ? `<pre class="code small csyn">${syn.map(esc).join("\n")}</pre>` : ""}
       ${opts.length ? `<dl class="copts">${opts.map(([k, v]) => `<dt class="mono" title="${esc(k)}">${esc(k.split(",")[0])}</dt><dd>${rich(v)}</dd>`).join("")}</dl>` : ""}
       ${info && info[2] ? `<p class="small muted">${rich(info[2])}</p>` : ""}
-      <div class="row" style="gap:8px"><button class="primary" id="cdrill">${icon("terminal")}Drill ${esc(c.cmd)}</button>
+      <div class="u-g8 row"><button class="primary" id="cdrill">${icon("terminal")}Drill ${esc(c.cmd)}</button>
         <button id="csel" aria-pressed="${sel}">${sel ? icon("check") + "In your set" : "+ Add to set"}</button></div>
-      <div class="stack" style="gap:2px"><span class="eyebrow">Prep it elsewhere</span>
+      <div class="u-g2 stack"><span class="eyebrow">Prep it elsewhere</span>
         ${L.parts.map(p => link("#lab/" + p.id, labState(p.id).completedAt ? "check" : "terminal", esc(partLabel(p)), esc(p.title) + (labState(p.id).completedAt ? " · done" : ""))).join("")}
-        ${L.partsN > L.parts.length ? `<span class="small muted" style="padding:2px 10px">and ${plural(L.partsN - L.parts.length, "more lab part")}</span>` : ""}
+        ${L.partsN > L.parts.length ? `<span class="u-pad-chip small muted">and ${plural(L.partsN - L.parts.length, "more lab part")}</span>` : ""}
         ${L.qids.length ? link("#", "test", `Answer ${plural(L.qids.length, "exam question")}`, `Study mode, about ${esc(c.cmd)}`, `data-cq="1"`) : ""}
         ${L.cids.length ? link("#", "cards", `Review ${plural(L.cids.length, "flashcard")}`, "", `data-ccards="1"`) : ""}
         ${link("#", "sheet", `Topic ${t} cheat sheet`, esc(TOP[t]), `data-csheet="${t}"`)}
         ${link("#sandbox", "drill", "Try it in the sandbox", man ? `Type <code>man ${esc(c.cmd)}</code> for the full page` : "A free terminal, no tasks")}
         ${OBJ[o] && OBJ[o].lesson ? link(esc(OBJ[o].lesson), "guide", `LPI lesson ${esc(o)}`, "Read it on learning.lpi.org", `target="_blank" rel="noopener"`) : ""}</div>
-      <div class="stack" style="gap:6px"><span class="eyebrow">Skills · ${c.practised} of ${c.skills.length} tried</span><ul class="cskills">${skills}</ul></div></div>`;
+      <div class="u-g6 stack"><span class="eyebrow">Skills · ${c.practised} of ${c.skills.length} tried</span><ul class="cskills">${skills}</ul></div></div>`;
   }
   function renderCommands() {
     const sp = st.settings.cmd;
@@ -1342,7 +1335,7 @@
       ["new", "Something new", tried < SKILLS.length ? plural(SKILLS.length - tried, "skill") + " you haven't tried" : "You've tried every skill", tried < SKILLS.length]];
     shell("commands", `${resume}<div class="page-head row spread progress-head"><div><h1>Commands</h1><p class="lead">Every exam command at a glance. Tap one to see what it does and where to practise it.</p></div>
         <div class="cmdsum"><div class="segbar" aria-hidden="true"><i style="width:${100 * mastered / n}%;background:var(--accent)"></i><i style="width:${100 * weak.length / n}%;background:var(--warm)"></i></div>
-          <span class="small muted"><b style="color:var(--ink)">${mastered}</b> of ${n} mastered${due ? ` · <b style="color:var(--ink)">${due}</b> due` : ""}</span></div></div>
+          <span class="small muted"><b class="u-ink">${mastered}</b> of ${n} mastered${due ? ` · <b class="u-ink">${due}</b> due` : ""}</span></div></div>
       <div class="cquick">${quick.map(([k, b, s, on], i) => `<button class="cq${i === 0 ? " primary-soft" : ""}" data-cmdgo="${k}" ${on ? "" : "disabled"}><b>${esc(b)}</b><span>${esc(s)}</span></button>`).join("")}</div>
       <div class="row csettings"><div class="seg" id="cmode" role="group" aria-label="Mode">${Object.keys(CMD_MODES).map(k => `<button data-v="${k}" class="${sp.mode === k ? "on" : ""}">${CMD_MODES[k][0]}</button>`).join("")}</div>
         <div class="seg" id="ccount" role="group" aria-label="Drills per set">${[5, 10, 20].map(x => `<button data-v="${x}" class="${sp.count === x ? "on" : ""}">${x}</button>`).join("")}</div>
@@ -1394,7 +1387,7 @@
     const dots = cp.tasks.map((x, i) => { const q = cp.res[i]; const cls = i === cp.i ? "cur" : !q || !q.recorded ? "" : q.ok ? "ok" : "miss";
       return `<span class="ddot ${cls}" title="Task ${i + 1}${q && q.recorded ? (q.ok ? ": right" : ": missed") : ""}"></span>`; }).join("");
     shell("cmdrun", `<div class="page-head"><a class="small backlink" href="#commands" id="cquit">${icon("left")}Command practice</a>
-        <h1>${esc(sk.label)}</h1><span class="eyebrow" style="margin-top:8px">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span>
+        <h1>${esc(sk.label)}</h1><span class="u-mt8 eyebrow">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span>
         <div class="drilldots" aria-hidden="true">${dots}</div></div>
       <div class="labwrap drillwrap">
         <div class="stack tasks">
@@ -1403,13 +1396,13 @@
             <div class="drilltext">${rich(t.text)}</div>
             ${verdict}
             ${over ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>
-              ${r.line ? `<div class="small" style="margin-top:8px">You typed <code>${esc(r.line)}</code>${r.line.trim() !== t.solution.trim() ? `. Another way: <code>${esc(t.solution.replace(/\n/g, "; "))}</code>` : ""}</div>`
-                : `<div class="small" style="margin-top:8px">One way: <pre class="code sol">${esc(t.solution)}</pre></div>`}`
+              ${r.line ? `<div class="u-mt8 small">You typed <code>${esc(r.line)}</code>${r.line.trim() !== t.solution.trim() ? `. Another way: <code>${esc(t.solution.replace(/\n/g, "; "))}</code>` : ""}</div>`
+                : `<div class="u-mt8 small">One way: <pre class="code sol">${esc(t.solution)}</pre></div>`}`
             : `${t.hints.slice(0, r.hint).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
               ${r.revealed ? `<pre class="code sol">${esc(t.solution)}</pre><div class="small muted">Type it to see it work. This one counts as a miss.</div>` : ""}
-              ${r.cmds && !r.solved ? `<div class="small muted" style="margin-top:6px">Not yet: the task isn't done. Check the output, or try another way.</div>` : ""}`}
+              ${r.cmds && !r.solved ? `<div class="u-mt6 small muted">Not yet: the task isn't done. Check the output, or try another way.</div>` : ""}`}
           </div></div>
-          <div class="row" style="gap:10px;flex-wrap:wrap">${over
+          <div class="u-g10 u-wrap row">${over
             ? `<button class="primary" id="cnext">${cp.i + 1 < cp.tasks.length ? "Next task" + icon("right", "after") : "See results"}</button><span class="small muted hide-sm">or press Enter in the terminal</span>`
             : `${guided && r.hint < t.hints.length ? `<button id="chint">${icon("bulb")}${r.hint ? "Another hint" : "Hint"}</button>` : ""}
                ${r.revealed ? "" : `<button class="ghost" id="creveal">Show answer</button>`}<button class="ghost" id="cskip">Skip</button>`}</div>
@@ -1446,7 +1439,7 @@
       <div class="card stack"><ol class="cmdresults">${cp.tasks.map((t, i) => { const q = res[i]; const sk = SKILL[t.skill] || { label: t.skill };
         return `<li class="${q && q.ok ? "ok" : "miss"}">${icon(q && q.ok ? "check" : "dot")}<span class="grow"><b>${esc(sk.label)}</b> <span class="mono small muted">${esc(t.cmd)}</span></span>
           <span class="small muted">${esc(why(q))}</span></li>`; }).join("")}</ol></div>
-      <div class="row" style="gap:10px;flex-wrap:wrap">${missed.length ? `<button class="primary" id="cagain">${icon("repeat")}Practise the ${missed.length === 1 ? "miss" : missed.length + " misses"} again</button>` : ""}
+      <div class="u-g10 u-wrap row">${missed.length ? `<button class="primary" id="cagain">${icon("repeat")}Practise the ${missed.length === 1 ? "miss" : missed.length + " misses"} again</button>` : ""}
         <button class="${missed.length ? "" : "primary"}" id="cmore">Another set</button><a class="btn ghost" href="#commands">Back to commands</a></div>`, { noTabs: true });
     const ids = [...new Set(missed.map(t => t.skill))];
     if ($("#cagain")) $("#cagain").onclick = () => startCmd({ source: "recommended", ids, count: missed.length, mode: cp.mode, label: "Misses again" });
@@ -1468,7 +1461,7 @@
         <p class="lead">A terminal with files, a log, a script, users, groups and a running process to explore. Nothing is checked or scored here. It stays as you left it until you reset it or reload the app.</p></div>
       <div class="labwrap">
         <div class="stack tasks"><div class="card stack"><b>Ideas to try</b><ol class="ideas">${SANDBOX_IDEAS.map(x => `<li>${rich(x)}</li>`).join("")}</ol></div>
-          <div class="row" style="gap:10px"><button class="ghost" id="sbReset">Reset the sandbox</button><a class="btn ghost" href="#commands">Command practice</a></div></div>
+          <div class="u-g10 row"><button class="ghost" id="sbReset">Reset the sandbox</button><a class="btn ghost" href="#commands">Command practice</a></div></div>
         ${termHTML()}
       </div>
       <div class="labfoot stack small"><div class="cmdrow"><span class="muted">Look one up:</span> ${cmds.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div></div>
@@ -1520,22 +1513,22 @@
       const url = i.url || (originServer && originServer.url) || "";
       const signup = originServer && originServer.url === url && originServer.signup;
       return `<div class="card stack" id="sync">${head}
-        ${i.lastError ? `<p class="small" style="color:var(--bad)">${esc(i.lastError)}</p>` : ""}
+        ${i.lastError ? `<p class="u-bad small">${esc(i.lastError)}</p>` : ""}
         <label class="small muted" for="syUrl">Server address</label><input id="syUrl" type="url" inputmode="url" autocomplete="url" placeholder="https://exit0.example.com" value="${esc(url)}">
-        <div class="row" style="gap:10px;flex-wrap:wrap"><input id="syUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" value="${esc(i.username || "")}" style="flex:1;min-width:140px">
-          <input id="syPass" type="password" autocomplete="current-password" placeholder="Password" style="flex:1;min-width:140px"></div>
+        <div class="u-g10 u-wrap row"><input id="syUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Username" value="${esc(i.username || "")}" class="u-f1 u-mw140">
+          <input id="syPass" type="password" autocomplete="current-password" placeholder="Password" class="u-f1 u-mw140"></div>
         <div class="row"><button class="primary" id="syIn"${dis}>${syncBusy ? "Signing in…" : "Sign in"}</button>${signup ? `<button id="syUp"${dis}>Create account</button>` : ""}</div></div>`;
     }
     return `<div class="card stack" id="sync">${head}
-      <div class="row spread" style="flex-wrap:wrap;gap:8px"><span>Signed in as <b>${esc(i.username)}</b> on <span class="mono small">${esc(i.url.replace(/^https?:\/\//, ""))}</span></span>
+      <div class="u-wrap u-g8 row spread"><span>Signed in as <b>${esc(i.username)}</b> on <span class="mono small">${esc(i.url.replace(/^https?:\/\//, ""))}</span></span>
         <span class="small muted">${i.lastSync ? "Synced " + ago(i.lastSync) : "Not synced yet"} · ${plural(i.others, "other device")}</span></div>
-      ${i.lastError ? `<p class="small" style="color:var(--bad)">${esc(i.lastError)}</p>` : ""}
-      <div class="row" style="flex-wrap:wrap"><button class="primary" id="syNow"${dis}>${syncBusy ? "Syncing…" : "Sync now"}</button>
+      ${i.lastError ? `<p class="u-bad small">${esc(i.lastError)}</p>` : ""}
+      <div class="u-wrap row"><button class="primary" id="syNow"${dis}>${syncBusy ? "Syncing…" : "Sync now"}</button>
         <button id="syDev">${syncDevices ? "Hide devices" : "Devices"}</button><button id="syPw">${syncPwOpen ? "Cancel" : "Change password"}</button><button class="ghost" id="syOut">Sign out</button></div>
-      ${syncDevices ? `<div class="stack" style="gap:6px">${syncDevices.devices.map(d => `<div class="row spread"><span>${esc(d.name)}${d.id === syncDevices.current ? ` <span class="chip lv-mastered">This device</span>` : ""}
+      ${syncDevices ? `<div class="u-g6 stack">${syncDevices.devices.map(d => `<div class="row spread"><span>${esc(d.name)}${d.id === syncDevices.current ? ` <span class="chip lv-mastered">This device</span>` : ""}
           <span class="small muted"> · last seen ${ago(d.lastSeen)}</span></span>${d.id === syncDevices.current ? "" : `<button class="small" data-sy-rm="${esc(d.id)}">Sign out</button>`}</div>`).join("")}
         <p class="small muted">Signing a device out stops it syncing. The progress it already made stays.</p></div>` : ""}
-      ${syncPwOpen ? `<div class="stack" style="gap:8px"><input id="syCur" type="password" autocomplete="current-password" placeholder="Current password">
+      ${syncPwOpen ? `<div class="u-g8 stack"><input id="syCur" type="password" autocomplete="current-password" placeholder="Current password">
         <input id="syNew" type="password" autocomplete="new-password" placeholder="New password (10+ characters)">
         <label class="small"><input type="checkbox" id="syOthers" checked> Sign out my other devices</label>
         <div class="row"><button class="primary" id="sySavePw">Change password</button></div></div>` : ""}</div>`;
@@ -1580,7 +1573,7 @@
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
       <div class="card stack"><h2>Daily goal</h2>
-        <div class="stack" style="gap:10px"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
+        <div class="u-g10 stack"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
       <div class="card stack"><h2>Daily review</h2>${reviewPickerHTML()}</div>
       ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
           <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device${SYNC && SYNC.linked ? " and synced" : " (or synced, if you set up Sync below)"}.</p></div>
@@ -1677,7 +1670,7 @@
         <button id="submit">${isTest ? "Submit" : "Finish"}</button>` : ""}</div></div>
       <main class="page qpage">
         <h1 class="sr">${esc(S.label)}: question ${S.cur + 1} of ${n}</h1>
-        ${confirming ? `<div class="card confirm stack" style="gap:10px"><h3>${isTest ? "Submit your exam?" : "Finish this study session?"}</h3>
+        ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : "Finish this study session?"}</h3>
           <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged.` : ""}</p>
           <div class="row"><button id="keep">Keep working</button><button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${showGrid ? `<div class="card"><div class="qgrid">${S.qids.map((qid, i) => { let c = C.answered(BANK.byId[qid], S.answers[qid]) ? "ans" : "";
@@ -1819,19 +1812,19 @@
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;
       if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
-      else body = `<div class="stack" style="gap:4px">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
+      else body = `<div class="u-g4 stack">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
         return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
-      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
+      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
-        <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
+        <p class="u-fw6">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
         <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
         <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
     shell(null, `<div class="page-head"><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span></div>
       <div class="card score"><div class="scorenum"><b>${pct}%</b><div class="scorebar" role="img" aria-label="Score ${pct} percent. The target is 80 percent."><i style="width:${pct}%"></i><span class="mark" style="left:80%"></span></div><span class="small muted">80% target</span></div>
-        <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
-          <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
+        <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
+          <p class="u-fs-l"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
             : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>
       <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
@@ -1843,7 +1836,7 @@
           return `<div class="bar"><div class="lbl"><span>${t}. ${esc(TOP[t])}</span><b>${r}/${nn}</b></div><div class="track2"><i style="width:${p}%;background:${col(p)}"></i><span class="mark"></span></div></div>`; }).join("")}</div></div>
         <div class="card stack"><h2>Where to study next</h2>${weakRows.length ? `<div class="olist">${weakRows.map(o => `<div class="orow" style="grid-template-columns:auto minmax(0,1fr) auto auto"><span class="o">${o}</span>
           <span>${esc(OBJ[o].name)}<br><a class="small" href="${OBJ[o].lesson}" target="_blank" rel="noopener">Read the LPI lesson</a></span>
-          <span class="pct" style="color:var(--bad)">${byObj[o][0]}/${byObj[o][1]}</span><button class="ghost small" data-study="${o}" style="padding:.4rem .6rem">Study</button></div>`).join("")}</div>`
+          <span class="u-bad pct">${byObj[o][0]}/${byObj[o][1]}</span><button class="u-pad-s ghost small" data-study="${o}">Study</button></div>`).join("")}</div>`
           : `<p class="muted small">You got every objective right. ${icon("trophy")}</p>`}</div></div>
       <div class="card stack"><div class="row spread"><h2>By question difficulty</h2><span class="small muted">How you did on each kind of thinking</span></div>${levelBars(byLevel)}</div>
       <div class="stack" id="review"><div class="row spread"><h2>Answers</h2><div class="filters">
@@ -1902,7 +1895,7 @@
     const right = hs.score.filter(Boolean).length, n = hs.score.length, missed = hs.items.filter((_, i) => i < n && !hs.score[i]);
     shell("study", `<div class="page-head"><h1>${right} of ${n} right</h1><span class="eyebrow">Hands-on · results</span>
         <p class="lead">${right === n ? "Every one right." : "The ones you missed come back first next time."}</p></div>
-      ${missed.length ? `<div class="card stack"><h2>To look at again</h2><div class="slist">${missed.map(it => `<div class="srow"><span class="o">${it.obj}</span><span class="stext">${rich(it.q)}
+      ${missed.length ? `<div class="card stack"><h2>To look at again</h2><div class="slist">${missed.map(it => `<div class="srow"><span class="o">${it.obj}</span><span class="stext"><span>${rich(it.q)}</span>
         <a class="small" href="${OBJ[it.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${it.obj}</a></span></div>`).join("")}</div></div>` : ""}
       <div class="row"><button class="primary" id="hsAgain">Ten more</button><button data-go="study">Back to Study</button></div>`);
     $("#hsAgain").onclick = () => startHandson();
@@ -1919,7 +1912,7 @@
         <button class="ghost small" data-ask="${q.id}">Answer it</button></div>`; };
     const crow = id => { const c = CARDS.find(x => x.id === id); return `<div class="srow"><span class="o">${c.obj}</span><span class="stext"><b>${esc(c.front)}</b><span class="small muted">${esc(c.back.length > 160 ? c.back.slice(0, 160) + "…" : c.back)}</span></span></div>`; };
     shell("study", `<div class="page-head"><h1>Search</h1><p class="lead">Find a question or flashcard by any word, command or question number.</p></div>
-      <div class="card stack"><label class="searchbox">${icon("guide")}<input id="q" type="search" value="${esc(searchText)}" placeholder="chmod, hard link, 3.2-07 …" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search questions and flashcards"></label>
+      <div class="card stack"><label class="searchbox">${icon("search")}<input id="q" type="search" value="${esc(searchText)}" placeholder="chmod, hard link, 3.2-07 …" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search questions and flashcards"></label>
         <div id="hits">${searchHits(r, qrow, crow)}</div></div>`);
     const inp = $("#q"), draw = () => { $("#hits").innerHTML = searchHits(C.search(BANK, CARDS, searchText, 40), qrow, crow); wireHits(); };
     const wireHits = () => { $$("[data-ask]").forEach(b => b.onclick = () => startStudy({ ids: [b.dataset.ask], label: "Search · " + b.dataset.ask }));

@@ -368,6 +368,15 @@
     const mix = reviewMix(avail, cfg, backlog, unseen);
     return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
   }
+  /** `n` of the due questions (already ordered oldest and missed first). When more are due than fit, each objective
+   *  gets its share by exam weight and gives its oldest ones, so a backlog is worked off where the exam's points are. */
+  function dueByWeight(bank, due, n, rand) {
+    if (n >= due.length) return due.slice();
+    const by = {}; for (const id of due) { const o = bank.byId[id].obj; (by[o] = by[o] || []).push(id); }
+    const objs = Object.keys(by);
+    const take = apportion(n, objs.map(o => ({ key: o, weight: (bank.objectives[o] || {}).weight, cap: by[o].length })), rand);
+    return [].concat(...objs.map(o => by[o].slice(0, take[o])));
+  }
   /** Start today's review (what's left of the daily size), or `opts.count` extra questions in the same mix. */
   function buildReview(bank, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
@@ -377,7 +386,7 @@
     let mix;
     if (opts.count) mix = reviewMix(opts.count, cfg, due.length, bank.questions.length);
     else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; }
-    const ids = due.slice(0, mix.due).concat(newIds(bank, state.qstats, mix.fresh, rand));
+    const ids = dueByWeight(bank, due, mix.due, rand).concat(newIds(bank, state.qstats, mix.fresh, rand));
     if (!ids.length) return null;
     return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }

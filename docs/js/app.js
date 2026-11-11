@@ -67,7 +67,8 @@
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const fmtDate = ms => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const col = p => p >= 80 ? "var(--accent)" : "var(--bar-low)";
+  const col = p => p >= 80 ? "var(--accent)" : "var(--bar-low)";      // bar fills
+  const tcol = p => p >= 80 ? "var(--accent-text)" : "var(--ink)";   // score text
   const vclass = p => p >= 80 ? "v-good" : p >= 65 ? "v-mid" : "v-bad";
   const LV = { new: "Not started", learning: "Learning", weak: "Weak", mastered: "Mastered" };
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
@@ -227,7 +228,7 @@
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
           <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
-            <div class="t2">${sk.metToday ? `Today's goal done, ${sk.today} of ${st.settings.goal}` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
+            <div class="t2">${sk.metToday ? `Today's goal of ${st.settings.goal} done` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
             <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
         ${canInstall() ? `<button class="ghost small install-btn" id="installSide">${icon("download")}Install app</button>` : ""}
@@ -357,7 +358,8 @@
     steps.push({ cmd: "levelup --rung " + lad.next, desc: lad.finished ? `All ${lad.steps} rungs climbed` : `${lad.size === 10 ? "Ten" : lad.size} questions, ${lad.pass}% to climb`, done: lad.finished, attr: 'data-start="levelup"' });
     if (cmdDue) steps.push({ cmd: "drill --due " + cmdDue, desc: plural(cmdDue, "command drill") + " on a fresh terminal", attr: 'data-start="cmddue"' });
     if (lab) steps.push({ cmd: "lab " + lab.id, desc: `${labName(lab)}: ${lab.title}`, href: "#lab/" + lab.id });
-    if (!st.tests.some(t => t.mode === "test")) steps.push({ cmd: "exam --baseline", desc: "Baseline exam, 40 questions in 60 minutes", attr: 'data-start="test"' });
+    steps.push(st.tests.some(t => t.mode === "test") ? { cmd: "exam", desc: "Practice exam, 40 questions in 60 minutes", attr: 'data-start="test"' }
+      : { cmd: "exam --baseline", desc: "Baseline exam, 40 questions in 60 minutes", attr: 'data-start="test"' });
     return steps;
   }
   function pipelineHTML(steps) {
@@ -500,7 +502,7 @@
           <button data-go="cards">Open flashcards</button></div>`;
     }
     const stats = last ? `<div class="grid4">
-        <div class="card stat"><b style="color:${col(last.pct)}">${last.pct}%</b><span>Last exam</span></div>
+        <div class="card stat"><b style="color:${tcol(last.pct)}">${last.pct}%</b><span>Last exam</span></div>
         <div class="card stat"><b>${Math.max(...tests.map(t => t.pct))}%</b><span>Best</span></div>
         <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></div>
         <div class="card stat"><b>${tests.length}</b><span>${tests.length === 1 ? "Exam" : "Exams"} taken</span></div></div>` : "";
@@ -612,7 +614,7 @@
         if (opts.select) return `<label class="orow" for="sel${o}"><input type="checkbox" id="sel${o}" data-obj="${o}" ${opts.sel.has(o) ? "checked" : ""}>
             <span class="o">${o}</span><span>${esc(OBJ[o].name)} <span class="small muted">· ${s.total} Qs</span></span><span class="chip lv-${s.level}">${LV[s.level]}</span></label>`;
         return `<div class="orow"><span class="o">${o}</span><span>${esc(OBJ[o].name)}</span>
-            <span class="u-g12 row"><span class="chip lv-${s.level} hide-sm">${LV[s.level]}</span><span class="pct" style="color:${s.pct == null ? "var(--muted)" : col(s.pct)}">${pct}</span></span>
+            <span class="u-g12 row"><span class="chip lv-${s.level} hide-sm">${LV[s.level]}</span><span class="pct" style="color:${s.pct == null ? "var(--muted)" : tcol(s.pct)}">${pct}</span></span>
             <button class="u-pad-s ghost small" data-study="${o}">Study</button></div>`;
       }).join("")).join("")}</div>`;
   }
@@ -760,7 +762,7 @@
       <details class="card histcard"><summary><h2>History</h2><span class="small muted">${plural(st.tests.length, "session")}</span></summary>
         <div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th class="u-tr">Score</th><th class="u-tr">Time</th><th></th></tr></thead><tbody>
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
-          <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
+          <td class="n" style="color:${tcol(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
           <td class="u-tr">${t.qids ? `<button class="u-pad-s ghost small" data-review="${esc(t.id)}">Review</button>` : ""}</td></tr>`).join("")}
         </tbody></table></div></details>
       ${SYNC && !SYNC.linked ? `<p class="small muted">Studying on more than one device? <a href="#settings">Set up sync</a> with your own exit0-sync server to keep this progress in step.</p>` : ""}`);
@@ -847,7 +849,7 @@
   let guideObserver = null;
   function renderGuide() {
     const os = C.objectiveStats(BANK, st.qstats), started = Object.keys(st.qstats).length > 0;
-    const you = p => p == null ? `<span class="muted">—</span>` : `<span style="color:${ocol(p)}">${p}%</span>`;
+    const you = p => p == null ? `<span class="muted">—</span>` : `<span style="color:${tcol(p)}">${p}%</span>`;
     const rank = o => os[o].pct == null ? 101 : os[o].pct;
     const weakest = Object.keys(OBJ).slice().sort((a, b) => rank(a) - rank(b))[0];
     const openT = started && os[weakest].pct != null ? C.topicOf(weakest) : "1";
@@ -1664,7 +1666,7 @@
     app.innerHTML = `<div class="exam-bar"><div class="in">
         <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : "Study"} page.">${icon("x")}</button>
         <div class="progress" id="prog" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${100 * done / n}%"></i></div>
-        <span class="count">${S.cur + 1} of ${n}</span>
+        <span class="count hide-sm" id="cnt">${done} of ${n} answered</span>
         ${S.deadline ? `<span class="timer" id="timer">${fmt((S.deadline - Date.now()) / 1000)}</span>` : ""}
         ${n > 1 ? `<button class="ghost hide-sm" id="gridBtn" aria-expanded="${showGrid}">${showGrid ? "Hide" : "All"} questions</button>
         <button id="submit">${isTest ? "Submit" : "Finish"}</button>` : ""}</div></div>
@@ -1676,7 +1678,7 @@
         ${showGrid ? `<div class="card"><div class="qgrid">${S.qids.map((qid, i) => { let c = C.answered(BANK.byId[qid], S.answers[qid]) ? "ans" : "";
             if (S.study && S.checked[qid]) c = C.isCorrect(BANK.byId[qid], S.answers[qid]) ? "ok" : "no";
             return `<button data-jump="${i}" class="${c}${S.flags[qid] ? " fl" : ""}${i === S.cur ? " cur" : ""}" aria-label="Question ${i + 1}">${i + 1}</button>`; }).join("")}</div></div>` : ""}
-        <div class="qmeta">${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
+        <div class="qmeta"><span class="qpos">Question ${S.cur + 1} of ${n}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
         ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}${revealed ? noteBox(id) : ""}
@@ -1706,7 +1708,7 @@
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
       const inp = $("#fillin");
-      inp.oninput = () => { S.answers[id] = inp.value; save(); const c = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length; $("#prog").setAttribute("aria-valuenow", c); $("#prog i").style.width = (100 * c / n) + "%"; };
+      inp.oninput = () => { S.answers[id] = inp.value; save(); const c = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length; $("#prog").setAttribute("aria-valuenow", c); $("#cnt").textContent = `${c} of ${n} answered`; $("#prog i").style.width = (100 * c / n) + "%"; };
       inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (S.study && !S.checked[id]) { S.checked[id] = 1; save(); renderExam(); } else if (S.cur < n - 1) move(S.cur + 1); else { confirming = true; renderExam(); } } };
       if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
     } else if (!revealed) {
@@ -1939,7 +1941,7 @@
       if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }
       else if (e.key === "ArrowLeft" && S.cur > 0) { S.cur--; save(); renderExam(); }
       else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
-      else if (e.key.toLowerCase() === "f") { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
+      else if (e.key.toLowerCase() === "f" && S.qids.length > 1) { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
       else if (e.key.toLowerCase() === "h") showHint(S, S.qids[S.cur]);
       else if (e.key === "Enter" && !confirming && !(e.target.closest && e.target.closest("button, a, summary, textarea"))) { const b = $(".qactions .primary"); if (b) { e.preventDefault(); b.click(); } }
     } else if (h === "cards" && cs && cs.i < cs.queue.length && !typing) {

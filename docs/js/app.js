@@ -352,7 +352,7 @@
     const dr = C.dailyReview(BANK, st), cardsDue = C.deckStats(CARDS, st.cards).due, cmdDue = cmdDueN();
     const lad = C.ladder(st.tests), lab = nextLabPart(), qod = BANK.byId[C.questionOfDay(BANK)];
     const steps = [];
-    if (C.clampReview(st.settings.review).on) steps.push({ cmd: dr.left ? "review --due " + dr.left : "review", desc: "Daily review, split by exam weight", done: !dr.left, attr: 'data-start="review"' });
+    if (C.clampReview(st.settings.review).on) steps.push({ cmd: dr.left ? "review --due " + dr.left : "review", desc: dr.left ? "Daily review, split by exam weight" : "Daily review done. Open it for extra questions", done: !dr.left, doneHref: "#review", attr: 'data-start="review"' });
     if (cardsDue) steps.push({ cmd: "cards --due " + cardsDue, desc: plural(cardsDue, "flashcard") + " due today", attr: 'data-start="duecards"' });
     steps.push({ cmd: "qotd", desc: "Question of the day" + (qod ? ", objective " + qod.obj : ""), done: C.qotdDone(st.tests), attr: 'data-start="qotd"' });
     steps.push({ cmd: "levelup --rung " + lad.next, desc: lad.finished ? `All ${lad.steps} rungs climbed` : `${lad.size === 10 ? "Ten" : lad.size} questions, ${lad.pass}% to climb`, done: lad.finished, attr: 'data-start="levelup"' });
@@ -368,7 +368,7 @@
       const inner = `<span class="pipe-cmd" aria-hidden="true"><span class="op">${i ? "|" : "$"}</span>${esc(s.cmd)}</span><span class="pipe-desc">${esc(s.desc)}</span>
         <span class="pipe-state">${s.done ? icon("check") + "Done" : i === next ? "Run" : "waiting"}</span>`;
       const cls = "pipe-row " + (s.done ? "done" : i === next ? "next" : "wait");
-      return `<li>${s.done ? `<div class="${cls}">${inner}</div>` : s.href ? `<a class="${cls}" href="${s.href}">${inner}</a>` : `<button class="${cls}" ${s.attr}>${inner}</button>`}</li>`;
+      return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}">${inner}</a>` : `<div class="${cls}">${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}">${inner}</a>` : `<button class="${cls}" ${s.attr}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
   function renderToday() {

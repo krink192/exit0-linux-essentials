@@ -200,6 +200,69 @@ t("daily review: when more is due than fits, the due questions are split by exam
   bank.byObj["1.3"].forEach(id => { few.qstats[id] = { seen: 1, right: 0, last: false, box: 0, due: today }; });
   assert.strictEqual(C.buildReview(bank, few, { seed: 1, today }).qids.filter(id => few.qstats[id]).length, 10);
 });
+t("fixed practice exams A-J: always the same 40 questions, a full blueprint each, nothing shared between sets", () => {
+  const seen = new Set();
+  for (const f of "ABCDEFGHIJ") {
+    const a = C.buildTest(bank, {}, { form: f, seed: 1 }), b = C.buildTest(bank, { [a.qids[0]]: { seen: 3, right: 0, last: false } }, { form: f, seed: 2 });
+    assert.strictEqual(a.label, "Practice exam " + f); assert.strictEqual(a.form, f); assert.strictEqual(a.mode, "test"); assert(a.deadline);
+    assert.deepStrictEqual(a.qids.slice().sort(), b.qids.slice().sort());
+    assert.deepStrictEqual(C.objCounts(bank, a.qids), Object.fromEntries(OBJS.map(o => [o, W(o)])));
+    a.qids.forEach(id => { assert(!seen.has(id), id + " is in two sets"); seen.add(id); });
+  }
+  assert.strictEqual(seen.size, 400); assert.strictEqual(C.buildTest(bank, {}, { form: "Z" }), null);
+  const st = C.freshState(), s = C.buildTest(bank, {}, { form: "C", seed: 1 });
+  const rec = C.recordResult(st, bank, s, C.grade(bank, s)); assert.strictEqual(rec.form, "C");
+  assert.strictEqual(C.migrate(JSON.parse(JSON.stringify(st))).tests[0].form, "C");
+});
+t("quick modes: Quick 10, timed quiz, question of the day", () => {
+  const q = C.buildQuick(bank, {}, { seed: 1 }); assert.strictEqual(q.qids.length, 10); assert.strictEqual(q.label, "Quick 10"); assert(q.study && !q.deadline);
+  const t5 = C.buildTimed(bank, {}, 5, { seed: 1, now: 1000 }), t10 = C.buildTimed(bank, {}, 10, { seed: 1, now: 1000 });
+  assert.strictEqual(t5.deadline, 1000 + 300000); assert.strictEqual(t10.deadline, 1000 + 600000); assert.strictEqual(t5.qids.length, 20); assert.strictEqual(t10.qids.length, 40);
+  assert(t5.study && t5.mode === "study");
+  const today = C.dayNum(), id = C.questionOfDay(bank, today);
+  assert.strictEqual(C.questionOfDay(bank, today), id); assert(bank.byId[id]);
+  assert(new Set(Array.from({ length: 60 }, (_, i) => C.questionOfDay(bank, today + i))).size > 50, "a different question most days");
+  const st = C.freshState(), s = C.buildQotd(bank, { today }); assert.deepStrictEqual(s.qids, [id]);
+  assert.strictEqual(C.qotdDone(st.tests, today), false);
+  s.answers[id] = bank.byId[id].type === "fill" ? bank.byId[id].accept[0] : bank.byId[id].answer;
+  C.recordResult(st, bank, s, C.grade(bank, s), Date.now());
+  assert.strictEqual(C.qotdDone(st.tests, today), true); assert.strictEqual(C.qotdDone(st.tests, today + 1), false);
+  assert.strictEqual(C.readiness(st.tests), null, "quick modes never count toward readiness");
+});
+t("Level Up: 8 of 10 moves up a step, steps get harder, progress comes from the history", () => {
+  const st = C.freshState(); const play = right => { const s = C.buildLevelUp(bank, st, { seed: st.tests.length + 1 });
+    s.qids.forEach((id, i) => { const q = bank.byId[id]; s.answers[id] = i < right ? (q.type === "fill" ? q.accept[0] : q.answer) : (q.type === "fill" ? "zzz" : [q.options.length - 1 === q.answer[0] ? 0 : q.options.length - 1]); });
+    return [s, C.recordResult(st, bank, s, C.grade(bank, s))]; };
+  assert.deepStrictEqual([C.ladder(st.tests).done, C.ladder(st.tests).next], [0, 1]);
+  let [s, rec] = play(7); assert.strictEqual(rec.rung, 1); assert(s.qids.every(id => bank.byId[id].level === 1)); assert.strictEqual(C.ladder(st.tests).next, 1, "7 of 10 stays");
+  [s, rec] = play(8); assert.strictEqual(C.ladder(st.tests).next, 2);
+  play(10); [s] = play(9); assert(s.qids.every(id => bank.byId[id].level === 2), "step 3 is apply-level"); assert.strictEqual(C.ladder(st.tests).next, 4);
+  for (let i = 0; i < 6; i++) play(10);
+  const l = C.ladder(st.tests); assert.strictEqual(l.done, 9); assert(l.finished);
+  assert.strictEqual(C.ladder(C.migrate(JSON.parse(JSON.stringify(st))).tests).done, 9, "survives a reload");
+});
+t("bookmarks and notes: saved, merged across devices (latest change wins), removal travels too", () => {
+  const a = C.freshState(), b = C.freshState();
+  C.setMark(a, "1.1-01", { on: true }, 100); C.setMark(a, "1.1-02", { note: "RPM = Red Hat <b>" }, 110); C.setMark(b, "1.1-01", { on: true, note: "from b" }, 120); C.setMark(b, "9.9-99", { on: true }, 130);
+  assert.deepStrictEqual(C.markedIds(bank, a), ["1.1-02", "1.1-01"]); assert.strictEqual(C.markOf(a, "3.3-01").on, false);
+  const docA = C.ownPart(a, C.mergeStates([]), {}), docB = C.ownPart(b, C.mergeStates([]), {});
+  C.applyMerged(a, C.mergeStates([docA, docB])); C.applyMerged(b, C.mergeStates([docB, docA]));
+  assert.deepStrictEqual(a.marks, b.marks); assert.strictEqual(a.marks["1.1-01"].note, "from b"); assert.strictEqual(a.marks["1.1-02"].note, "RPM = Red Hat <b>");
+  C.setMark(b, "1.1-01", { on: false, note: "" }, 200);
+  C.applyMerged(a, C.mergeStates([C.ownPart(a, C.mergeStates([docB]), {}), C.ownPart(b, C.mergeStates([]), {})]));
+  assert.strictEqual(a.marks["1.1-01"].on, false); assert(!C.markedIds(bank, a).includes("1.1-01"));
+  assert.deepStrictEqual(C.ownPart(a, C.mergeStates([C.ownPart(a, C.mergeStates([]), {})]), {}).marks, {}, "nothing to upload when the others already have it");
+  const m = C.migrate({ marks: { "1.1-01": { on: "yes", note: 5, at: "x" }, "<x>": { on: true }, "1.1-02": "str" } });
+  assert.deepStrictEqual(m.marks, { "1.1-01": { on: false, note: "", at: 0 } });
+  assert.strictEqual(C.importState(C.freshState(), { app: "le010", tests: [], marks: { "2.1-01": { on: true, note: "n", at: 5 } } }).marks["2.1-01"].note, "n");
+});
+t("search finds questions and flashcards by every word", () => {
+  const r = C.search(bank, cards, "chmod octal"); assert(r.questions.length > 0); assert(r.questions.every(id => /chmod/i.test(JSON.stringify(bank.byId[id])) && /octal/i.test(JSON.stringify(bank.byId[id]))));
+  assert(C.search(bank, cards, "kernel").cards.length > 0);
+  assert.deepStrictEqual(C.search(bank, cards, "  ").questions, []); assert.strictEqual(C.search(bank, cards, "zzzqqqxxx").total, 0);
+  assert.deepStrictEqual(C.search(bank, cards, "3.2-07").questions, ["3.2-07"]);
+  assert(C.search(bank, cards, "the", 5).questions.length === 5 && C.search(bank, cards, "the", 5).more);
+});
 t("daily review: new questions cover the bank in step with the exam weights (never more than one question off)", () => {
   const c = {};
   C.newIds(bank, {}, bank.questions.length, C.rng(1)).forEach((id, i) => {

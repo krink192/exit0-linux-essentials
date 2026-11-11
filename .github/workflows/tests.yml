@@ -1,6 +1,9 @@
 # Runs the logic and question-bank tests on every push and pull request.
 name: Tests
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_call:      # pages.yml runs these before it publishes the website
 jobs:
   test:
     # Pinned: the lab shell is compared with real Bash and GNU coreutils. ubuntu-latest moved to 26.04, whose

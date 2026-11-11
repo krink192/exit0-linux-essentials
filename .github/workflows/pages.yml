@@ -26,8 +26,13 @@ env:
   SITE: https://krink192.github.io/exit0-linux-essentials
 
 jobs:
-  build:
+  # Nothing is published unless the tests pass on the commit being published.
+  tests:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    uses: ./.github/workflows/tests.yml
+
+  build:
+    needs: tests
     runs-on: ubuntu-latest
     outputs:
       repo: ${{ steps.repo.outputs.repo }}

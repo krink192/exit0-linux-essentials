@@ -730,7 +730,7 @@
         <div class="tablewrap"><table class="table"><thead><tr><th>Date</th><th>Session</th><th style="text-align:right">Score</th><th style="text-align:right">Time</th><th></th></tr></thead><tbody>
         ${st.tests.slice().reverse().slice(0, 25).map(t => `<tr><td>${fmtDate(t.date)}</td><td>${esc(t.label)}</td>
           <td class="n" style="color:${col(t.pct)}">${t.score}/${t.total} · ${t.pct}%</td><td class="n">${fmt(t.secs)}</td>
-          <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${t.id}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
+          <td style="text-align:right">${t.qids ? `<button class="ghost small" data-review="${esc(t.id)}" style="padding:.4rem .6rem">Review</button>` : ""}</td></tr>`).join("")}
         </tbody></table></div></details>
       ${SYNC && !SYNC.linked ? `<p class="small muted">Studying on more than one device? <a href="#settings">Set up sync</a> with your own exit0-sync server to keep this progress in step.</p>` : ""}`);
     wireStarts($("#page"));
@@ -948,7 +948,7 @@
     if (!window.LEShell || !window.LE_LABS) {
       shell("labs", `<div class="page-head"><a class="small" href="#labs">← All labs</a><h1>${esc(meta.title)}</h1><p class="lead muted">Starting the lab system…</p></div>`, { noTabs: true });
       loadLabs().then(() => { if ((location.hash || "").slice(1) === "lab/" + id) renderLab(id); },
-        () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the lab files. Check your connection and <a href="#lab/${esc(id)}" onclick="location.reload()">try again</a>.</div>`); });
+        () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the lab files. Check your connection and <button class="linkbtn" data-reload>try again</button>.</div>`); wireReload(); });
       return;
     }
     const lab = window.LE_LABS.find(l => l.id === id);
@@ -1194,11 +1194,12 @@
     if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
     return { paint, focus: () => inp.focus({ preventScroll: true }) };
   }
+  const wireReload = () => $$("[data-reload]").forEach(b => b.onclick = () => location.reload());
   const keepScroll = fn => { const y = scrollY; fn(); scrollTo(0, y); const i = $("#termIn"); if (i && matchMedia("(pointer:fine)").matches) i.focus({ preventScroll: true }); };
   function loadingPage(active, title, retryHash) {
     shell(active, `<div class="page-head"><h1>${esc(title)}</h1><p class="lead muted">Starting the terminal…</p></div>`, { noTabs: active === "cmdrun" });
     loadDrills().then(() => { if ((location.hash || "").slice(1) === retryHash) render(); },
-      () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the practice files. Check your connection and <a href="#${retryHash}" onclick="location.reload()">try again</a>.</div>`); });
+      () => { $("#page").insertAdjacentHTML("beforeend", `<div class="card">Couldn't load the practice files. Check your connection and <button class="linkbtn" data-reload>try again</button>.</div>`); wireReload(); });
   }
 
   // ================================================================== COMMAND PRACTICE: mastery map, set builder, drill runner
@@ -1578,13 +1579,12 @@
     };
     bindSyncCard();
     if ($("#imp")) $("#imp").onclick = () => {
-      try {
-        const d = JSON.parse($("#impData").value);
-        if (d.app !== "le010" || !Array.isArray(d.tests)) throw new Error("bad");
-        Object.assign(st, { tests: d.tests, qstats: d.qstats || {}, cards: d.cards || {}, cmdstats: d.cmdstats || {}, days: d.days || {}, labs: d.labs || st.labs || {}, badges: d.badges || st.badges || {} });
-        if (d.settings) st.settings = Object.assign(st.settings, d.settings);
-        save(); applyTheme(); toast("Progress imported"); renderSettings();
-      } catch (e) { toast("That code isn't valid. Copy the whole export code and try again."); }
+      let next = null;
+      try { next = C.importState(st, JSON.parse($("#impData").value)); } catch (e) { /* not JSON */ }
+      if (!next) return toast("That code isn't valid. Copy the whole export code and try again.");
+      st = next; st.current = C.repairSession(BANK, st.current); deck = st.settings.deck || deck;
+      C.migrateLabs(st, LABS); C.awardBadges(st, BANK, CARDS, null, LABS.length);
+      save(); applyTheme(); toast("Progress imported"); renderSettings();
     };
     if ($("#reset")) $("#reset").onclick = () => { resetOpen = true; renderSettings(); };
     if ($("#rno")) { $("#rno").onclick = () => { resetOpen = false; renderSettings(); };
@@ -1755,6 +1755,7 @@
       (byObj[o] = byObj[o] || [0, 0])[1]++; (byTopic[t] = byTopic[t] || [0, 0])[1]++; if (ok) { byObj[o][0]++; byTopic[t][0]++; }
     }
     const flags = new Set(rec.flags || []), hintsUsed = new Set(rec.hints || []);
+    const order = (q, o) => Array.isArray(o) && o.length === q.options.length && o.every(i => q.options[i] != null) ? o : q.options.map((_, i) => i);
     const pct = rec.pct, isTest = rec.mode === "test";
     const verdict = pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing";
     const wrongN = rec.qids.filter(id => !perQ[id]).length;
@@ -1763,7 +1764,7 @@
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;
       if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
-      else body = `<div class="stack" style="gap:4px">${rec.optOrder[id].map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
+      else body = `<div class="stack" style="gap:4px">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
         return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${k && p ? "Your pick · correct" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct · missed" : "Correct") : "Your pick · wrong"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>

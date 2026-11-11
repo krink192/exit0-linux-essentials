@@ -57,6 +57,50 @@ t("a saved session survives a bank update that removed one of its questions", ()
   assert.strictEqual(C.repairSession(bank, { qids: ["9.9-99"] }), null);
   assert.strictEqual(C.repairSession(bank, null), null); assert.strictEqual(C.repairSession(bank, { qids: "x" }), null);
 });
+t("progress from storage, an export code or a sync server is rebuilt with safe types; valid progress is unchanged", () => {
+  const X = "<img src=x onerror=alert(1)>", walk = (v, f) => { f(v); if (v && typeof v === "object") for (const k in v) { f(k); walk(v[k], f); } };
+  const noMarkup = v => walk(v, x => assert(typeof x !== "string" || !x.includes("<") || x === X.slice(0, 200), "markup survived: " + x));
+  // a real, well-used state comes back exactly as it went in
+  const st = C.freshState();
+  for (let i = 0; i < 3; i++) { const s = i ? C.buildTest(bank, st.qstats, { seed: i }) : C.buildStudy(bank, {}, { count: 10 }, { seed: 9 });
+    s.qids.forEach((id, n) => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : n % 3 ? q.answer : [0]; }); s.flags[s.qids[0]] = true; s.hints[s.qids[1]] = 1;
+    C.recordResult(st, bank, s, C.grade(bank, s), 1.7e12 + i * 864e5); }
+  C.reviewCard(st.cards, cards[0].id, true, C.dayNum(1.7e12), 1.7e12); C.recordDrill(st, "echo-var", false, 1.7e12);
+  st.labs["2.1.1-a"] = { done: [0, 2], completedAt: 5 }; st.badges.ready = 1.7e12; st.settings.examDate = "2027-01-20"; st.current = C.buildStudy(bank, {}, { count: 5 }, { seed: 3 });
+  const round = JSON.parse(JSON.stringify(st));
+  assert.deepStrictEqual(C.migrate(JSON.parse(JSON.stringify(st))), round);
+  assert.deepStrictEqual(C.cleanDoc(JSON.parse(JSON.stringify(C.ownPart(st, C.mergeStates([]), {})))), JSON.parse(JSON.stringify(C.ownPart(st, C.mergeStates([]), {}))));
+  // hostile values: markup in every text slot, wrong types everywhere, prototype keys
+  const bad = JSON.parse(JSON.stringify(st));
+  Object.assign(bad.tests[0], { score: X, total: X, pct: X, secs: X, id: 't"><b>', label: X, mode: X, qids: [X, "1.1-01"], flags: X, answers: { "1.1-01": { a: X } } });
+  bad.tests.push({ id: "t9", score: X, extra: X, nested: { a: X } }, X, null, 7);
+  bad.qstats[X] = { seen: 1 }; bad.qstats["1.1-01"] = { seen: X, right: -5, last: X, box: 99, due: X, at: X, note: X };
+  bad.qstats["__proto__x"] = X; bad.cards = X; bad.days = { "2026-11-10": X, [X]: 3, "2026-11-09": 4 }; bad.badges = { ready: X, [X]: 1 };
+  bad.labs = { "2.1.1-a": { done: [X, 1, 1, -2, 1.5], completedAt: X }, p2: X };
+  bad.settings = { theme: X, goal: 0, review: X, examDate: X, remindAt: X, deck: X, study: { objMode: X, objs: X, levels: [X, 9, 2], source: X, count: X }, cmd: { mode: X, cmds: [X, 5], count: X, source: X }, junk: X };
+  bad.current = { qids: [X], start: X };
+  const m = C.migrate(JSON.parse(JSON.stringify(bad)));
+  const t0 = m.tests.find(t => t.label === X.slice(0, 200));     // the label stays text; the app escapes it when shown
+  assert(!m.tests.some(t => /[<"]/.test(t.id))); assert.strictEqual(m.tests.filter(t => t.id === "t9").length, 1); assert.strictEqual(m.tests.find(t => t.id === "t9").score, 0);
+  for (const t of m.tests) { for (const k of ["score", "total", "pct", "secs", "date"]) assert(Number.isFinite(t[k]), k); assert(/^[a-z]+$/.test(t.mode)); delete t.label; }
+  noMarkup(m.tests); noMarkup(m.qstats); noMarkup(m.cards); noMarkup(m.days); noMarkup(m.badges); noMarkup(m.labs); noMarkup(m.settings);
+  assert.deepStrictEqual(m.qstats["1.1-01"], { seen: 0, right: 0, last: null, box: 5 });
+  assert.deepStrictEqual(m.days, { "2026-11-09": 4 }); assert.deepStrictEqual(m.badges, {}); assert.deepStrictEqual(m.labs, { "2.1.1-a": { done: [1] } });
+  assert.deepStrictEqual(m.cards, {}); assert.strictEqual(m.current, null);
+  assert.deepStrictEqual([m.settings.theme, m.settings.goal, m.settings.examDate, m.settings.remindAt, m.settings.deck], ["system", 1, null, "19:00", "concepts"]);
+  assert.deepStrictEqual(m.settings.review, { on: false, size: 20, fresh: 5 });
+  assert.deepStrictEqual(m.settings.study, { objMode: "all", objs: [], levels: [], source: "mix", count: 0 });
+  assert.deepStrictEqual(m.settings.cmd, { source: "recommended", cmds: [X], count: 1, mode: "guided" });   // command names are text, escaped when shown
+  assert.strictEqual(typeof C.streak(m.days, m.settings.goal).count, "number");                                            // a goal of 0 used to spin forever
+  // the same through an export code and through a sync merge
+  const imp = C.importState(C.freshState(), Object.assign({ app: "le010" }, JSON.parse(JSON.stringify(bad))));
+  assert.strictEqual(imp.settings.goal, 1); noMarkup(imp.qstats); noMarkup(imp.labs); assert(imp.tests.every(t => Number.isFinite(t.score)));
+  assert.strictEqual(C.importState(C.freshState(), { app: "other", tests: [] }), null); assert.strictEqual(C.importState(C.freshState(), X), null);
+  const target = C.freshState(); C.applyMerged(target, C.mergeStates([C.cleanDoc(JSON.parse(JSON.stringify(bad)))]));
+  assert.strictEqual(target.settings.goal, 1); noMarkup(target.qstats); noMarkup(target.days); assert(target.tests.every(t => Number.isFinite(t.pct)));
+  const raw = C.freshState(); C.applyMerged(raw, JSON.parse(JSON.stringify(bad)));                       // even an unclean view is cleaned on the way in
+  noMarkup(raw.qstats); noMarkup(raw.labs); assert.strictEqual(raw.settings.goal, 1); assert.deepStrictEqual(raw.cards, {});
+});
 t("answer keys grade correctly; wrong answers fail; fill-in trims spaces, keeps case", () => {
   for (const q of bank.questions) {
     if (q.type === "fill") { q.accept.forEach(a => assert(C.isCorrect(q, "  " + a + " "), q.id)); assert(!C.isCorrect(q, "zzz")); }
@@ -299,6 +343,33 @@ t("index.html loads each script and stylesheet by its current content hash (run 
   for (const [, f, v] of refs) assert.strictEqual(v, crypto.createHash("sha256").update(fs.readFileSync(path.join(docs, f))).digest("hex").slice(0, 10), f + " changed: run python3 tools/build.py");
   assert.ok(!/(?:src|href)="(?:js|data|css)\/[\w.-]+\.(?:js|css)"/.test(html), "every local script has a version");
   for (const f in window.LE_LABINDEX.assets) assert.strictEqual(window.LE_LABINDEX.assets[f], crypto.createHash("sha256").update(fs.readFileSync(path.join(docs, f))).digest("hex").slice(0, 10), f + " changed: run python3 tools/build.py");
+});
+t("the service worker's offline snapshot lists every file of this build by its current hash, and nothing from other sites", () => {
+  const fs = require("fs"), path = require("path"), crypto = require("crypto"), docs = path.join(__dirname, "../docs");
+  const hash = f => crypto.createHash("sha256").update(fs.readFileSync(path.join(docs, f))).digest("hex").slice(0, 10);
+  const sw = fs.readFileSync(path.join(docs, "sw.js"), "utf8"), html = fs.readFileSync(path.join(docs, "index.html"), "utf8");
+  const list = JSON.parse(/const PRECACHE = (\[.*\]);/.exec(sw)[1]), name = /const CACHE = "(exit0-\w{10})";/.exec(sw)[1];
+  assert.notStrictEqual(name, "exit0-0000000000", "run python3 tools/build.py");
+  const has = f => list.some(u => u.split("?")[0] === f);
+  for (const u of list) { const [f, v] = u.split("?v="); assert(fs.existsSync(path.join(docs, f)), f + " is listed but missing"); if (v) assert.strictEqual(v, hash(f), f + " changed: run python3 tools/build.py"); }
+  for (const [, f] of html.matchAll(/(?:src|href)="((?:js|data|css)\/[\w.-]+\.(?:js|css))\?v=\w+"/g)) assert(list.includes(f + "?v=" + hash(f)), f + " is loaded by index.html but not in the snapshot");
+  for (const f in window.LE_LABINDEX.assets) assert(list.includes(f + "?v=" + hash(f)), f + " is loaded on demand but not in the snapshot");
+  for (const f of ["index.html", "manifest.webmanifest"].concat(fs.readdirSync(path.join(docs, "fonts")).filter(n => n.endsWith(".woff2")).map(n => "fonts/" + n),
+    fs.readdirSync(path.join(docs, "icons")).map(n => "icons/" + n))) assert(has(f), f + " is not in the snapshot");
+  const css = fs.readFileSync(path.join(docs, "css/styles.css"), "utf8");
+  for (const [, f] of css.matchAll(/url\(\.\.\/(fonts\/[\w.-]+)\)/g)) assert(has(f), f + " is used by the stylesheet but not in the snapshot");
+  // a build that changes any file gets a new cache name (the build hashes the list and the unversioned files into it)
+  assert(!/skipWaiting/.test(sw.replace(/\/\/.*$/gm, "")), "a new build must wait for the app to be reopened, not swap files under a running page");
+  // nothing is loaded from another site: no font CDN, no inline script, and a policy that says so
+  assert(!/https?:\/\/(?!www\.w3\.org)[^"' ]+\.(css|js|woff2?)/.test(html) && !/fonts\.(googleapis|gstatic)/.test(html + css + sw), "a file is loaded from another site");
+  assert(!/<script(?![^>]*\bsrc=)[^>]*>/.test(html), "index.html has an inline script");
+  const csp = /http-equiv="Content-Security-Policy" content="([^"]+)"/.exec(html)[1];
+  for (const want of ["default-src 'self'", "script-src 'self'", "font-src 'self'", "object-src 'none'", "base-uri 'none'"]) assert(csp.split(/;\s*/).includes(want), "policy is missing: " + want);
+  assert(!/script-src[^;]*unsafe/.test(csp), "scripts must not allow inline or eval");
+  const app = fs.readFileSync(path.join(docs, "js/app.js"), "utf8");
+  assert(!/\son\w+\s*=\s*["'\\]/.test(app.replace(/\.on\w+\s*=/g, "")), "app.js builds markup with an inline event handler, which the policy blocks");
+  const nginx = fs.readFileSync(path.join(__dirname, "../docker/nginx.conf"), "utf8");
+  assert(nginx.includes(csp), "docker/nginx.conf sends a different policy than index.html");
 });
 t("question-to-lab links point at real parts of the same objective", () => {
   const X = window.LE_LABINDEX, ids = new Set(X.parts.map(p => p.id));

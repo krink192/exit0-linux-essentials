@@ -183,6 +183,23 @@ t("apportion: totals, caps and leftovers", () => {
   assert.deepStrictEqual(C.apportion(5, [{ key: "a", weight: 2, cap: 0 }, { key: "b", weight: 1, cap: 9 }], C.rng(1)), { a: 0, b: 5 });
   assert.deepStrictEqual(C.apportion(0, items, C.rng(1)), Object.fromEntries(OBJS.map(o => [o, 0])));
 });
+t("daily review: when more is due than fits, the due questions are split by exam weight, oldest first inside each objective", () => {
+  const today = C.dayNum(), st = C.freshState(); st.settings.review = { on: true, size: 20, fresh: 0 };
+  bank.questions.forEach((q, i) => { st.qstats[q.id] = { seen: 1, right: 0, last: false, box: 0, due: today - 1 - (i % 5) }; });   // all 400 due
+  const mean = {};
+  for (let seed = 1; seed <= 200; seed++) {
+    const s = C.buildReview(bank, st, { seed, today }), c = C.objCounts(bank, s.qids);
+    assert.strictEqual(s.qids.length, 20);
+    for (const o of OBJS) { const share = 20 * W(o) / 40, k = c[o] || 0; mean[o] = (mean[o] || 0) + k / 200; assert(k >= Math.floor(share) && k <= Math.ceil(share), o + " got " + k);
+      const mine = s.qids.filter(id => bank.byId[id].obj === o), worst = Math.max(...mine.map(id => st.qstats[id].due), -Infinity);
+      assert(bank.byObj[o].filter(id => st.qstats[id].due < worst).every(id => mine.includes(id)), o + ": an older due question was skipped"); }
+  }
+  for (const o of OBJS) assert(Math.abs(mean[o] - 20 * W(o) / 40) < 0.12, o);
+  // fewer due than the batch: all of them, whatever their objective
+  const few = C.freshState(); few.settings.review = { on: true, size: 20, fresh: 0 };
+  bank.byObj["1.3"].forEach(id => { few.qstats[id] = { seen: 1, right: 0, last: false, box: 0, due: today }; });
+  assert.strictEqual(C.buildReview(bank, few, { seed: 1, today }).qids.filter(id => few.qstats[id]).length, 10);
+});
 t("daily review: new questions cover the bank in step with the exam weights (never more than one question off)", () => {
   const c = {};
   C.newIds(bank, {}, bank.questions.length, C.rng(1)).forEach((id, i) => {

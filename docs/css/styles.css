@@ -148,7 +148,6 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .card.accent { background: var(--accent-soft); border-color: transparent; }
 .card h3 + p { margin-top: 4px; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
 .stat b { display: block; font-size: var(--fs-title); font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .stat span { font-size: var(--fs-sm); color: var(--muted); }
@@ -161,10 +160,6 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .tip span { color: var(--muted); font-size: var(--fs-body); }
 .hero { display: flex; flex-direction: column; gap: 18px; }
 .hero .cta { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
-.passcard details summary { cursor: pointer; }
-.passcard details p { margin-top: 6px; }
-.focusrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--line); }
-.focusrow .gain { font: 600 var(--fs-xs) var(--ui); color: var(--good); white-space: nowrap; }
 .countdown { font-size: var(--fs-row); color: var(--muted); }
 .countdown b { font-size: var(--fs-num); font-weight: 800; letter-spacing: -.02em; color: var(--ink); margin-right: 4px; font-variant-numeric: tabular-nums; }
 .milestones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -174,7 +169,6 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .milestones li.done > span { color: var(--muted); }
 .plancard input[type=date], .plancard input[type=time] { font: inherit; padding: .5rem .65rem; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
 .banner { display: flex; gap: 14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-
 
 /* bars */
 .bars { display: flex; flex-direction: column; gap: 12px; }
@@ -355,7 +349,7 @@ textarea { width: 100%; min-height: 140px; font: 400 var(--fs-sm)/1.5 var(--mono
   .top .streakmini { margin-left: auto; display: flex; gap: 6px; align-items: center; font-weight: 700; font-size: var(--fs-body); }
   .page { padding: 24px 20px 64px; gap: 24px; }
   .exam-bar .in { padding: 6px 20px; }
-  .grid3, .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .grid2 { grid-template-columns: 1fr; }
@@ -460,14 +454,9 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 
 /* ---------- Labs */
 .labgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
-.lessongrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
-.lessoncard { display: flex; flex-direction: column; gap: 8px; }
-.lessoncard.done { border-color: color-mix(in srgb, var(--good) 40%, var(--line)); }
 .partlist { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .partlist a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-sm); color: inherit; text-decoration: none; font-size: var(--fs-body); }
 .partlist a:hover { background: var(--sunk); }
-.partlist .pn { width: 22px; height: 22px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; font: 700 var(--fs-xs) var(--ui); flex: none; }
-.partlist a.done .pn { background: var(--good); color: var(--on-solid); } .partlist a.done .pn svg.i { width: 13px; height: 13px; stroke-width: 3; }
 .partnav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .partnav a { display: inline-flex; align-items: center; gap: 5px; font: 600 var(--fs-sm) var(--ui); padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); text-decoration: none; background: var(--surface); }
 .partnav a.on { border-color: var(--accent); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -563,16 +552,6 @@ code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-va
 .goalcard { margin-top: 12px; max-width: 640px; }
 .page-head .lead .linkbtn { margin-left: 6px; vertical-align: baseline; }
 
-/* ---- command practice */
-.cmdgroup { display: flex; flex-direction: column; gap: 8px; }
-.cmdtiles { display: flex; flex-wrap: wrap; gap: 8px; }
-.cmdtile { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid transparent; min-width: 92px; text-align: left; }
-.cmdtile .mono { font: 700 var(--fs-sm) var(--mono); }
-.cmdtile .small { font-size: var(--fs-xs); opacity: .9; }
-.cmdtile.lv-new { border-color: var(--line); }
-.cmdtile:hover { border-color: currentColor; }
-.cmdtile.sel { outline: 2px solid var(--accent); outline-offset: 2px; }
-.legend .chip { font-size: var(--fs-xs); }
 .drilldots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
 .ddot { width: 10px; height: 10px; border-radius: 50%; background: var(--line-2); }
 .ddot.cur { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }

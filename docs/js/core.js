@@ -170,8 +170,11 @@
       if (q.type !== "fill") optOrder[id] = shuffle(q.options.map((_, i) => i), rand);
     }
     const now = opts.now || Date.now();
-    return { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, cur: 0, study: !!opts.study,
-             timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
+    const s = { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, cur: 0, study: !!opts.study,
+                timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
+    if (opts.form) s.form = opts.form;      // a fixed practice exam (A-J)
+    if (opts.rung) s.rung = opts.rung;      // a Level Up step
+    return s;
   }
 
   /** A saved session after the bank changed: questions that no longer exist are dropped so the app still opens.
@@ -195,9 +198,13 @@
   function buildTest(bank, qstats, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
     let ids = [];
-    for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand, conflictSet(bank)));
-    const label = opts.study ? "Practice test · answers shown" : "Exam";
-    return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now });
+    // A fixed practice exam is one of the bank's ten sets: always the same 40 questions, each a full blueprint,
+    // no question shared with another set. Scores on the same set are comparable from one attempt to the next.
+    if (opts.form) ids = bank.questions.filter(q => q.form === opts.form).map(q => q.id);
+    else for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand, conflictSet(bank)));
+    if (!ids.length) return null;
+    const label = opts.form ? "Practice exam " + opts.form : opts.study ? "Practice test · answers shown" : "Exam";
+    return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now, form: opts.form });
   }
 
   /** Study mode filters. objs/levels empty = all. source: "mix" (everything), "unseen" or "missed". */
@@ -222,7 +229,65 @@
     const objs = f.objs && f.objs.length && f.objs.length < all ? f.objs : null;
     const what = !objs ? "All objectives" : objs.length === 1 ? objs[0] + " " + bank.objectives[objs[0]].name : objs.length + " objectives";
     const src = { missed: "Missed last time", unseen: "New questions" }[f.source];
-    return newSession(bank, "study", "Study · " + (f.label ? f.label : (src ? src + " · " : "") + what), shuffle(ids, rand), { study: true, seed: opts.seed });
+    return newSession(bank, opts.mode || "study", opts.label || "Study · " + (f.label ? f.label : (src ? src + " · " : "") + what), shuffle(ids, rand),
+      { study: true, seed: opts.seed, now: opts.now, timed: !!opts.seconds, seconds: opts.seconds, rung: opts.rung });
+  }
+
+  // ------------------------------------------------------------- quick modes
+  /** Ten questions across the exam, by weight, new and missed ones first. */
+  const buildQuick = (bank, qstats, opts) => buildStudy(bank, qstats, { count: 10 }, Object.assign({ label: "Quick 10" }, opts));
+  /** As many questions as you can answer in `minutes`. Only the ones you answer are scored. */
+  function buildTimed(bank, qstats, minutes, opts) {
+    minutes = minutes === 10 ? 10 : 5;
+    return buildStudy(bank, qstats, { count: minutes * 4 }, Object.assign({ label: "Timed quiz · " + minutes + " min", seconds: minutes * 60 }, opts));
+  }
+  // Level Up: a ladder of 10-question steps that get harder. 8 of 10 right moves you up one step.
+  // Steps 1-2 are recall questions, 3-5 apply, 6-8 analyze, 9 mixes apply and analyze.
+  const LADDER = [[1], [1], [2], [2], [2], [3], [3], [3], [2, 3]], LADDER_PASS = 80, LADDER_SIZE = 10;
+  /** Where the learner stands on the ladder, worked out from finished steps (so it syncs with the history). */
+  function ladder(tests) {
+    let top = 0;
+    for (const t of tests || []) if (t.rung && t.total >= LADDER_SIZE && t.pct >= LADDER_PASS && t.rung === top + 1) top = t.rung;
+    return { done: top, next: Math.min(top + 1, LADDER.length), steps: LADDER.length, finished: top >= LADDER.length, pass: LADDER_PASS, size: LADDER_SIZE };
+  }
+  function buildLevelUp(bank, state, opts) {
+    const l = ladder(state.tests);
+    return buildStudy(bank, state.qstats, { levels: LADDER[l.next - 1], count: LADDER_SIZE }, Object.assign({ label: "Level Up · step " + l.next + " of " + l.steps, rung: l.next }, opts));
+  }
+  /** One question a day, the same on every device: picked from the whole bank by the day number. */
+  function questionOfDay(bank, today) {
+    today = today == null ? dayNum() : today;
+    return shuffle(bank.questions.map(q => q.id), rng(today * 2654435761 % 4294967296))[0];
+  }
+  const qotdDone = (tests, today) => { today = today == null ? dayNum() : today; return (tests || []).some(t => t.mode === "qotd" && dayNum(t.date) === today); };
+  function buildQotd(bank, opts) {
+    opts = opts || {};
+    return newSession(bank, "qotd", "Question of the day", [questionOfDay(bank, opts.today)], { study: true, seed: opts.seed, now: opts.now });
+  }
+
+  // ------------------------------------------------------------- bookmarks and notes
+  // state.marks[questionId] = { on, note, at }. `at` is when it last changed: across devices the latest change wins,
+  // and a removed bookmark stays as { on: false } so the removal reaches the other devices too.
+  function setMark(state, id, change, now) {
+    state.marks = state.marks || {};
+    const m = Object.assign({ on: false, note: "" }, state.marks[id], change, { at: now || Date.now() });
+    m.on = !!m.on; m.note = String(m.note || "").slice(0, 1000);
+    state.marks[id] = m; return m;
+  }
+  const markOf = (state, id) => (state.marks || {})[id] || { on: false, note: "" };
+  /** Question ids that are bookmarked or carry a note, newest first. */
+  const markedIds = (bank, state) => Object.keys(state.marks || {}).filter(id => bank.byId[id] && (state.marks[id].on || state.marks[id].note))
+    .sort((a, b) => (state.marks[b].at || 0) - (state.marks[a].at || 0));
+
+  // ------------------------------------------------------------- search
+  /** Questions and flashcards that contain every word of `text` (in the question, options, code, explanation; front or back). */
+  function search(bank, cards, text, limit) {
+    const words = String(text || "").toLowerCase().split(/\s+/).filter(w => w.length > 1); limit = limit || 40;
+    if (!words.length) return { questions: [], cards: [], more: false };
+    const hit = hay => { hay = hay.toLowerCase(); return words.every(w => hay.indexOf(w) >= 0); };
+    const qs = bank.questions.filter(q => hit([q.id, q.q, q.code || "", (q.options || []).join(" "), (q.accept || []).join(" "), q.explanation].join(" \n ")));
+    const cs = (cards || []).filter(c => hit([c.front || c.term || "", c.back || c.def || ""].join(" \n ")));
+    return { questions: qs.slice(0, limit).map(q => q.id), cards: cs.slice(0, limit).map(c => c.id), more: qs.length > limit || cs.length > limit, total: qs.length + cs.length };
   }
 
   function objectiveStats(bank, qstats) {
@@ -281,6 +346,7 @@
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
                   flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]) };
+    if (s.form) rec.form = s.form; if (s.rung) rec.rung = s.rung;
     state.tests.push(rec);
     // keep full detail for the 30 most recent records
     state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; } });
@@ -857,7 +923,7 @@
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
   function mergeStates(docs) {
-    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, settings: {}, settingsTs: {} };
+    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: {}, settingsTs: {} };
     const tests = {};
     for (const d of docs || []) {
       if (!d) continue;
@@ -870,6 +936,10 @@
         const a = d.labs[id] || {}, o = out.labs[id] || (out.labs[id] = { done: [] });
         o.done = Array.from(new Set(o.done.concat(a.done || []))).sort((x, y) => x - y);
         if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
+      }
+      for (const id in d.marks || {}) {            // bookmarks and notes: the latest change wins; a tie goes to the larger JSON so devices agree
+        const m = d.marks[id], o = out.marks[id];
+        if (!o || (m.at || 0) > (o.at || 0) || ((m.at || 0) === (o.at || 0) && JSON.stringify(m) > JSON.stringify(o))) out.marks[id] = clone(m);
       }
       for (const t of d.tests || []) { const h = tests[t.id]; if (!h || (t.qids && !h.qids)) tests[t.id] = t; }
       const ts = d.settingsTs || {};
@@ -893,7 +963,7 @@
    */
   function ownPart(view, others, settingsTs) {
     others = others || mergeStates([]);
-    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
     for (const key of ["qstats", "cards", "cmdstats"]) {
       for (const id in view[key] || {}) {
         const s = view[key][id], o = (others[key] || {})[id];
@@ -904,6 +974,7 @@
       }
     }
     for (const k in view.days || {}) { const n = (view.days[k] || 0) - (others.days[k] || 0); if (n > 0) own.days[k] = n; }
+    for (const id in view.marks || {}) { const o = (others.marks || {})[id]; if (!o || JSON.stringify(o) !== JSON.stringify(view.marks[id])) own.marks[id] = clone(view.marks[id]); }
     const theirs = {}; for (const t of others.tests) theirs[t.id] = t;
     own.tests = (view.tests || []).filter(t => !theirs[t.id] || (t.qids && !theirs[t.id].qids));
     for (const id in view.badges || {}) if (!others.badges[id] || view.badges[id] < others.badges[id]) own.badges[id] = view.badges[id];
@@ -919,7 +990,7 @@
   function applyMerged(state, view) {
     view = Object.assign(mergeStates([]), cleanDoc(view));     // whatever a server sent, the app only ever holds well-formed progress
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
-    state.badges = view.badges; state.labs = view.labs;
+    state.badges = view.badges; state.labs = view.labs; state.marks = view.marks || {};
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
     return state;
   }
@@ -971,7 +1042,7 @@
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
   const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
-                 label: text(200), score: count, total: count, pct: v => Math.min(100, count(v)), answered: count, secs: count, timed: flag, study: flag,
+                 label: text(200), score: count, total: count, pct: v => Math.min(100, count(v)), answered: count, secs: count, timed: flag, study: flag, form: v => typeof v === "string" && /^[A-Z]$/.test(v) ? v : undefined,
                  qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList };
   function cleanTest(t) {
     if (!isObj(t)) return undefined;
@@ -992,12 +1063,13 @@
   const DOC = { tests: v => Array.isArray(v) ? v.map(cleanTest).filter(Boolean) : [], qstats: v => mapOf(v, cleanSched), cards: v => mapOf(v, cleanSched),
                 cmdstats: v => mapOf(v, cleanSched), days: v => mapOf(v, x => isNum(x) && x > 0 ? Math.floor(x) : undefined, k => DAY_RE.test(k)),
                 badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), settings: cleanSettings,
-                settingsTs: v => mapOf(v, numOr(undefined)) };
+                settingsTs: v => mapOf(v, numOr(undefined)),
+                marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
   function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
   const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks,
-                    cur: count, study: flag, timed: flag, start: numOr(undefined), deadline: numOr(null) };
+                    cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
@@ -1012,7 +1084,7 @@
     if (!isObj(d) || d.app !== "le010" || !Array.isArray(d.tests)) return null;
     const p = cleanDoc(d);
     return migrate(Object.assign({}, state, { tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
-      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, settings: Object.assign({}, state.settings, p.settings) }));
+      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
   }
 
   // ------------------------------------------------------------- state
@@ -1022,7 +1094,7 @@
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
-             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, current: null };
+             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -1045,7 +1117,7 @@
       }
     }
     // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")
-    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs });
+    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, marks: st.marks });
     const fresh = freshState().settings, s = cleanSettings(st.settings);
     s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
@@ -1054,7 +1126,8 @@
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
            scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
-           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
+           setMark, markOf, markedIds, search, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,

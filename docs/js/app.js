@@ -204,7 +204,7 @@
   // Four places to go, plus reference material and settings. Practice and Learn pages share a tab bar.
   const NAV = [["today", "Today", "target"], ["practice", "Practice", "test"], ["labs", "Labs", "terminal"], ["progress", "Progress", "progress"]];
   const NAV2 = [["learn", "Learn", "guide"], ["settings", "Settings", "settings"]];
-  const SECTION = { review: "practice", test: "practice", study: "practice", cards: "practice", guide: "learn", sheets: "learn", commands: "labs", sandbox: "labs", cmdrun: "labs" };
+  const SECTION = { review: "practice", test: "practice", study: "practice", search: "practice", cards: "practice", guide: "learn", sheets: "learn", commands: "labs", sandbox: "labs", cmdrun: "labs" };
   const TABS = { practice: [["review", "Daily review"], ["test", "Exam"], ["study", "Study"], ["cards", "Flashcards"]], learn: [["guide", "Exam guide"], ["sheets", "Cheat sheets"]],
                  labs: [["labs", "Lessons"], ["commands", "Commands"], ["sandbox", "Sandbox"]] };
   const TAB_LABEL = { practice: "Practice", learn: "Learn", labs: "Labs" };
@@ -270,7 +270,7 @@
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
     if (h === "cmdrun" && !cp) return go("commands");
     const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
-                    guide: renderGuide, settings: renderSettings };
+                    guide: renderGuide, settings: renderSettings, search: renderSearch };
     (pages[h] || renderToday)();
   }
   window.addEventListener("hashchange", render);
@@ -278,6 +278,9 @@
   // ------------------------------------------------------------------ start sessions
   function begin(s) { st.current = s; confirming = false; showGrid = false; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
   function startTest() { begin(C.buildTest(BANK, st.qstats, {})); }
+  function startForm(f) { const s = C.buildTest(BANK, st.qstats, { form: f }); if (s) begin(s); }
+  const startBuilt = s => { if (s) begin(s); else toast("No questions match those choices"); };
+  function startMarked() { const ids = C.markedIds(BANK, st); if (ids.length) startStudy({ ids, count: Math.min(20, ids.length), label: "Bookmarked" }); else toast("Nothing bookmarked yet"); }
   function startStudy(f) { const s = C.buildStudy(BANK, st.qstats, f); if (s) begin(s); else toast("No questions match those choices"); }
   function startReview(extra) { const s = C.buildReview(BANK, st, extra ? { count: extra } : {}); if (s) begin(s); else toast("Nothing left to review"); }
   function startDueCards() {
@@ -309,6 +312,12 @@
     $$("[data-start=duecards]", root).forEach(b => b.onclick = startDueCards);
     $$("[data-start=cmddue]", root).forEach(b => b.onclick = () => startCmd({ source: "recommended", count: Math.max(5, Math.min(20, cmdDueN())) }));
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
+    $$("[data-start=quick]", root).forEach(b => b.onclick = () => startBuilt(C.buildQuick(BANK, st.qstats)));
+    $$("[data-start=timed]", root).forEach(b => b.onclick = () => startBuilt(C.buildTimed(BANK, st.qstats, +b.dataset.min)));
+    $$("[data-start=levelup]", root).forEach(b => b.onclick = () => startBuilt(C.buildLevelUp(BANK, st)));
+    $$("[data-start=qotd]", root).forEach(b => b.onclick = () => startBuilt(C.buildQotd(BANK)));
+    $$("[data-start=marked]", root).forEach(b => b.onclick = startMarked);
+    $$("[data-form]", root).forEach(b => b.onclick = () => startForm(b.dataset.form));
     $$("[data-start=weak]", root).forEach(b => b.onclick = startWeakStudy);
     $$("[data-start=unseen]", root).forEach(b => b.onclick = () => startStudy({ source: "unseen", count: 20 }));
     $$("[data-study]", root).forEach(b => b.onclick = () => { const objs = b.dataset.study.split(","); startStudy({ objs, count: objs.length > 1 ? 20 : 10 }); });
@@ -353,6 +362,8 @@
     if (!tests.length) steps.push({ ic: "test", eyebrow: "Exam", title: "Take a baseline exam", desc: "40 questions in 60 minutes, weighted like the real exam. It shows where to focus.", btn: `<button class="primary" data-start="test">Start exam</button>` });
     else if (weak) steps.push({ ic: "weak", eyebrow: "Weakest objective", title: `Study ${weak} ${OBJ[weak].name}`, desc: `You're at ${C.objectiveStats(BANK, st.qstats)[weak].pct}% there. Ten questions with hints and answers.`, btn: `<button class="primary" data-study="${weak}">Study it</button>` });
     else steps.push({ ic: "test", eyebrow: "Exam", title: "Take a practice exam", desc: "Three exams in a row at 80% or more is the signal to book the real one.", btn: `<button class="primary" data-start="test">Start exam</button>` });
+    if (!C.qotdDone(st.tests)) steps.push({ ic: "bulb", eyebrow: "Question of the day", title: "One question, every day",
+      desc: "The same question for everyone today. It takes a minute and keeps your streak going.", btn: `<button class="primary" data-start="qotd">Answer it</button>` });
     if (!cmdDue && !triedCmds && LABS.some(l => labState(l.id).done.length)) steps.push({ ic: "drill", eyebrow: "Command practice", title: "Drill the commands you've met",
       desc: "Quick tasks on a fresh terminal, picked from what you haven't practised yet.", btn: `<a class="btn primary" href="#commands">Open command practice</a>` });
     const [main, ...rest] = steps;
@@ -462,6 +473,14 @@
 
 
   // ================================================================== EXAM MODE (home)
+  // The bank's ten fixed sets: each a full blueprint, no question shared between sets.
+  function formsCard() {
+    const best = {}; for (const t of st.tests) if (t.form && t.mode === "test") best[t.form] = Math.max(best[t.form] == null ? -1 : best[t.form], t.pct);
+    const taken = Object.keys(best).length;
+    return `<section class="card stack forms"><div class="row spread"><h2>Fixed practice exams</h2><span class="small muted">${taken} of 10 taken</span></div>
+      <p class="small muted">Ten set exams, A to J. Each is a full 40-question blueprint and no question appears in two of them, so a retake of the same letter shows real improvement. They count toward readiness like any exam.</p>
+      <div class="formgrid">${"ABCDEFGHIJ".split("").map(f => `<button data-form="${f}" class="${best[f] != null ? "done" : ""}" title="Practice exam ${f}${best[f] != null ? ": best " + best[f] + "%" : ""}"><b>${f}</b><span style="${best[f] != null ? "color:" + col(best[f]) : ""}">${best[f] != null ? best[f] + "%" : "new"}</span></button>`).join("")}</div></section>`;
+  }
   function renderTest() {
     const tests = st.tests.filter(t => t.mode === "test");
     const last = tests[tests.length - 1];
@@ -494,7 +513,7 @@
           <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
         <div class="rules"><span>${icon("clock")}60:00 timer</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
       </section>
-      ${stats}${next}${tips}`);
+      ${stats}${next}${formsCard()}${tips}`);
     wireResume();
     wireStarts($("#page"));
   }
@@ -515,6 +534,7 @@
     const n = sp.count ? Math.min(sp.count, pool.length) : pool.length;
     const lv = sp.levels.length === 1 ? sp.levels[0] : 0;
     const byWeight = " Split like the real exam: heavier objectives get more questions.";
+    const lad = C.ladder(st.tests), nMarked = C.markedIds(BANK, st).length;
     const objNote = sp.objMode === "all" ? "Questions from every objective." + byWeight
       : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
       : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
@@ -525,6 +545,12 @@
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
         <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " below 80%" : "None yet. Take an exam to find them."}</span></button>
         <button class="qs" data-start="unseen" ${unseen ? "" : "disabled"}>${icon("bulb")}<b>New questions</b><span>${unseen ? plural(unseen, "question") + " you haven't seen" : "You've seen every question"}</span></button>
+        <button class="qs" data-start="quick">${icon("drill")}<b>Quick 10</b><span>Ten questions across the exam, split by weight</span></button>
+        <div class="qs qs-split">${icon("clock")}<b>Timed quiz</b><span>As many as you can answer before the clock runs out</span>
+          <span class="row"><button data-start="timed" data-min="5">5 min</button><button data-start="timed" data-min="10">10 min</button></span></div>
+        <button class="qs" data-start="levelup" ${lad.finished ? "disabled" : ""}>${icon("trophy")}<b>Level Up</b><span>${lad.finished ? "All " + lad.steps + " steps done" : `Step ${lad.next} of ${lad.steps}: ${["", "Recall", "Apply", "Analyze"][lad.next <= 2 ? 1 : lad.next <= 5 ? 2 : 3]} questions. ${lad.size * lad.pass / 100} of ${lad.size} right moves you up`}</span></button>
+        <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("flag")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
+        <a class="qs" href="#search">${icon("guide")}<b>Search</b><span>Find any question or flashcard by a word or command</span></a>
       </div>
       <div class="card stack builder"><h2>Build a session</h2>
         <div class="frow"><span class="flabel">Objectives</span><div><div class="seg" id="fobj">${[["all", "All"], ["weak", "Weak"], ["pick", "Choose…"]].map(([k, l]) =>
@@ -1644,9 +1670,10 @@
         <div class="qhead"><span class="qnum">Question <b>${S.cur + 1}</b> of ${n}</span><span class="row" style="gap:8px">${S.study ? lvChip(q) : ""}<span class="eyebrow">${typeTag}${S.study ? " · " + q.obj : ""}</span></span></div>
         <p class="qtext">${rich(q.q)}</p>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}
+        ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}${revealed ? noteBox(id) : ""}
         <div class="nav-row"><button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>
           <span class="row"><button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>
+          ${S.study ? markButton(id) : ""}
           ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${S.study && !revealed ? `<button id="check">Check answer</button>` : ""}
           ${S.cur < n - 1 ? `<button class="primary" id="next">Next</button>` : `<button class="primary" id="end">${isTest ? "Review & submit" : "Finish"}</button>`}</span></div>
@@ -1658,6 +1685,7 @@
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     if ($("#check")) $("#check").onclick = () => { S.checked[id] = 1; save(); renderExam(); };
     $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
+    wireMarks(app, () => { const y = scrollY; renderExam(); scrollTo(0, y); });
     $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
     $("#submit").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     $("#exit").onclick = () => { save(); go(isTest ? "test" : S.mode === "review" ? "review" : "study"); };
@@ -1709,6 +1737,15 @@
     const right = a.filter(x => q.answer.includes(x)).length, n = q.answer.length;
     const why = a.length < n ? `you picked ${a.length} of the ${n} answers asked for` : `${right} of your ${a.length} picks ${right === 1 ? "is" : "are"} correct`;
     return `<p class="small muted multinote">Scored as wrong because ${why}. A "Choose ${n === 2 ? "TWO" : "THREE"}" question only counts when every pick is right, so pick exactly ${n}.</p>`;
+  }
+  // Bookmarks and notes. A bookmark keeps a question for later (Study > Bookmarked); a note is your own words on it.
+  const markButton = id => { const on = C.markOf(st, id).on; return `<button class="${on ? "marked" : "ghost"}" data-mark="${esc(id)}" aria-pressed="${on}" title="${on ? "Remove from" : "Save to"} Study > Bookmarked">${icon("flag")}${on ? "Bookmarked" : "Bookmark"}</button>`; };
+  const noteBox = id => { const note = C.markOf(st, id).note;
+    return `<details class="notebox"${note ? " open" : ""}><summary>${note ? "Your note" : "Add a note"}</summary>
+      <textarea data-note="${esc(id)}" rows="2" maxlength="1000" placeholder="Your own words: a mnemonic, why you missed it, what to look up" aria-label="Your note on this question">${esc(note)}</textarea></details>`; };
+  function wireMarks(root, redraw) {
+    $$("[data-mark]", root).forEach(b => b.onclick = () => { const id = b.dataset.mark; C.setMark(st, id, { on: !C.markOf(st, id).on }); save(); redraw(); });
+    $$("[data-note]", root).forEach(t => t.onchange = () => { C.setMark(st, t.dataset.note, { note: t.value.trim() }); save(); toast(t.value.trim() ? "Note saved" : "Note removed"); });
   }
   function studyRef(q) {
     const nc = CARDS.filter(c => c.obj === q.obj).length;
@@ -1769,7 +1806,8 @@
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
-        <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}</article>`;
+        <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
+        <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
     shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1></div>
@@ -1797,6 +1835,33 @@
         ${list.length ? list.map(item).join("") : `<p class="muted small">Nothing here.</p>`}</div>`);
     wireStarts($("#page"));
     $$("[data-f]").forEach(b => b.onclick = () => { reviewFilter = b.dataset.f; const y = $("#review").offsetTop; renderResults(rec); scrollTo(0, y - 16); });
+    wireMarks($("#page"), () => { const y = scrollY; renderResults(rec); scrollTo(0, y); });
+  }
+
+  // ================================================================== SEARCH
+  let searchText = "";
+  function renderSearch() {
+    const r = C.search(BANK, CARDS, searchText, 40);
+    const qrow = id => { const q = BANK.byId[id], s = st.qstats[id], m = C.markOf(st, id);
+      return `<div class="srow"><span class="o">${q.obj}</span><span class="stext">${esc(q.q.length > 150 ? q.q.slice(0, 150) + "…" : q.q)}
+        <span class="small muted">${q.id} · ${s && s.seen ? (s.last ? "right last time" : "missed last time") : "not seen yet"}${m.on ? " · bookmarked" : ""}${m.note ? " · has a note" : ""}</span></span>
+        <button class="ghost small" data-ask="${q.id}">Answer it</button></div>`; };
+    const crow = id => { const c = CARDS.find(x => x.id === id); return `<div class="srow"><span class="o">${c.obj}</span><span class="stext"><b>${esc(c.front)}</b><span class="small muted">${esc(c.back.length > 160 ? c.back.slice(0, 160) + "…" : c.back)}</span></span></div>`; };
+    shell("study", `<div class="page-head"><span class="eyebrow">Practice</span><h1>Search</h1><p class="lead">Find a question or flashcard by any word, command or question number.</p></div>
+      <div class="card stack"><label class="searchbox">${icon("guide")}<input id="q" type="search" value="${esc(searchText)}" placeholder="chmod, hard link, 3.2-07 …" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search questions and flashcards"></label>
+        <div id="hits">${searchHits(r, qrow, crow)}</div></div>`);
+    const inp = $("#q"), draw = () => { $("#hits").innerHTML = searchHits(C.search(BANK, CARDS, searchText, 40), qrow, crow); wireHits(); };
+    const wireHits = () => { $$("[data-ask]").forEach(b => b.onclick = () => startStudy({ ids: [b.dataset.ask], label: "Search · " + b.dataset.ask }));
+      const all = $("#askAll"); if (all) all.onclick = () => { const ids = C.search(BANK, CARDS, searchText, 400).questions; startStudy({ ids, count: Math.min(20, ids.length), label: "Search · " + searchText.slice(0, 30) }); }; };
+    inp.oninput = () => { searchText = inp.value; draw(); };
+    wireHits(); if (!searchText) inp.focus();
+  }
+  function searchHits(r, qrow, crow) {
+    if (!searchText.trim()) return `<p class="small muted">Type at least two letters.</p>`;
+    if (!r.total) return `<p class="small muted">Nothing found for “${esc(searchText)}”.</p>`;
+    return `${r.questions.length ? `<div class="row spread"><h3>Questions</h3>${r.questions.length > 1 ? `<button class="small" id="askAll">Study these</button>` : ""}</div><div class="slist">${r.questions.map(qrow).join("")}</div>` : ""}
+      ${r.cards.length ? `<h3>Flashcards</h3><div class="slist">${r.cards.map(crow).join("")}</div>` : ""}
+      ${r.more ? `<p class="small muted">Showing the first 40 of each. Add a word to narrow it down.</p>` : ""}`;
   }
 
   // ------------------------------------------------------------------ keyboard

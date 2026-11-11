@@ -768,3 +768,28 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
   .cq { scroll-snap-align: start; }
   .csettings > span { display: none; }
 }
+
+/* Quick modes, fixed exams, bookmarks, notes, search */
+.qs-split { cursor: default; border: 1px solid var(--line); background: var(--sunk); }
+.qs-split .row { gap: 8px; margin-top: 4px; }
+.qs-split .row button { padding: .4rem .8rem; font-size: .88rem; }
+a.qs { text-decoration: none; color: inherit; border: 1px solid var(--line); background: var(--sunk); }
+a.qs:hover { border-color: var(--accent); background: var(--surface); }
+.formgrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.formgrid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 6px; border-radius: var(--r-sm); }
+.formgrid button b { font-size: 1.15rem; }
+.formgrid button span { font-size: .8rem; color: var(--muted); font-family: var(--mono); }
+.formgrid button.done { background: var(--surface); border-color: var(--line-2); }
+button.marked { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-2); }
+.notebox { margin-top: 10px; font-size: .9rem; }
+.notebox summary { cursor: pointer; color: var(--muted); }
+.notebox textarea { width: 100%; margin-top: 8px; padding: 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
+.row.marks { margin-top: 10px; }
+.searchbox { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); }
+.searchbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: 1.05rem; }
+.searchbox svg.i { width: 20px; height: 20px; color: var(--muted); }
+.slist { display: flex; flex-direction: column; }
+.srow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.srow .o { font-family: var(--mono); font-size: .82rem; color: var(--muted); }
+.srow .stext { display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 640px) { .formgrid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; } .quick { grid-template-columns: 1fr; } }

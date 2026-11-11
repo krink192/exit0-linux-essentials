@@ -67,7 +67,7 @@
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const fmtDate = ms => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  const col = p => p >= 80 ? "var(--good)" : p >= 65 ? "var(--flag)" : "var(--bad)";
+  const col = p => p >= 80 ? "var(--accent)" : "var(--bar-low)";
   const vclass = p => p >= 80 ? "v-good" : p >= 65 ? "v-mid" : "v-bad";
   const LV = { new: "Not started", learning: "Learning", weak: "Weak", mastered: "Mastered" };
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
@@ -108,6 +108,10 @@
     bookmark: '<path d="M6 3h12v18l-6-4.5L6 21z"/>',
     left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
     right: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+    up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
+    down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+    ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+    chevron: '<path d="M9 6l6 6-6 6"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
 
@@ -447,7 +451,7 @@
     const d = C.dailyReview(BANK, st), cardsDue = C.deckStats(CARDS, st.cards).due;
     const extra = Math.min(10, d.backlog + d.unseen);
     shell("review", `${resumeBanner()}
-      <div class="page-head"><span class="eyebrow">Daily review · a few minutes a day</span><h1>Daily review</h1>
+      <div class="page-head"><h1>Daily review</h1>
         ${!d.on ? `<p class="lead">A set number of questions each day: reviews of ones you've answered, plus some new ones so you keep moving through the bank. It's off until you turn it on, and you choose how many.</p></div>
       <div class="grid2">
         <div class="card stack revcard"><div class="row" style="gap:10px">${icon("repeat")}<span class="eyebrow">Questions</span></div>
@@ -513,7 +517,7 @@
         <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
     shell("test", `${resumeBanner()}
       <section class="hero">
-        <div class="page-head"><span class="eyebrow">Exam mode · as close to test day as possible</span><h1>Exam</h1>
+        <div class="page-head"><h1>Exam</h1>
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
         <div class="cta"><button class="primary big" data-start="test">${icon("test")}Start exam</button>
           <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
@@ -546,7 +550,7 @@
       : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
       : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
     shell("study", `${resumeBanner()}
-      <div class="page-head"><span class="eyebrow">Study mode · learn as you go</span><h1>Study</h1>
+      <div class="page-head"><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
       <div class="quick">
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
@@ -651,7 +655,7 @@
       ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
     return `<section class="card readyhero">
-      <div class="hero-nums">${ring(ready || 0, 120, 10, ready == null ? "—" : ready + "%", "Readiness", ready == null ? "var(--line)" : col(ready))}
+      <div class="hero-nums"><div class="stack" style="gap:2px"><span class="small muted">Readiness</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No exams taken yet" : "Average of your last 3 exams"}</span></div>
         <div class="stack" style="gap:2px">${passBlock}</div></div>
       <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
         <details class="small muted"><summary>How are these worked out?</summary><p>Readiness is the average of your last three exams. ${passWhy(p)}</p></details></div></section>`;
@@ -659,7 +663,7 @@
 
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
-  const ocol = p => p >= 80 ? "var(--good)" : p >= 50 ? "var(--flag)" : "var(--bad)";
+  const ocol = col;
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;
     const row = o => { const s = os[o];
@@ -685,10 +689,10 @@
     const x = C.xpInfo(st), bs = C.badgeStatus(st, BANK, CARDS, LABS.length), got = bs.filter(b => b.done).length;
     const pct = x.next ? Math.round(100 * (x.xp - x.floor) / (x.next - x.floor)) : 100;
     const near = bs.filter(b => !b.done && b.progress && b.progress[1] > 1).sort((a, b) => b.progress[0] / b.progress[1] - a.progress[0] / a.progress[1]).slice(0, 3);
-    return `<section class="card stack"><div class="row spread"><h2>Next badges</h2><span class="small muted mono">Level ${x.level} · ${esc(x.name)}${x.next ? ` · ${x.next - x.xp} XP to ${x.level + 1}` : ""}</span></div>
+    return `<section class="card stack"><div class="row spread"><h2>Next badges</h2><span class="small muted">Level ${x.level} · ${esc(x.name)}${x.next ? ` · ${x.next - x.xp} XP to ${x.level + 1}` : ""}</span></div>
       <div class="track2 slim" aria-hidden="true"><i style="width:${pct}%;background:var(--accent)"></i></div>
       ${near.length ? `<div class="nextbadges">${near.map(b => `<div class="nb"><b>${esc(b.name)}</b><span class="small muted">${esc(b.desc)}</span>
-          <div class="track2 slim" aria-hidden="true"><i style="width:${Math.round(100 * b.progress[0] / b.progress[1])}%;background:var(--accent)"></i></div><span class="small muted mono">${b.progress[0]} / ${b.progress[1]}</span></div>`).join("")}</div>` : ""}
+          <div class="track2 slim" aria-hidden="true"><i style="width:${Math.round(100 * b.progress[0] / b.progress[1])}%;background:var(--accent)"></i></div><span class="small muted">${b.progress[0]} / ${b.progress[1]}</span></div>`).join("")}</div>` : ""}
       <details class="allbadges"><summary>All ${bs.length} badges · ${got} earned</summary>
         <div class="badges">${bs.map(b => `<div class="badge ${b.done ? "got" : ""}" title="${esc(b.desc)}">${icon(b.icon)}<div><b>${esc(b.name)}</b>
           <span>${b.done ? (b.at ? "Earned " + new Date(b.at).toLocaleDateString([], { month: "short", day: "numeric" }) : "Earned") : esc(b.desc) + (b.progress && b.progress[1] > 1 ? ` (${b.progress[0]}/${b.progress[1]})` : "")}</span></div></div>`).join("")}</div>
@@ -795,7 +799,7 @@
       <div class="stack" style="gap:10px"><div class="row spread"><h2>Browse ${pool.length} cards</h2><label class="switch"><input type="checkbox" id="cbrowse" ${browse ? "checked" : ""}> Show list</label></div>
         ${browse ? `<input class="search" id="cq" type="search" placeholder="Search terms and definitions…" value="${esc(query)}" aria-label="Search cards">
         <div class="glossary">${list.map(c => `<div class="gitem ${c.deck === "commands" ? "cmd" : ""}"><div class="gf">${esc(c.front)}</div>
-          <div><span class="mono small muted">${c.obj}</span> ${rich(c.back)}${c.ex ? `<pre class="code" style="margin-top:6px">${esc(c.ex)}</pre>` : ""}</div></div>`).join("") || `<p class="muted small" style="padding:12px 4px">No cards match.</p>`}</div>` : ""}</div>`);
+          <div><span class="small muted">${c.obj}</span> ${rich(c.back)}${c.ex ? `<pre class="code" style="margin-top:6px">${esc(c.ex)}</pre>` : ""}</div></div>`).join("") || `<p class="muted small" style="padding:12px 4px">No cards match.</p>`}</div>` : ""}</div>`);
     $$("[data-deck]").forEach(b => b.onclick = () => { deck = b.dataset.deck; st.settings.deck = deck; save(); renderCards(); });
     $("#ctopic").onchange = e => { cardTopic = e.target.value; renderCards(); };
     $$("#csize button").forEach(b => b.onclick = () => { cardSize = +b.dataset.n; renderCards(); });
@@ -858,7 +862,7 @@
       let r = 0, n = 0; objs.forEach(o => { r += os[o].right; n += os[o].seen; });
       return `<details class="bprow"${t === openT ? " open" : ""}><summary><span class="tname">${t}. ${esc(TOP[t])}</span><span class="n">${objs.reduce((s, o) => s + OBJ[o].weight, 0)}</span><span class="n">${you(n ? Math.round(100 * r / n) : null)}</span><span></span></summary>
         <div class="tbody">${objs.map(o => `<div class="bpobj"><span><span class="o">${o}</span> ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="n">${you(os[o].pct)}</span>
-          <a href="${OBJ[o].lesson}" target="_blank" rel="noopener">Lesson ↗</a></div>`).join("")}</div></details>`; }).join("");
+          <a href="${OBJ[o].lesson}" target="_blank" rel="noopener">Lesson${icon("ext", "ext")}</a></div>`).join("")}</div></details>`; }).join("");
     shell("guide", `<div class="guidewrap">
       <aside class="guiderail"><h1>Exam guide</h1><span class="eyebrow">On this page</span>
         <nav aria-label="Exam guide sections">${GUIDE_SECTIONS.map(([id, label], i) => `<button class="railbtn ${i === 0 ? "on" : ""}" data-jump="${id}">${label}</button>`).join("")}</nav></aside>
@@ -938,7 +942,7 @@
       const go = parts.find(p => !labState(p.id).completedAt) || parts[0];
       const label = done === parts.length ? "Review" : lessonStarted(L) ? "Continue" : "Start";
       return `<div class="lrow ${done === parts.length ? "done" : ""}"><span class="lname"><span class="o">${esc(lessonName(L))}</span> ${esc(L.title)}</span>
-        ${segs(parts)}<span class="small muted mono lcount">${done}/${parts.length}</span><a href="#lab/${go.id}" class="${label === "Continue" ? "strong" : ""}">${label}</a></div>`; };
+        ${segs(parts)}<span class="small muted lcount">${done}/${parts.length}</span><a href="#lab/${go.id}" class="${label === "Continue" ? "strong" : ""}">${label}</a></div>`; };
     const keep = L => labFilter === "all" || !lessonDone(L);
     const byTopic = {}; LESSONS.filter(L => !L.track).forEach(L => (byTopic[C.topicOf(L.obj)] = byTopic[C.topicOf(L.obj)] || []).push(L));
     const trouble = LESSONS.filter(L => L.track === TROUBLE);
@@ -954,8 +958,7 @@
     shell("labs", `<div class="page-head row spread progress-head"><div><h1>Labs</h1><p class="lead">One lab per LPI lesson, in short parts. Each task is checked as you type. It's simulated, so nothing can break.</p></div>
         <div class="row pills"><span class="pill"><b>${doneParts} / ${LABS.length}</b> parts</span><span class="pill"><b>${doneLessons} / ${LESSONS.length}</b> lessons</span></div></div>
       ${next ? `<section class="card continue"><div class="cic">${icon("terminal")}</div>
-        <div class="stack grow" style="gap:6px"><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span>
-          <p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
+        <div class="stack grow" style="gap:6px"><p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
           <div class="row" style="gap:10px;align-items:center">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
       : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
@@ -994,17 +997,16 @@
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
     const tip = coachTip[id];
     const fi = typeof focusTask[id] === "number" ? focusTask[id] : (stuck[id] ? stuck[id].task : tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
-    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><span class="eyebrow" style="margin-top:8px">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span>
-        <h1>${esc(lab.title)}</h1><p class="lead">${rich(lab.intro)}</p>
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(lab.title)}</h1><span class="eyebrow" style="margin-top:8px">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span><p class="lead">${rich(lab.intro)}</p>
         <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
       ${ls.completedAt ? `<div class="card banner done-banner"><div class="row" style="gap:10px">${icon("trophy")}<div><b>Part complete.</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
         <div class="row">${related.length ? `<button class="primary" id="labQs">${icon("drill")}Answer ${plural(Math.min(10, related.length), "related question")}</button>` : ""}
         ${next ? `<a class="btn ${related.length ? "" : "primary"}" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : next.track === TROUBLE ? "Next: troubleshooting " + esc(next.lesson) : "Next lesson: " + esc(next.lesson)}${icon("right", "after")}</a>` : `<a class="btn" href="#labs">All labs</a>`}</div></div>` : ""}
       <div class="labwrap ${focusTask[id] === "all" ? "" : "one"}">
         <div class="stack tasks">
-          <div class="taskpager"><button class="ghost small" data-tp="-1" ${fi <= 0 ? "disabled" : ""} aria-label="Previous task">‹</button>
+          <div class="taskpager"><button class="ghost small" data-tp="-1" ${fi <= 0 ? "disabled" : ""} aria-label="Previous task">${icon("left")}</button>
             <span class="small"><b>Task ${fi + 1}</b> <span class="muted">of ${lab.tasks.length} · ${ls.done.length} done</span></span>
-            <button class="ghost small" data-tp="1" ${fi >= lab.tasks.length - 1 ? "disabled" : ""} aria-label="Next task">›</button><span class="grow"></span>
+            <button class="ghost small" data-tp="1" ${fi >= lab.tasks.length - 1 ? "disabled" : ""} aria-label="Next task">${icon("right")}</button><span class="grow"></span>
             <button class="linkbtn" id="allTasks">${focusTask[id] === "all" ? "One at a time" : "All tasks"}</button></div>
           ${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
           return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="row" style="gap:10px;align-items:flex-start"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
@@ -1021,7 +1023,7 @@
       </div>
       <div class="labfoot stack small">
         <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
-        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))} ↗</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF) ↗</a>
+        <div class="row" style="gap:16px;flex-wrap:wrap"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
       <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
@@ -1143,7 +1145,7 @@
     pg.setAttribute("role", "dialog"); pg.setAttribute("aria-label", req.title);
     pg.innerHTML = `<div class="pager-bar"><b class="mono">${esc(req.title)}</b><span class="grow"></span>
         <input id="pgFind" class="pager-find" placeholder="Search ( / )" aria-label="Search this page" autocomplete="off" autocapitalize="off" spellcheck="false">
-        <button class="small ghost" id="pgPrev" aria-label="Previous match">↑</button><button class="small ghost" id="pgNext" aria-label="Next match">↓</button>
+        <button class="small ghost" id="pgPrev" aria-label="Previous match">${icon("up")}</button><button class="small ghost" id="pgNext" aria-label="Next match">${icon("down")}</button>
         <button class="small" id="pgQuit">Close (q)</button></div>
       <pre class="pager-text" id="pgText"></pre>
       <div class="pager-status small" id="pgStatus"></div>`;
@@ -1186,7 +1188,7 @@
   }
 
   // ================================================================== TERMINAL (shared by command practice and the sandbox)
-  const KEYS_HELP = `<span class="kbd">↑</span> <span class="kbd">↓</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line<br>Stuck? <code>man NAME</code> · <code>NAME --help</code> · <code>apropos WORD</code> finds a command for a task · <code>help NAME</code> for builtins like cd and if · <code>man bash</code> for pipes and redirection`;
+  const KEYS_HELP = `<span class="kbd">${icon("up")}</span> <span class="kbd">${icon("down")}</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line<br>Stuck? <code>man NAME</code> · <code>NAME --help</code> · <code>apropos WORD</code> finds a command for a task · <code>help NAME</code> for builtins like cd and if · <code>man bash</code> for pipes and redirection`;
   const termHTML = cls => `<div class="term ${cls || ""}" id="term"><div class="term-out" id="termOut"></div>
     <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
   /** Wire the terminal markup to a machine. onRun(line, result) runs after every finished command; return true if it re-rendered the page.
@@ -1296,13 +1298,13 @@
     const sel = st.settings.cmd.cmds.includes(c.cmd);
     const L = cmdLinks(c), o = c.obj, t = C.topicOf(o), today = C.dayNum();
     const skills = c.skills.map(id => { const s = st.cmdstats[id], sk = SKILL[id] || { label: id };
-      const mark = !s || !s.seen ? ["·", "untried", "not tried"] : s.last ? ["✓", "ok", "right last time"] : ["✗", "miss", "missed last time"];
+      const mark = !s || !s.seen ? [icon("dot"), "untried", "not tried"] : s.last ? [icon("check"), "ok", "right last time"] : [icon("x"), "miss", "missed last time"];
       const due = s && s.seen && C.cmdDue({ [id]: s }, today).length;
       return `<li class="${mark[1]}"><span class="mk" aria-hidden="true">${mark[0]}</span><span class="grow">${esc(sk.label)}</span><span class="small muted">${mark[2]}${due ? " · due" : ""}</span></li>`; }).join("");
-    const link = (href, ic, label, sub, attrs) => `<a class="plink" href="${href}" ${attrs || ""}>${icon(ic)}<span class="grow"><b>${label}</b>${sub ? `<span class="small muted">${sub}</span>` : ""}</span><span class="muted" aria-hidden="true">›</span></a>`;
+    const link = (href, ic, label, sub, attrs) => `<a class="plink" href="${href}" ${attrs || ""}>${icon(ic)}<span class="grow"><b>${label}</b>${sub ? `<span class="small muted">${sub}</span>` : ""}</span>${icon("chevron")}</a>`;
     return `<div class="cpanel-in">
-      <div class="row spread" style="align-items:flex-start;flex-wrap:nowrap"><div class="stack" style="gap:4px;min-width:0"><span class="eyebrow">${esc(o)} ${esc((OBJ[o] || {}).name || "")}</span><h2 class="mono cname">${esc(c.cmd)}</h2></div>
-        <button class="ghost small cclose" id="cclose" aria-label="Close">✕</button></div>
+      <div class="row spread" style="align-items:flex-start;flex-wrap:nowrap"><div class="stack" style="gap:4px;min-width:0"><h2 class="mono cname">${esc(c.cmd)}</h2><span class="eyebrow">${esc(o)} ${esc((OBJ[o] || {}).name || "")}</span></div>
+        <button class="ghost small cclose" id="cclose" aria-label="Close">${icon("x")}</button></div>
       <span class="chip lv-${c.level}">${LVN[c.level]}${c.pct != null ? " · " + c.pct + "% right" : ""}</span>
       ${summary ? `<p>${rich(summary)}</p>` : ""}
       ${syn.length ? `<pre class="code small csyn">${syn.map(esc).join("\n")}</pre>` : ""}
@@ -1317,7 +1319,7 @@
         ${L.cids.length ? link("#", "cards", `Review ${plural(L.cids.length, "flashcard")}`, "", `data-ccards="1"`) : ""}
         ${link("#", "sheet", `Topic ${t} cheat sheet`, esc(TOP[t]), `data-csheet="${t}"`)}
         ${link("#sandbox", "drill", "Try it in the sandbox", man ? `Type <code>man ${esc(c.cmd)}</code> for the full page` : "A free terminal, no tasks")}
-        ${OBJ[o] && OBJ[o].lesson ? link(esc(OBJ[o].lesson), "guide", `LPI lesson ${esc(o)} ↗`, "Read it on learning.lpi.org", `target="_blank" rel="noopener"`) : ""}</div>
+        ${OBJ[o] && OBJ[o].lesson ? link(esc(OBJ[o].lesson), "guide", `LPI lesson ${esc(o)}`, "Read it on learning.lpi.org", `target="_blank" rel="noopener"`) : ""}</div>
       <div class="stack" style="gap:6px"><span class="eyebrow">Skills · ${c.practised} of ${c.skills.length} tried</span><ul class="cskills">${skills}</ul></div></div>`;
   }
   function renderCommands() {
@@ -1392,7 +1394,7 @@
     const dots = cp.tasks.map((x, i) => { const q = cp.res[i]; const cls = i === cp.i ? "cur" : !q || !q.recorded ? "" : q.ok ? "ok" : "miss";
       return `<span class="ddot ${cls}" title="Task ${i + 1}${q && q.recorded ? (q.ok ? ": right" : ": missed") : ""}"></span>`; }).join("");
     shell("cmdrun", `<div class="page-head"><a class="small backlink" href="#commands" id="cquit">${icon("left")}Command practice</a>
-        <span class="eyebrow" style="margin-top:8px">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span><h1>${esc(sk.label)}</h1>
+        <h1>${esc(sk.label)}</h1><span class="eyebrow" style="margin-top:8px">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span>
         <div class="drilldots" aria-hidden="true">${dots}</div></div>
       <div class="labwrap drillwrap">
         <div class="stack tasks">
@@ -1439,7 +1441,7 @@
     const res = cp.res, okN = res.filter(x => x && x.ok).length, missed = cp.tasks.filter((t, i) => !(res[i] && res[i].ok));
     const why = q => !q ? "skipped" : q.ok ? "" : q.timeout ? "out of time" : q.revealed ? "answer shown" : q.hint ? "used a hint" : q.solved ? "" : "skipped";
     const pct = cp.tasks.length ? Math.round(100 * okN / cp.tasks.length) : 0;
-    shell("cmdrun", `<div class="page-head"><span class="eyebrow">Command practice · ${esc(CMD_MODES[cp.mode][0])}</span><h1>${okN} of ${cp.tasks.length} right</h1>
+    shell("cmdrun", `<div class="page-head"><h1>${okN} of ${cp.tasks.length} right</h1><span class="eyebrow">Command practice · ${esc(CMD_MODES[cp.mode][0])}</span>
         <p class="lead">${pct >= 80 ? "Strong set. These skills move further out in the schedule." : pct >= 50 ? "Good progress. The misses come back tomorrow, so they'll stick." : "Tough set, and that's how it should feel: the misses come back tomorrow."}</p></div>
       <div class="card stack"><ol class="cmdresults">${cp.tasks.map((t, i) => { const q = res[i]; const sk = SKILL[t.skill] || { label: t.skill };
         return `<li class="${q && q.ok ? "ok" : "miss"}">${icon(q && q.ok ? "check" : "dot")}<span class="grow"><b>${esc(sk.label)}</b> <span class="mono small muted">${esc(t.cmd)}</span></span>
@@ -1462,7 +1464,7 @@
     const sh = sandboxSh = sandboxSh || window.LEShell.createMachine({ setup: window.LE_DRILLS.sandbox });
     if (!sh.log) sh.log = "exit 0 sandbox: a simulated Linux system with no tasks and no score. Break whatever you like; Reset brings it back.\n'help' lists the commands, 'man NAME' explains one, 'ls -a' shows what's here.\n";
     const cmds = [...new Set(SKILLS.map(s => s.cmd).filter(c => /^[a-z][\w-]*$/.test(c)))].sort();
-    shell("sandbox", `<div class="page-head"><span class="eyebrow">Sandbox · free practice</span><h1>Sandbox</h1>
+    shell("sandbox", `<div class="page-head"><h1>Sandbox</h1>
         <p class="lead">A terminal with files, a log, a script, users, groups and a running process to explore. Nothing is checked or scored here. It stays as you left it until you reset it or reload the app.</p></div>
       <div class="labwrap">
         <div class="stack tasks"><div class="card stack"><b>Ideas to try</b><ol class="ideas">${SANDBOX_IDEAS.map(x => `<li>${rich(x)}</li>`).join("")}</ol></div>
@@ -1484,7 +1486,7 @@
     shell("sheets", `<div class="page-head"><h1>Cheat sheets</h1><p class="lead">One page per exam topic with the commands, options, files and facts you need on test day. Print them or save them as PDF.</p></div>
       <div class="card row spread sheet-tools"><div class="seg" id="stopic">${SHEETS.map(x => `<button data-v="${x.topic}" class="${sheetTopic === x.topic ? "on" : ""}" title="${esc(TOP[x.topic])}">Topic ${x.topic}</button>`).join("")}<button data-v="all" class="${sheetTopic === "all" ? "on" : ""}">All</button></div>
         <button class="primary" id="sprint">${icon("print")}Print${sheetTopic === "all" ? " all" : ""}</button></div>
-      ${shown.map(x => `<section class="sheet"><div class="sheet-head"><span class="eyebrow">exit 0 · Linux Essentials 010-160 · Topic ${x.topic}</span><h2>${esc(TOP[x.topic])}</h2></div>
+      ${shown.map(x => `<section class="sheet"><div class="sheet-head"><h2>${esc(TOP[x.topic])}</h2><span class="eyebrow">exit 0 · Linux Essentials 010-160 · Topic ${x.topic}</span></div>
         <div class="sheet-grid">${x.sections.map(sec => `<div class="sheet-sec"><h3>${esc(sec.h)}</h3><dl>${sec.rows.map(([k, v]) => `<dt>${rich(k)}</dt><dd>${rich(v)}</dd>`).join("")}</dl></div>`).join("")}</div></section>`).join("")}`);
     $$("#stopic button").forEach(b => b.onclick = () => { sheetTopic = b.dataset.v; renderSheets(); });
     $("#sprint").onclick = () => window.print();
@@ -1582,11 +1584,11 @@
       <div class="card stack"><h2>Daily review</h2>${reviewPickerHTML()}</div>
       ${DESKTOP() || STANDALONE() ? "" : `<div class="card stack" id="install"><div><h2>Install on this device</h2>
           <p class="small muted">Add exit 0 to your home screen or app list. It opens in its own window and works offline, with your progress kept on this device${SYNC && SYNC.linked ? " and synced" : " (or synced, if you set up Sync below)"}.</p></div>
-        ${installEvt ? `<div class="row"><button class="primary" id="installNow">${icon("download")}Install exit 0</button></div>`
+        ${installEvt ? `<div class="row"><button id="installNow">${icon("download")}Install exit 0</button></div>`
           : IOS ? `<p class="small">In Safari, tap the <b>Share</b> button, then <b>Add to Home Screen</b>.</p>`
           : `<p class="small">In Chrome or Edge, open the browser menu and choose <b>Install app</b> (on Android: <b>Add to Home screen</b>). Firefox doesn't support installing web apps on desktop; use the desktop app below instead.</p>`}</div>`}
       ${DESKTOP() ? "" : `<div class="card stack"><div><h2>Desktop app</h2><p class="small muted">The same app in its own window. It works offline, saves progress on your computer and can sync with your server too.</p></div>
-        <div class="row"><a class="btn primary" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
+        <div class="row"><a class="btn" href="${REPO}/releases/latest/download/Exit0.exe" target="_blank" rel="noopener">Windows (.exe)</a>
           <a class="btn" href="${REPO}#fedora" target="_blank" rel="noopener">Fedora (dnf)</a>
           <a class="btn" href="${REPO}#ubuntu--debian" target="_blank" rel="noopener">Ubuntu / Debian (apt)</a></div></div>`}
       ${syncCardHTML()}
@@ -1818,18 +1820,18 @@
       let body;
       if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
       else body = `<div class="stack" style="gap:4px">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
-        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${k && p ? "Your pick · correct" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct · missed" : "Correct") : "Your pick · wrong"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
+        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="row" style="gap:8px"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
-        <span class="dverdict ${ok ? "v-good" : "v-bad"}">${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
+        <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p style="font-weight:600">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
         <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
         <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
     };
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
-    shell(null, `<div class="page-head"><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1></div>
-      <div class="card score">${ring(pct, 128, 12, pct + "%", "", col(pct))}
-        <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode" style="color:${col(pct)}">$ echo $? → ${pct >= 80 ? 0 : 1}</code></span>
-          <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in <span class="mono">${fmt(rec.secs)}</span></p>
+    shell(null, `<div class="page-head"><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span></div>
+      <div class="card score"><div class="scorenum"><b>${pct}%</b><div class="scorebar" role="img" aria-label="Score ${pct} percent. The target is 80 percent."><i style="width:${pct}%"></i><span class="mark" style="left:80%"></span></div><span class="small muted">80% target</span></div>
+        <div class="stack grow" style="gap:8px;min-width:220px"><span class="row" style="gap:10px"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
+          <p style="font-size:1.1rem"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
             : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>
       <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
@@ -1868,7 +1870,7 @@
   function renderHandson() {
     if (!hs) return go("study");
     if (hs.i >= hs.items.length) return renderHandsonDone();
-    const it = hs.items[hs.i], n = hs.items.length, res = hs.res, tick = ok => `<span class="hmark ${ok ? "ok" : "no"}">${ok ? "✓" : "✗"}</span>`;
+    const it = hs.items[hs.i], n = hs.items.length, res = hs.res, tick = ok => `<span class="hmark ${ok ? "ok" : "no"}">${icon(ok ? "check" : "x")}<span class="sr">${ok ? "right" : "wrong"}</span></span>`;
     let body;
     if (it.type === "match") {
       body = `<div class="hmatch">${it.left.map((l, i) => `<div class="hrow ${res ? (res.rows[i] ? "ok" : "no") : ""}"><span class="hleft">${rich(l)}</span>
@@ -1877,12 +1879,11 @@
           ${res && !res.rows[i] ? `<span class="hfix">Answer: ${rich(it.right[it.key[i]])}</span>` : ""}</span></div>`).join("")}</div>`;
     } else {
       body = `<ol class="horder">${hs.ans.map((idx, pos) => `<li class="hrow ${res ? (res.rows[pos] ? "ok" : "no") : ""}" data-item="${idx}"><span class="hleft">${rich(it.items[idx])}</span>
-        <span class="hmove">${res ? tick(res.rows[pos]) : `<button class="ghost" data-up="${pos}" ${pos ? "" : "disabled"} aria-label="Move up">↑</button><button class="ghost" data-down="${pos}" ${pos < hs.ans.length - 1 ? "" : "disabled"} aria-label="Move down">↓</button>`}</span></li>`).join("")}</ol>
+        <span class="hmove">${res ? tick(res.rows[pos]) : `<button class="ghost" data-up="${pos}" ${pos ? "" : "disabled"} aria-label="Move up">${icon("up")}</button><button class="ghost" data-down="${pos}" ${pos < hs.ans.length - 1 ? "" : "disabled"} aria-label="Move down">${icon("down")}</button>`}</span></li>`).join("")}</ol>
         ${res && !res.ok ? `<div class="hfix"><b>Correct order</b><ol>${it.items.map(x => `<li>${rich(x)}</li>`).join("")}</ol></div>` : ""}`;
     }
     const ready = it.type !== "match" || hs.ans.every(a => a >= 0);
-    shell("study", `<div class="page-head"><span class="eyebrow">Hands-on · ${it.type === "match" ? "match each item" : "put in order"} · ${it.obj} ${esc(OBJ[it.obj].name)}</span>
-        <h1 class="hq">${rich(it.q)}</h1><p class="small muted">Question ${hs.i + 1} of ${n}. Practice only: the real exam is multiple choice and fill-in.</p></div>
+    shell("study", `<div class="page-head"><h1 class="hq">${rich(it.q)}</h1><span class="eyebrow">Hands-on · ${it.type === "match" ? "match each item" : "put in order"} · ${it.obj} ${esc(OBJ[it.obj].name)}</span><p class="small muted">Question ${hs.i + 1} of ${n}. Practice only: the real exam is multiple choice and fill-in.</p></div>
       <div class="card stack">${body}
         ${res ? `<div class="feedback ${res.ok ? "ok" : "no"}"><h3>${res.ok ? "Correct" : `${res.right} of ${res.total} right`}</h3><div>${rich(it.ex)}</div>
           <div class="studyref"><a href="${OBJ[it.obj].lesson}" target="_blank" rel="noopener">${icon("guide")}LPI lesson ${it.obj}: ${esc(OBJ[it.obj].name)}</a></div></div>` : ""}
@@ -1899,7 +1900,7 @@
   }
   function renderHandsonDone() {
     const right = hs.score.filter(Boolean).length, n = hs.score.length, missed = hs.items.filter((_, i) => i < n && !hs.score[i]);
-    shell("study", `<div class="page-head"><span class="eyebrow">Hands-on · results</span><h1>${right} of ${n} right</h1>
+    shell("study", `<div class="page-head"><h1>${right} of ${n} right</h1><span class="eyebrow">Hands-on · results</span>
         <p class="lead">${right === n ? "Every one right." : "The ones you missed come back first next time."}</p></div>
       ${missed.length ? `<div class="card stack"><h2>To look at again</h2><div class="slist">${missed.map(it => `<div class="srow"><span class="o">${it.obj}</span><span class="stext">${rich(it.q)}
         <a class="small" href="${OBJ[it.obj].lesson}" target="_blank" rel="noopener">LPI lesson ${it.obj}</a></span></div>`).join("")}</div></div>` : ""}
@@ -1917,7 +1918,7 @@
         <span class="small muted">${q.id} · ${s && s.seen ? (s.last ? "right last time" : "missed last time") : "not seen yet"}${m.on ? " · bookmarked" : ""}${m.note ? " · has a note" : ""}</span></span>
         <button class="ghost small" data-ask="${q.id}">Answer it</button></div>`; };
     const crow = id => { const c = CARDS.find(x => x.id === id); return `<div class="srow"><span class="o">${c.obj}</span><span class="stext"><b>${esc(c.front)}</b><span class="small muted">${esc(c.back.length > 160 ? c.back.slice(0, 160) + "…" : c.back)}</span></span></div>`; };
-    shell("study", `<div class="page-head"><span class="eyebrow">Practice</span><h1>Search</h1><p class="lead">Find a question or flashcard by any word, command or question number.</p></div>
+    shell("study", `<div class="page-head"><h1>Search</h1><p class="lead">Find a question or flashcard by any word, command or question number.</p></div>
       <div class="card stack"><label class="searchbox">${icon("guide")}<input id="q" type="search" value="${esc(searchText)}" placeholder="chmod, hard link, 3.2-07 …" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Search questions and flashcards"></label>
         <div id="hits">${searchHits(r, qrow, crow)}</div></div>`);
     const inp = $("#q"), draw = () => { $("#hits").innerHTML = searchHits(C.search(BANK, CARDS, searchText, 40), qrow, crow); wireHits(); };

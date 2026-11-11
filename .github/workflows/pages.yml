@@ -57,55 +57,79 @@ jobs:
             echo "::warning::No release with exit0.rpm and exit0.deb yet, so only the web app is published."
             echo "repo=no" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          sudo apt-get update -q
-          sudo apt-get install -y -q apt-utils dpkg-dev
-          printf '%s\n' "$PACKAGE_SIGNING_KEY" | gpg --batch --import
-          fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
-          ver=$(dpkg-deb -f pkgs/exit0.deb Version)
           R=_site/repo
-          mkdir -p "$R/rpm" "$R/deb"
 
-          # dnf/yum repository: the package must already be signed by the release workflow.
-          cp pkgs/exit0.rpm "$R/rpm/exit0-$ver.noarch.rpm"
-          if sudo apt-get install -y -q createrepo-c; then
-            createrepo_c "$R/rpm"
-          else
-            docker run --rm -v "$PWD/$R/rpm:/repo" fedora:latest sh -c 'dnf -q -y install createrepo_c && createrepo_c /repo'
-            sudo chown -R "$USER" "$R/rpm"
-          fi
-          gpg --batch --yes --local-user "$fpr" --detach-sign --armor "$R/rpm/repodata/repomd.xml"
+          # Build the repository from the release packages. Runs in a subshell so that a failure here (for example the
+          # runner not reaching Ubuntu's package servers) does not stop the web app from being published.
+          build_repo() (
+            set -e
+            sudo apt-get update -q -o Acquire::Retries=3
+            sudo apt-get install -y -q -o Acquire::Retries=3 apt-utils dpkg-dev
+            printf '%s\n' "$PACKAGE_SIGNING_KEY" | gpg --batch --import
+            fpr=$(gpg --batch --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
+            ver=$(dpkg-deb -f pkgs/exit0.deb Version)
+            mkdir -p "$R/rpm" "$R/deb"
 
-          # apt repository (flat layout): a signed Release/InRelease covers the package checksums.
-          cp pkgs/exit0.deb "$R/deb/exit0_${ver}_all.deb"
-          (
-            cd "$R/deb"
-            apt-ftparchive packages . > Packages
-            gzip -9kn Packages
-            apt-ftparchive -o APT::FTPArchive::Release::Origin=exit0 -o APT::FTPArchive::Release::Label=exit0 \
-              -o APT::FTPArchive::Release::Suite=stable -o APT::FTPArchive::Release::Codename=stable release . > Release
-            gpg --batch --yes --local-user "$fpr" --clearsign -o InRelease Release
-            gpg --batch --yes --local-user "$fpr" --armor --detach-sign -o Release.gpg Release
+            # dnf/yum repository: the package must already be signed by the release workflow.
+            cp pkgs/exit0.rpm "$R/rpm/exit0-$ver.noarch.rpm"
+            if sudo apt-get install -y -q createrepo-c; then
+              createrepo_c "$R/rpm"
+            else
+              docker run --rm -v "$PWD/$R/rpm:/repo" fedora:latest sh -c 'dnf -q -y install createrepo_c && createrepo_c /repo'
+              sudo chown -R "$USER" "$R/rpm"
+            fi
+            gpg --batch --yes --local-user "$fpr" --detach-sign --armor "$R/rpm/repodata/repomd.xml"
+
+            # apt repository (flat layout): a signed Release/InRelease covers the package checksums.
+            cp pkgs/exit0.deb "$R/deb/exit0_${ver}_all.deb"
+            (
+              cd "$R/deb"
+              apt-ftparchive packages . > Packages
+              gzip -9kn Packages
+              apt-ftparchive -o APT::FTPArchive::Release::Origin=exit0 -o APT::FTPArchive::Release::Label=exit0 \
+                -o APT::FTPArchive::Release::Suite=stable -o APT::FTPArchive::Release::Codename=stable release . > Release
+              gpg --batch --yes --local-user "$fpr" --clearsign -o InRelease Release
+              gpg --batch --yes --local-user "$fpr" --armor --detach-sign -o Release.gpg Release
+            )
+
+            gpg --batch --armor --export "$fpr" > "$R/exit0.asc"
+            printf '%s\n' '[exit0]' 'name=exit 0' "baseurl=$SITE/repo/rpm" 'enabled=1' 'gpgcheck=1' 'repo_gpgcheck=1' "gpgkey=$SITE/repo/exit0.asc" > "$R/exit0.repo"
+            printf '%s\n' 'Types: deb' "URIs: $SITE/repo/deb/" 'Suites: ./' 'Signed-By: /etc/apt/keyrings/exit0.asc' > "$R/exit0.sources"
+            echo "Repository for exit0 $ver signed with key $fpr"
           )
 
-          gpg --batch --armor --export "$fpr" > "$R/exit0.asc"
-          cat > "$R/exit0.repo" <<EOF
-          [exit0]
-          name=exit 0
-          baseurl=$SITE/repo/rpm
-          enabled=1
-          gpgcheck=1
-          repo_gpgcheck=1
-          gpgkey=$SITE/repo/exit0.asc
-          EOF
-          cat > "$R/exit0.sources" <<EOF
-          Types: deb
-          URIs: $SITE/repo/deb/
-          Suites: ./
-          Signed-By: /etc/apt/keyrings/exit0.asc
-          EOF
-          echo "Repository for exit0 $ver signed with key $fpr"
-          find "$R" -type f | sort
-          echo "repo=yes" >> "$GITHUB_OUTPUT"
+          # Fallback: carry over the repository that is live now, file for file, so installs keep working.
+          keep_live_repo() (
+            set -e
+            get() { mkdir -p "$(dirname "$R/$1")"; curl -fsS --retry 3 -o "$R/$1" "$SITE/repo/$1"; }
+            for f in exit0.asc exit0.repo exit0.sources deb/Packages deb/Packages.gz deb/Release deb/InRelease deb/Release.gpg \
+              rpm/repodata/repomd.xml rpm/repodata/repomd.xml.asc; do get "$f"; done
+            for f in $(grep -o 'href="[^"]*"' "$R/rpm/repodata/repomd.xml" | cut -d'"' -f2); do get "rpm/$f"; done
+            ver=$(awk '/^Version:/ {print $2; exit}' "$R/deb/Packages")
+            get "deb/exit0_${ver}_all.deb"
+            get "rpm/exit0-$ver.noarch.rpm"
+          )
+
+          set +e
+          build_repo; built=$?
+          set -e
+          if [ "$built" -eq 0 ]; then
+            find "$R" -type f | sort
+            echo "repo=yes" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          rm -rf "$R"
+          set +e
+          keep_live_repo; kept=$?
+          set -e
+          if [ "$kept" -eq 0 ]; then
+            echo "::warning::The package repository could not be rebuilt, so the one already published is kept as it is."
+            find "$R" -type f | sort
+            echo "repo=kept" >> "$GITHUB_OUTPUT"
+          else
+            rm -rf "$R"
+            echo "::warning::The package repository could not be rebuilt or carried over, so only the web app is published."
+            echo "repo=no" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

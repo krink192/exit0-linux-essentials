@@ -180,6 +180,12 @@
     if (!s || !Array.isArray(s.qids)) return null;
     const qids = s.qids.filter(id => bank.byId[id]);
     if (!qids.length) return null;
+    s.optOrder = s.optOrder || {};
+    for (const id of qids) {                         // an option order that doesn't fit the question is replaced by the plain order
+      const q = bank.byId[id]; if (q.type === "fill") continue;
+      const o = s.optOrder[id], n = q.options.length;
+      if (!Array.isArray(o) || o.length !== n || new Set(o).size !== n || o.some(i => !(i >= 0 && i < n))) s.optOrder[id] = q.options.map((_, i) => i);
+    }
     if (qids.length === s.qids.length) return s;
     return Object.assign(s, { qids, cur: Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0)) });
   }
@@ -902,6 +908,7 @@
   /** Copy a merged view into the app state, keeping this device's local settings and any session in progress.
    *  The progress maps are replaced, not updated in place: don't keep state.labs[id] and the like across a sync. */
   function applyMerged(state, view) {
+    view = Object.assign(mergeStates([]), cleanDoc(view));     // whatever a server sent, the app only ever holds well-formed progress
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
     state.badges = view.badges; state.labs = view.labs;
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
@@ -914,6 +921,89 @@
     if (local.tests.some(t => ids[t.id])) return true;
     for (const id in local.qstats) if (remote.qstats[id] && local.qstats[id].at && local.qstats[id].at === remote.qstats[id].at) return true;
     return false;
+  }
+
+  // ------------------------------------------------------------- data from outside the app
+  // Saved progress comes from places the app doesn't control: the browser's storage, a pasted export code and a
+  // sync server. All of it is rebuilt field by field with the types the app expects, so text in it can never reach
+  // the page as HTML and a broken value can't crash a screen or spin a loop. Valid data comes back unchanged.
+  // Fields this version doesn't know are kept only when they are plain numbers or booleans.
+  const ID_RE = /^[\w.-]{1,40}$/, DAY_RE = /^\d{4}-\d{2}-\d{2}$/, TIME_RE = /^\d{1,2}:\d{2}$/;
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+  const okKey = k => ID_RE.test(k) && k !== "__proto__" && k !== "constructor" && k !== "prototype";
+  const isObj = x => !!x && typeof x === "object" && !Array.isArray(x);
+  const isNum = v => typeof v === "number" && isFinite(v);
+  const count = v => isNum(v) && v > 0 ? Math.floor(v) : 0;
+  const numOr = d => v => isNum(v) ? v : d;
+  const flag = v => v === true;
+  const oneOf = (list, d) => v => list.indexOf(v) >= 0 ? v : d;
+  const text = max => v => typeof v === "string" ? v.slice(0, max) : "";
+  const idList = v => Array.isArray(v) ? v.filter(x => typeof x === "string" && okKey(x)) : [];
+  const intList = v => Array.isArray(v) ? v.filter(x => Number.isInteger(x) && x >= 0 && x < 10000) : [];
+  /** Rebuild an object: fields named in `spec` go through their function, other fields stay only if number or boolean. */
+  function shape(src, spec) {
+    const out = {};
+    for (const k in src) {
+      if (!has(src, k) || !okKey(k)) continue;
+      if (spec[k]) { const v = spec[k](src[k]); if (v !== undefined) out[k] = v; }
+      else if (isNum(src[k]) || typeof src[k] === "boolean") out[k] = src[k];
+    }
+    return out;
+  }
+  /** Rebuild a map (id -> value): bad keys and values that `fn` rejects (undefined) are dropped. */
+  function mapOf(src, fn, keyOk) {
+    const out = {};
+    if (isObj(src)) for (const k in src) { if (!has(src, k) || !(keyOk || okKey)(k)) continue; const v = fn(src[k]); if (v !== undefined) out[k] = v; }
+    return out;
+  }
+  const SCHED = { seen: count, right: count, last: v => v === true || v === false ? v : null, at: numOr(undefined),
+                  box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined };
+  const cleanSched = s => isObj(s) ? shape(s, SCHED) : undefined;
+  const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
+  const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
+  const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
+                 label: text(200), score: count, total: count, pct: v => Math.min(100, count(v)), answered: count, secs: count, timed: flag, study: flag,
+                 qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList };
+  function cleanTest(t) {
+    if (!isObj(t)) return undefined;
+    const o = shape(t, TEST); if (!o.id) return undefined;
+    for (const k of ["date", "score", "total", "pct", "secs"]) if (o[k] == null) o[k] = 0;
+    if (o.label == null) o.label = ""; if (o.mode == null) o.mode = "study";
+    if (o.qids) { o.answers = o.answers || {}; o.optOrder = o.optOrder || {}; }
+    return o;
+  }
+  const STUDY = { objMode: oneOf(["all", "weak", "pick"], "all"), objs: idList, levels: v => intList(v).filter(x => x >= 1 && x <= 3),
+                  source: oneOf(["mix", "unseen", "missed"], "mix"), count: v => Math.min(400, count(v)) };
+  const CMD = { source: oneOf(["recommended", "due", "new", "pick"], "recommended"), cmds: v => Array.isArray(v) ? v.filter(x => typeof x === "string" && x.length <= 40) : [],
+                count: v => Math.max(1, Math.min(50, count(v))), mode: oneOf(["guided", "recall", "timed"], "guided") };
+  const SETTINGS = { theme: oneOf(["system", "light", "dark"], "system"), goal: v => clampGoal(v), review: v => clampReview(isObj(v) ? v : {}),
+                     examDate: v => typeof v === "string" && parseDate(v) ? v : null, remindAt: v => typeof v === "string" && TIME_RE.test(v) ? v : "19:00",
+                     deck: oneOf(["concepts", "commands"], "concepts"), study: v => isObj(v) ? shape(v, STUDY) : undefined, cmd: v => isObj(v) ? shape(v, CMD) : undefined };
+  const cleanSettings = s => isObj(s) ? shape(s, SETTINGS) : {};
+  const DOC = { tests: v => Array.isArray(v) ? v.map(cleanTest).filter(Boolean) : [], qstats: v => mapOf(v, cleanSched), cards: v => mapOf(v, cleanSched),
+                cmdstats: v => mapOf(v, cleanSched), days: v => mapOf(v, x => isNum(x) && x > 0 ? Math.floor(x) : undefined, k => DAY_RE.test(k)),
+                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), settings: cleanSettings,
+                settingsTs: v => mapOf(v, numOr(undefined)) };
+  /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
+  function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
+  const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
+  const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks,
+                    cur: count, study: flag, timed: flag, start: numOr(undefined), deadline: numOr(null) };
+  /** The session in progress as saved in the browser, or null when it isn't one. */
+  function cleanSession(s) {
+    if (!isObj(s)) return null;
+    const o = shape(s, SESSION);
+    if (!o.qids || !o.qids.length || o.start == null) return null;
+    for (const k of ["optOrder", "answers", "flags", "checked", "hints"]) o[k] = o[k] || {};
+    o.cur = Math.min(o.qids.length - 1, o.cur || 0); o.label = o.label || ""; o.mode = o.mode || "study"; if (o.deadline === undefined) o.deadline = null;
+    return o;
+  }
+  /** Replace progress with the contents of an export code (already parsed). Returns the new state, or null if it isn't one. */
+  function importState(state, d) {
+    if (!isObj(d) || d.app !== "le010" || !Array.isArray(d.tests)) return null;
+    const p = cleanDoc(d);
+    return migrate(Object.assign({}, state, { tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
+      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, settings: Object.assign({}, state.settings, p.settings) }));
   }
 
   // ------------------------------------------------------------- state
@@ -945,7 +1035,11 @@
           label: h.mode === "random" || h.mode === "form" ? "Practice test" : h.label, score: h.score, total: h.total, pct: h.pct, secs: h.secs }));
       }
     }
-    return st;
+    // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")
+    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs });
+    const fresh = freshState().settings, s = cleanSettings(st.settings);
+    s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
+    return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
   }
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
@@ -954,6 +1048,6 @@
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
-           clampGoal, GOAL_MIN, GOAL_MAX,
+           clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

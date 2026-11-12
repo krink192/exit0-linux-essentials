@@ -1655,6 +1655,8 @@
     const revealed = S.study && S.checked[id];
     const hintOn = S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
+    S.conf = S.conf || {};
+    const rated = S.conf[id] === true || S.conf[id] === false;
     if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
     if (q.type === "fill") {
@@ -1674,15 +1676,22 @@
       }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
     }
     const ok = revealed && C.isCorrect(q, a);
+    const confWrong = revealed && rated && S.conf[id] === true && !ok;
     const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" :C.extraSudo(q, a) ? "Right command, but drop sudo" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+        ${confWrong ? `<p class="conf-flag">${icon("flag")} You marked this <b>sure</b>, but it was wrong. Worth another look.</p>` : ""}
         ${!ok && C.extraSudo(q, a) ? `<p>Nothing in the question needs root, and the exam wants the shortest command that does the job. Running a command like this as root also removes the permission checks that would stop a mistake.</p>` : ""}
         ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
         <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
-    // One filled button per screen: Check answer until the answer is shown, then Next question (or Finish on the last one).
+    // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
     const primary = canCheck ? `<button class="primary" id="check">Check answer</button>`
-      : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>` : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
+      : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>`
+      : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
+    const confPick = !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
+      <span class="small muted">Optional:</span>
+      <div class="seg" id="confSeg"><button type="button" data-c="1" class="${S.conf[id] === true ? "on" : ""}" id="sure">Sure</button>
+        <button type="button" data-c="0" class="${S.conf[id] === false ? "on" : ""}" id="unsure">Unsure</button></div></div>` : "";
     app.innerHTML = `<div class="exam-bar"><div class="in">
         <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : "Study"} page.">${icon("x")}</button>
         <div class="progress" id="prog" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${100 * done / n}%"></i></div>
@@ -1704,7 +1713,8 @@
         ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}${revealed ? noteBox(id) : ""}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
           ${S.study ? markButton(id) : ""}
-          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}</div>
+          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
+          ${confPick}</div>
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
@@ -1716,6 +1726,11 @@
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     if ($("#check")) $("#check").onclick = () => { S.checked[id] = 1; save(); renderExam(); };
+    $$("#confSeg button").forEach(b => b.onclick = () => {
+      const v = b.dataset.c === "1";
+      if (S.conf[id] === v) delete S.conf[id]; else S.conf[id] = v;
+      save(); const y = scrollY; renderExam(); scrollTo(0, y);
+    });
     if ($("#flag")) $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
     wireMarks(app, () => { const y = scrollY; renderExam(); scrollTo(0, y); });
     if ($("#gridBtn")) $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
@@ -1810,7 +1825,8 @@
     lastRec = C.recordResult(st, BANK, S, res);
     celebrate();
     st.current = null; confirming = false; showGrid = false; save();
-    reviewFilter = res.score < res.total ? "wrong" : "all";
+    const cal = C.calibration(lastRec, BANK);
+    reviewFilter = cal.focus.length ? "focus" : res.score < res.total ? "wrong" : "all";
     go("results");
   }
 
@@ -1825,30 +1841,44 @@
       (byObj[o] = byObj[o] || [0, 0])[1]++; (byTopic[t] = byTopic[t] || [0, 0])[1]++; if (ok) { byObj[o][0]++; byTopic[t][0]++; }
     }
     const flags = new Set(rec.flags || []), hintsUsed = new Set(rec.hints || []);
+    const conf = rec.conf || {}, cal = C.calibration(rec, BANK);
     const order = (q, o) => Array.isArray(o) && o.length === q.options.length && o.every(i => q.options[i] != null) ? o : q.options.map((_, i) => i);
     const pct = rec.pct, isTest = rec.mode === "test";
     const verdict = pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing";
     const wrongN = rec.qids.filter(id => !perQ[id]).length;
-    const list = rec.qids.map((id, i) => ({ id, i })).filter(({ id }) => BANK.byId[id]).filter(({ id }) => reviewFilter === "all" || (reviewFilter === "wrong" && !perQ[id]) || (reviewFilter === "flag" && flags.has(id)));
+    const focusSet = new Set(cal.focus);
+    const list = rec.qids.map((id, i) => ({ id, i })).filter(({ id }) => BANK.byId[id]).filter(({ id }) =>
+      reviewFilter === "all" || (reviewFilter === "wrong" && !perQ[id]) || (reviewFilter === "flag" && flags.has(id))
+      || (reviewFilter === "focus" && focusSet.has(id)));
+    const confLabel = (id, ok) => {
+      if (conf[id] !== true && conf[id] !== false) return "";
+      if (conf[id] && !ok) return `<span class="chip conf-cw" title="You were sure, but wrong">${icon("flag")}Sure, wrong</span>`;
+      if (!conf[id] && ok) return `<span class="chip conf-uc" title="Correct, but you were unsure">Unsure, correct</span>`;
+      return `<span class="chip ${conf[id] ? "lv-mastered" : "lv-attempted"}">${conf[id] ? "Sure" : "Unsure"}</span>`;
+    };
     const item = ({ id, i }) => {
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;
       if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
       else body = `<div class="u-g4 stack">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
         return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
-      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}</span>
+      return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}${confLabel(id, ok)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p class="u-fw6">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
         <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
         <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
     };
+    const calLine = cal.sureN
+      ? `<p class="small muted">When you said <b>sure</b> you were right ${cal.surePct}% of the time (${cal.sureOk} of ${cal.sureN})${cal.unsureN ? `; when <b>unsure</b>, ${cal.unsurePct}% (${cal.unsureOk} of ${cal.unsureN})` : ""}.${cal.cw.length ? ` ${plural(cal.cw.length, "confident miss")} to review.` : ""}</p>`
+      : "";
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
     shell(null, `<div class="page-head"><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span></div>
       <div class="card score"><div class="scorenum"><b>${pct}%</b><div class="scorebar" role="img" aria-label="Score ${pct} percent. The target is 80 percent."><i style="width:${pct}%"></i><span class="mark" style="left:80%"></span></div><span class="small muted">80% target</span></div>
         <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
           <p class="u-fs-l"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
-            : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p></div></div>
+            : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>
+          ${calLine}</div></div>
       <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
           : rec.mode === "review" ? (C.deckStats(CARDS, st.cards).due ? `<button class="primary" data-start="duecards">Review ${plural(C.deckStats(CARDS, st.cards).due, "due flashcard")}</button>` : `<button class="primary" data-go="review">Back to daily review</button>`)
           : `<button class="primary" data-go="study">Study more</button>`}
@@ -1862,6 +1892,7 @@
           : `<p class="muted small">You got every objective right. ${icon("trophy")}</p>`}</div></div>
       <div class="card stack"><div class="row spread"><h2>By question difficulty</h2><span class="small muted">How you did on each kind of thinking</span></div>${levelBars(byLevel)}</div>
       <div class="stack" id="review"><div class="row spread"><h2>Answers</h2><div class="filters">
+        ${cal.focus.length ? `<button data-f="focus" class="${reviewFilter === "focus" ? "on" : ""}">Focus (${cal.focus.length})</button>` : ""}
         <button data-f="wrong" class="${reviewFilter === "wrong" ? "on" : ""}">Missed (${wrongN})</button>
         <button data-f="all" class="${reviewFilter === "all" ? "on" : ""}">All ${rec.qids.length}</button>
         <button data-f="flag" class="${reviewFilter === "flag" ? "on" : ""}">Flagged (${flags.size})</button></div></div>

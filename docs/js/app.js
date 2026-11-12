@@ -117,6 +117,15 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
+  // Screen readers: one live region outside #app, which is redrawn on every render. A region inserted with the new
+  // content is often not announced, so results ("Wrong. Correct answer: C.") are written here instead.
+  let announcedId = null;
+  function announce(text) {
+    let el = document.getElementById("srLive");
+    if (!el) { el = document.createElement("div"); el.id = "srLive"; el.className = "sr"; el.setAttribute("role", "status"); el.setAttribute("aria-live", "polite"); document.body.appendChild(el); }
+    el.textContent = "";
+    setTimeout(() => { el.textContent = text; }, 60);
+  }
 
   const toastQueue = [];          // one toast at a time, so several at once don't pile up on top of each other
   function toast(msg) {
@@ -803,7 +812,7 @@
     const nextN = Math.min(cardSize, ds.due + ds.fresh);
     shell("cards", `<div class="page-head"><h1>Flashcards</h1><p class="lead">Every term in LPI's exam objectives. Cards you know come back less often, and cards you miss come back first.</p></div>
       <div class="deck-tabs">${decks.map(([k, name, desc]) => { const s = C.deckStats(CARDS, st.cards, c => c.deck === k);
-        return `<button class="deck ${deck === k ? "on" : ""}" data-deck="${k}"><span class="row spread"><span class="dn">${name}</span><span class="chip lv-${s.due ? "weak" : "new"}">${s.due ? s.due + " due" : s.total + " cards"}</span></span>
+        return `<button class="deck ${deck === k ? "on" : ""}" data-deck="${k}"><span class="row spread"><span class="dn">${name}</span><span class="chip lv-${s.due ? "due" : "new"}">${s.due ? s.due + " due" : s.total + " cards"}</span></span>
           <span class="ds">${desc}</span><span class="stackbar"><i style="width:${100 * s.mastered / s.total}%"></i><i style="width:${100 * s.learning / s.total}%"></i></span>
           <span class="ds">${s.mastered} mastered · ${s.learning} learning · ${s.fresh} new</span></button>`; }).join("")}</div>
       <div class="card row spread">
@@ -1726,6 +1735,12 @@
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     if ($("#check")) $("#check").onclick = () => { S.checked[id] = 1; save(); renderExam(); };
+    if (revealed && announcedId !== S.start + "|" + id) {      // once per question, when its answer is first shown
+      announcedId = S.start + "|" + id;
+      const right = q.type === "fill" ? (q.accept || [])[0] || ""
+        : S.optOrder[id].map((oi, pos) => q.answer.includes(oi) ? L[pos] : null).filter(Boolean).join(" and ");
+      announce(ok ? "Correct." : `${C.answered(q, a) ? "Not quite." : "Not answered."} Correct answer: ${right}.`);
+    }
     $$("#confSeg button").forEach(b => b.onclick = () => {
       const v = b.dataset.c === "1";
       if (S.conf[id] === v) delete S.conf[id]; else S.conf[id] = v;
@@ -1940,7 +1955,8 @@
     const swap = (a, b) => { const t = hs.ans[a]; hs.ans[a] = hs.ans[b]; hs.ans[b] = t; redraw(); const f = $(`[data-${b < a ? "up" : "down"}="${b}"]:not([disabled])`) || $(`[data-up="${b}"]:not([disabled])`) || $(`[data-down="${b}"]`); if (f) f.focus(); };
     $$("[data-up]").forEach(b => b.onclick = () => swap(+b.dataset.up, +b.dataset.up - 1));
     $$("[data-down]").forEach(b => b.onclick = () => swap(+b.dataset.down, +b.dataset.down + 1));
-    const chk = $("#hsCheck"); if (chk) chk.onclick = () => { hs.res = C.checkHandson(it, hs.ans); hs.score[hs.i] = hs.res.ok; C.recordDrill(st, it.id, hs.res.ok); save(); celebrate(); redraw(); };
+    const chk = $("#hsCheck"); if (chk) chk.onclick = () => { hs.res = C.checkHandson(it, hs.ans); hs.score[hs.i] = hs.res.ok; C.recordDrill(st, it.id, hs.res.ok); save(); celebrate(); redraw();
+      announce(hs.res.ok ? "Correct." : `${hs.res.right} of ${hs.res.total} right. The correct answers are shown on each row.`); };
     const nx = $("#hsNext"); if (nx) nx.onclick = () => { hs.i++; if (hs.i < n) hsOpen(); renderHandson(); scrollTo(0, 0); };
     $("#hsQuit").onclick = () => { if (hs.score.length) { hs.items = hs.items.slice(0, hs.score.length); hs.i = hs.items.length; renderHandson(); } else { hs = null; go("study"); } };
   }

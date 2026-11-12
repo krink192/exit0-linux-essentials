@@ -178,7 +178,7 @@
       if (q.type !== "fill") optOrder[id] = shuffle(q.options.map((_, i) => i), rand);
     }
     const now = opts.now || Date.now();
-    const s = { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, cur: 0, study: !!opts.study,
+    const s = { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, conf: {}, cur: 0, study: !!opts.study,
                 timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
     if (opts.form) s.form = opts.form;      // a fixed practice exam (A-J)
     if (opts.rung) s.rung = opts.rung;      // a Level Up step
@@ -426,6 +426,10 @@
       if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
       else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
+      if (s.conf && (s.conf[id] === true || s.conf[id] === false)) {
+        st.conf = s.conf[id] ? 1 : 0;                 // last rating: for "low confidence" filters later
+        if (s.conf[id] && !res.perQ[id]) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
+      }
       if (res.perQ[id] && cold && !hinted) noteColdDay(st, bank.byId[id], today);
       scheduleQuestion(st, res.perQ[id], today, exDay);
       state.qstats[id] = st;
@@ -449,15 +453,37 @@
         }
       }
     }
+    const conf = {};
+    for (const id of s.qids) if (s.conf && (s.conf[id] === true || s.conf[id] === false)) conf[id] = !!s.conf[id];
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
-                  flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]) };
+                  flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]), conf };
     if (s.form) rec.form = s.form; if (s.rung) rec.rung = s.rung;
     state.tests.push(rec);
     // keep full detail for the 30 most recent records
-    state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; } });
+    state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; delete t.conf; } });
     addActivity(state, res.answered, now);
     return rec;
+  }
+
+  /** How well confidence matched outcomes. conf[id] true = sure, false = unsure. */
+  function calibration(rec, bank) {
+    let sureN = 0, sureOk = 0, unsureN = 0, unsureOk = 0;
+    const cw = [], focus = [];
+    const conf = (rec && rec.conf) || {};
+    for (const id of (rec && rec.qids) || []) {
+      if (!bank.byId[id]) continue;
+      const rated = conf[id] === true || conf[id] === false; if (!rated) continue;
+      const ok = isCorrect(bank.byId[id], rec.answers[id]);
+      if (conf[id]) { sureN++; if (ok) sureOk++; else cw.push(id); }
+      else { unsureN++; if (ok) unsureOk++; }
+      if (!ok || !conf[id]) focus.push(id);   // misses and unsure corrects
+    }
+    return {
+      sureN, sureOk, surePct: sureN ? Math.round(100 * sureOk / sureN) : null,
+      unsureN, unsureOk, unsurePct: unsureN ? Math.round(100 * unsureOk / unsureN) : null,
+      cw, focus
+    };
   }
 
   // ------------------------------------------------------------- daily review (spaced repetition for questions)
@@ -1040,7 +1066,7 @@
   // Each device uploads only its own progress (its "replica"). Merging all replicas gives the same result on
   // every device, in any order: counts add up, schedules come from the device that answered last, lists are unions.
   const LOCAL_SETTINGS = ["theme", "study", "cmd"];   // per-device: look and the last Study / command practice choices
-  const TEST_DETAIL = ["qids", "answers", "optOrder", "flags", "hints"];
+  const TEST_DETAIL = ["qids", "answers", "optOrder", "flags", "hints", "conf"];
   const KEEP_DETAIL = 30;
   const clone = x => x == null ? x : JSON.parse(JSON.stringify(x));
 
@@ -1187,6 +1213,8 @@
   const SCHED = { seen: count, right: count, last: v => v === true || v === false ? v : null, at: numOr(undefined),
                   box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined,
                   ev: v => v === 1 || v === 0 || v === -1 ? v : undefined,
+                  conf: v => v === 1 || v === 0 ? v : undefined,
+                  cw: count,
                   cdays: v => {
                     if (!Array.isArray(v)) return undefined;
                     const days = v.filter(x => Number.isInteger(x) && x >= 0 && x < 100000);
@@ -1195,9 +1223,10 @@
   const cleanSched = s => isObj(s) ? shape(s, SCHED) : undefined;
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
+  const confMap = v => mapOf(v, x => x === true || x === false ? x : undefined);
   const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
                  label: text(200), score: count, total: count, pct: v => Math.min(100, count(v)), answered: count, secs: count, timed: flag, study: flag, form: v => typeof v === "string" && /^[A-Z]$/.test(v) ? v : undefined,
-                 qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList };
+                 qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList, conf: confMap };
   function cleanTest(t) {
     if (!isObj(t)) return undefined;
     const o = shape(t, TEST); if (!o.id) return undefined;
@@ -1222,14 +1251,14 @@
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
   function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
-  const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks,
+  const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap,
                     cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
     const o = shape(s, SESSION);
     if (!o.qids || !o.qids.length || o.start == null) return null;
-    for (const k of ["optOrder", "answers", "flags", "checked", "hints"]) o[k] = o[k] || {};
+    for (const k of ["optOrder", "answers", "flags", "checked", "hints", "conf"]) o[k] = o[k] || {};
     o.cur = Math.min(o.qids.length - 1, o.cur || 0); o.label = o.label || ""; o.mode = o.mode || "study"; if (o.deadline === undefined) o.deadline = null;
     return o;
   }
@@ -1282,7 +1311,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
-           coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum,
+           coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,

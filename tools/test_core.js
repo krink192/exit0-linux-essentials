@@ -618,6 +618,31 @@ t("a correct fill answer with an extra leading sudo is flagged, still marked wro
   assert(!C.extraSudo(q, "rm -rf old_logs"), "right answers aren't flagged"); assert(!C.extraSudo(q, "sudo rmdir old_logs"), "wrong commands aren't flagged");
   for (const q2 of bank.questions) if (q2.type === "fill") for (const a of q2.accept) assert(!C.extraSudo(q2, a), q2.id + " accepted answer flagged");
 });
+t("confidence: sure/unsure is stored, calibration and focus lists are correct", () => {
+  const st = C.freshState(), s = C.buildStudy(bank, {}, { count: 4 }, { seed: 11 });
+  assert.deepStrictEqual(s.conf, {});
+  const ids = s.qids.slice();
+  ids.forEach((id, i) => {
+    const q = bank.byId[id];
+    s.answers[id] = i === 1 ? (q.type === "fill" ? "nope" : [q.answer[0] === 0 ? 1 : 0]) : (q.type === "fill" ? q.accept[0] : q.answer);
+    s.conf[id] = i === 0 || i === 1;   // sure, sure (will be wrong), unsure (right), unsure (right)
+  });
+  s.conf[ids[2]] = false; s.conf[ids[3]] = false;
+  const res = C.grade(bank, s), rec = C.recordResult(st, bank, s, res);
+  assert.strictEqual(rec.conf[ids[0]], true); assert.strictEqual(rec.conf[ids[1]], true);
+  assert.strictEqual(rec.conf[ids[2]], false);
+  const cal = C.calibration(rec, bank);
+  assert.strictEqual(cal.sureN, 2); assert.strictEqual(cal.sureOk, 1); assert.strictEqual(cal.surePct, 50);
+  assert.strictEqual(cal.unsureN, 2); assert.strictEqual(cal.unsureOk, 2); assert.strictEqual(cal.unsurePct, 100);
+  assert.deepStrictEqual(cal.cw, [ids[1]]);
+  assert(cal.focus.includes(ids[1]) && cal.focus.includes(ids[2]) && cal.focus.includes(ids[3]));
+  assert(!cal.focus.includes(ids[0]), "sure and correct is not a focus item");
+  assert.strictEqual(st.qstats[ids[1]].conf, 1); assert.strictEqual(st.qstats[ids[1]].cw, 1);
+  assert.strictEqual(st.qstats[ids[2]].conf, 0);
+  const cleaned = C.cleanDoc({ tests: [rec], qstats: st.qstats });
+  assert.strictEqual(cleaned.tests[0].conf[ids[1]], true);
+  assert.strictEqual(cleaned.qstats[ids[1]].cw, 1);
+});
 t("mastery: cold corrects on three different days; same day and hints do not advance it", () => {
   const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
   const obj = "1.1", id = bank.byObj[obj][0], q = bank.byId[id];

@@ -1656,9 +1656,7 @@
     const hintOn = S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
     S.conf = S.conf || {};
-    const hasAns = C.answered(q, a);
     const rated = S.conf[id] === true || S.conf[id] === false;
-    const needConf = hasAns && !rated && !revealed;   // rate before reveal (study) or before moving on (exam)
     if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
     if (q.type === "fill") {
@@ -1685,14 +1683,15 @@
         ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
         <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
-    // Rate sure/unsure before reveal (study) or before next (exam). One filled button otherwise.
+    // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
-    const confBtns = `<div class="conf-ask" role="group" aria-label="How sure are you?"><span class="small muted">How sure are you?</span>
-      <div class="grade-row conf-row"><button class="primary" id="sure">${icon("check")}Sure</button><button id="unsure">Unsure</button></div></div>`;
-    const primary = needConf ? confBtns
-      : canCheck ? `<button class="primary" id="check">Check answer</button>`
+    const primary = canCheck ? `<button class="primary" id="check">Check answer</button>`
       : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>`
       : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
+    const confPick = !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
+      <span class="small muted">Optional:</span>
+      <div class="seg" id="confSeg"><button type="button" data-c="1" class="${S.conf[id] === true ? "on" : ""}" id="sure">Sure</button>
+        <button type="button" data-c="0" class="${S.conf[id] === false ? "on" : ""}" id="unsure">Unsure</button></div></div>` : "";
     app.innerHTML = `<div class="exam-bar"><div class="in">
         <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : "Study"} page.">${icon("x")}</button>
         <div class="progress" id="prog" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${100 * done / n}%"></i></div>
@@ -1714,25 +1713,24 @@
         ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}${revealed ? noteBox(id) : ""}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
           ${S.study ? markButton(id) : ""}
-          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}</div>
-        <div class="qactions">${n > 1 && !needConf ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
-          ${canCheck && !last && !needConf ? `<button id="next">Skip</button>` : ""}${primary}</div>
+          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
+          ${confPick}</div>
+        <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
+          ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
-          ${needConf ? `<span><span class="kbd">1</span> sure · <span class="kbd">2</span> unsure</span>` : `<span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>`}${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study ? `<span><span class="kbd">H</span> hint</span>` : ""}
-          <span><span class="kbd">Enter</span> ${needConf ? "sure" : canCheck ? "check" : last ? "finish" : "next"}</span></p>
+          <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study ? `<span><span class="kbd">H</span> hint</span>` : ""}
+          <span><span class="kbd">Enter</span> ${canCheck ? "check" : last ? "finish" : "next"}</span></p>
       </main>`;
     const move = i => { S.cur = Math.max(0, Math.min(n - 1, i)); save(); renderExam(); scrollTo(0, 0); };
-    const rate = sure => {
-      S.conf[id] = !!sure;
-      if (S.study) S.checked[id] = 1;
-      save(); renderExam(); scrollTo(0, S.study ? scrollY : 0);
-    };
     if ($("#prev")) $("#prev").onclick = () => move(S.cur - 1);
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     if ($("#check")) $("#check").onclick = () => { S.checked[id] = 1; save(); renderExam(); };
-    if ($("#sure")) $("#sure").onclick = () => rate(true);
-    if ($("#unsure")) $("#unsure").onclick = () => rate(false);
+    $$("#confSeg button").forEach(b => b.onclick = () => {
+      const v = b.dataset.c === "1";
+      if (S.conf[id] === v) delete S.conf[id]; else S.conf[id] = v;
+      save(); const y = scrollY; renderExam(); scrollTo(0, y);
+    });
     if ($("#flag")) $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
     wireMarks(app, () => { const y = scrollY; renderExam(); scrollTo(0, y); });
     if ($("#gridBtn")) $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
@@ -1746,10 +1744,7 @@
     if (q.type === "fill" && !revealed) {
       const inp = $("#fillin");
       inp.oninput = () => { S.answers[id] = inp.value; save(); const c = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length; $("#prog").setAttribute("aria-valuenow", c); $("#cnt").textContent = `${c} of ${n} answered`; $("#prog i").style.width = (100 * c / n) + "%"; };
-      inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault();
-        if (needConf) rate(true);
-        else if (S.study && !S.checked[id]) { S.checked[id] = 1; save(); renderExam(); }
-        else if (S.cur < n - 1) move(S.cur + 1); else { confirming = true; renderExam(); } } };
+      inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (S.study && !S.checked[id]) { S.checked[id] = 1; save(); renderExam(); } else if (S.cur < n - 1) move(S.cur + 1); else { confirming = true; renderExam(); } } };
       if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
     } else if (!revealed) {
       $$(".opt input").forEach(inp => inp.onchange = () => {
@@ -1994,9 +1989,7 @@
     const h = (location.hash || "#today").slice(1);
     if (h === "exam" && st.current && !typing) {
       const S = st.current;
-      if ($("#sure") && (e.key === "1" || e.key === "Enter")) { e.preventDefault(); $("#sure").click(); }
-      else if ($("#unsure") && e.key === "2") { e.preventDefault(); $("#unsure").click(); }
-      else if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }
+      if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }
       else if (e.key === "ArrowLeft" && S.cur > 0) { S.cur--; save(); renderExam(); }
       else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
       else if (e.key.toLowerCase() === "f" && S.qids.length > 1) { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }

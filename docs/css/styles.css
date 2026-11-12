@@ -322,9 +322,8 @@ pre.code { margin: 0; font: 400 var(--fs-body)/1.6 var(--mono); background: var(
 .grade-row button { padding: 1rem; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .grade-row .again { color: var(--bad); }
 .grade-row .knew { color: var(--good); }
-.conf-ask { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; margin-left: auto; }
-.conf-ask .conf-row { width: 100%; }
-.conf-ask .conf-row .primary { margin-left: 0; min-width: 0; }
+.conf-opt { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+.conf-opt .seg button { min-height: var(--tap); padding: 0 12px; }
 .conf-flag { display: flex; gap: 8px; align-items: flex-start; }
 .conf-flag svg.i { flex-shrink: 0; margin-top: 2px; color: var(--warm); }
 .chip.conf-cw { background: var(--warm-soft); color: var(--warm); }
@@ -884,8 +883,7 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
   .qactions { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; padding: 12px 20px calc(12px + env(safe-area-inset-bottom)); background: var(--bg); border-top: 1px solid var(--line); }
   .qactions .primary { flex: 1; min-width: 0; min-height: 52px; font-size: var(--fs-row); }
   .qactions button:not(.primary) { min-height: 52px; }
-  .qactions .conf-ask { margin-left: 0; width: 100%; }
-  .qactions .conf-row button { min-height: 52px; font-size: var(--fs-row); }
+  .conf-opt { margin-left: 0; width: 100%; justify-content: flex-start; flex-wrap: wrap; }
   .qkeys { display: none; }
 }
 @media (min-width: 901px) {

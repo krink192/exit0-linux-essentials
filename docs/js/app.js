@@ -371,9 +371,20 @@
       return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}">${inner}</a>` : `<div class="${cls}">${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}">${inner}</a>` : `<button class="${cls}" ${s.attr}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
+  // The score estimate counts first attempts (and answers after a long gap) only, so it can't be pushed up by repeating questions.
+  const estimateOf = pp => pp.chance == null ? null
+    : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
+  const topicList = ts => andList(ts.map(t => "topic " + t));
+  const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
+    : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
+  const estimateBasis = pp => `From ${plural(pp.seen, "first attempt")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
+  function scoreBand(est, T, label) {
+    return `<div class="scorebar band" role="img" aria-label="${label} ${est.mean} percent, likely between ${est.low} and ${est.high}. The target is ${T} percent.">
+      <i style="width:${est.low}%"></i><b style="left:${est.low}%;width:${Math.max(1, est.high - est.low)}%"></b><span class="mark" style="left:${T}%"></span></div>`;
+  }
   function renderToday() {
     const sk = C.streak(st.days, st.settings.goal), pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80;
-    const pred = pp.chance == null ? null : Math.round(100 * pp.mean / pp.total);
+    const est = estimateOf(pp);
     const os = C.objectiveStats(BANK, st.qstats), weak = C.weakObjectives(BANK, st.qstats, 4);
     shell("today", `${resumeBanner()}
       <div class="today-head"><h1>Today</h1><span class="pack">Linux Essentials 010-160</span></div>
@@ -382,9 +393,9 @@
       ${goalOpen ? `<div class="card stack goalcard"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div>` : ""}
       <div class="today-grid">${pipelineHTML(todaySteps())}
         <div class="today-side">
-          <section><div class="sect-head"><h2>Predicted score</h2>${pred == null ? "" : `<span class="score-now"><b>${pred}%</b>of ${T}% target</span>`}</div>
-            ${pred == null ? `<p class="muted small">Answer ${plural(pp.more, "more question")} and your predicted exam score shows up here.</p>`
-              : `<div class="scorebar" role="img" aria-label="Predicted score ${pred} percent. The target is ${T} percent."><i style="width:${pred}%"></i><span class="mark" style="left:${T}%"></span></div>`}</section>
+          <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>${est.mean}%</b>of ${T}% target</span>`}</div>
+            ${est == null ? `<p class="muted small">${estimateWait(pp)} It counts only first attempts, so repeating questions can't inflate it.</p>`
+              : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">Likely ${est.low}–${est.high}%. ${estimateBasis(pp)}</p>`}</section>
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
               : `<p class="u-pad-x muted small">Nothing is below ${T}% yet. Once you've answered a few questions, the objectives you score lowest on are listed here.</p>`}</section>
@@ -630,30 +641,35 @@
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
   // One "am I ready?" card at the top of Progress: readiness, pass chance and the single most useful next step.
-  const passWhy = p => `Estimated from your latest answer to each question, weighted like the real exam. Objectives you haven't practised count as a coin flip.
-      LPI doesn't publish the raw pass mark, so this assumes ${p.passPct}% to stay on the safe side. Questions you've seen before get easier, so treat it as a guide, not a promise.`;
+  const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
+      Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
+      Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
+      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a promise.`;
   const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   function heroCard() {
-    const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats);
+    const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
     const pct = p.chance == null ? null : Math.round(p.chance * 100);
     const focus = p.focus.map(f => f.obj);
-    const head = ready == null ? "Take an exam to get your readiness score."
-      : ready >= 80 ? "You're in the ready range."
-      : ready >= 65 ? "Close." : "Keep building.";
-    const sub = focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
-      : ready == null ? "Study sessions count toward pass chance, but only full exams count toward readiness."
-      : ready >= 80 ? "Keep it there across three exams in a row, then book the real one." : "Aim for 80% on three exams in a row.";
-    const passBlock = pct == null
-      ? `<span class="small muted">Pass chance</span><b class="big">—</b><span class="small muted">Answer ${plural(p.more, "more question")} to unlock it</span>`
-      : `<span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Likely ${p.low}–${p.high} of ${p.total} · need ${p.need}</span>`;
+    const head = est == null ? "Not enough fresh answers for an estimate yet."
+      : est.mean >= 80 ? "You're in the ready range."
+      : est.mean >= 65 ? "Close." : "Keep building.";
+    const sub = est == null ? estimateWait(p)
+      : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
+      : est.low >= 80 ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above 80%.";
+    const nums = est == null
+      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><b class="big">—</b><span class="small muted">${plural(p.seen, "first attempt")} so far</span></div>`
+      : `<div class="u-g2 stack"><span class="small muted">Estimated score</span><b class="big">${est.mean}%</b><span class="small muted">Likely ${est.low}–${est.high}%</span></div>
+        <div class="u-g2 stack"><span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Need ${p.need} of ${p.total} right</span></div>`;
     const btns = focus.length
       ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
+      : est == null ? `<button class="primary" data-start="unseen">Answer new questions</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
     return `<section class="card readyhero">
-      <div class="hero-nums"><div class="u-g2 stack"><span class="small muted">Readiness</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No exams taken yet" : "Average of your last 3 exams"}</span></div>
-        <div class="u-g2 stack">${passBlock}</div></div>
+      <div class="hero-nums">${nums}
+        <div class="u-g2 stack"><span class="small muted">Exam average</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No full exams yet" : "Last 3 full exams"}</span></div></div>
+      ${est == null ? "" : `<div class="hero-band">${scoreBand(est, C.TARGET || 80, "Estimated score")}<p class="small muted band-note">${estimateBasis(p)}</p></div>`}
       <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
-        <details class="small muted"><summary>How are these worked out?</summary><p>Readiness is the average of your last three exams. ${passWhy(p)}</p></details></div></section>`;
+        <details class="small muted"><summary>How are these worked out?</summary><p>${passWhy(p)} Exam average is the plain average of your last three full exams, including questions you'd seen before, so it can read higher than the estimate.</p></details></div></section>`;
   }
 
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.

@@ -44,7 +44,7 @@ t("pass prediction always lists focus objectives, also before there is enough da
   s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
   C.recordResult(st, bank, s, C.grade(bank, s));
   const p = C.passPrediction(bank, st.qstats);
-  assert.strictEqual(p.chance, null); assert.strictEqual(p.more, 20); assert.deepStrictEqual(p.focus, []);
+  assert.strictEqual(p.chance, null); assert.strictEqual(p.more, 30); assert.deepStrictEqual(p.focus, []);
   assert.deepStrictEqual(C.passPrediction(bank, {}).focus, []);
 });
 t("a saved session survives a bank update that removed one of its questions", () => {
@@ -528,7 +528,8 @@ t("beta-binomial is a probability distribution", () => {
   }
 });
 t("pass chance needs enough answers, then rises with accuracy", () => {
-  const none = C.passPrediction(bank, {}); assert.strictEqual(none.chance, null); assert.strictEqual(none.more, 30);
+  const none = C.passPrediction(bank, {}); assert.strictEqual(none.chance, null); assert.strictEqual(none.more, 40);
+  assert.deepStrictEqual(none.thinTopics, ["1", "2", "3", "4", "5"]);
   let prev = -1;
   for (const acc of [0.5, 0.65, 0.75, 0.85, 0.95]) {
     const p = C.passPrediction(bank, answerAll(0.8, acc));
@@ -540,14 +541,44 @@ t("pass chance needs enough answers, then rises with accuracy", () => {
 });
 t("pass chance stays low when whole topics are unpractised, and points at them", () => {
   const q = {}; bank.questions.filter(x => x.obj < "2").forEach(x => q[x.id] = { seen: 1, right: 1, last: true });
+  assert.strictEqual(C.passPrediction(bank, q).chance, null, "topic 1 alone is not enough evidence for an estimate");
+  for (const tp of ["2", "3", "4", "5"]) bank.questions.filter(x => x.obj[0] === tp).slice(0, 3).forEach(x => q[x.id] = { seen: 1, right: 0, last: false });
   const p = C.passPrediction(bank, q);
   assert(p.chance < 0.5, "perfect on topic 1 alone gave " + p.chance);
   assert(p.focus.length === 3 && p.focus.every(f => f.obj >= "2" && f.gain > 0));
 });
-t("the latest answer counts, not the lifetime average", () => {
+t("only cold answers count: repeats of a question you've seen the answer to are left out", () => {
   const ids = bank.questions.map(x => x.id);
-  const fixed = {}, broke = {}; ids.forEach(id => { fixed[id] = { seen: 3, right: 1, last: true }; broke[id] = { seen: 3, right: 2, last: false }; });
-  assert(C.passPrediction(bank, fixed).chance > 0.99 && C.passPrediction(bank, broke).chance < 0.01);
+  // first attempts all wrong, later repeats all right: the estimate must stay low however often the repeats are drilled
+  const drilled = {}; ids.forEach(id => { drilled[id] = { seen: 4, right: 3, last: true, ev: 0 }; });
+  const p = C.passPrediction(bank, drilled); assert(p.chance < 0.01, "drilled repeats gave " + p.chance); assert.strictEqual(p.repeats, 0);
+  // saved progress from before cold evidence was tracked: seen once, or always right, or always wrong is known; a mix is not
+  assert.strictEqual(C.coldOutcome({ seen: 1, right: 1, last: true }), 1);
+  assert.strictEqual(C.coldOutcome({ seen: 3, right: 3, last: true }), 1);
+  assert.strictEqual(C.coldOutcome({ seen: 2, right: 0, last: false }), 0);
+  assert(Math.abs(C.coldOutcome({ seen: 3, right: 1, last: true }) - 1 / 3) < 1e-9, "a mix counts as its share right, not dropped");
+  assert.strictEqual(C.coldOutcome({ seen: 3, right: 1, last: true, ev: -1 }), -1);
+  // dropping old mixed results would keep only never-missed questions and inflate the estimate
+  const mixed = {}; ids.forEach(id => { mixed[id] = { seen: 3, right: 1, last: true }; });
+  const m = C.passPrediction(bank, mixed); assert(m.chance < 0.01, "a third right on old progress gave " + m.chance); assert.strictEqual(m.repeats, 0);
+  const hinted = {}; ids.forEach(id => { hinted[id] = { seen: 2, right: 2, last: true, ev: -1 }; });
+  const h = C.passPrediction(bank, hinted); assert.strictEqual(h.chance, null); assert.strictEqual(h.repeats, ids.length);
+});
+t("recording: first attempts and answers after a long gap are cold evidence; hinted and quick repeats are not", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
+  const st = C.freshState(), q = bank.questions.find(x => x.type === "single"), wrong = [q.answer[0] === 0 ? 1 : 0];
+  const run = (ans, at, hint) => { const s = C.buildStudy(bank, {}, { ids: [q.id], count: 1 }, { seed: 1 });
+    s.answers[q.id] = ans; if (hint) s.hints[q.id] = 1; C.recordResult(st, bank, s, C.grade(bank, s), at); return st.qstats[q.id]; };
+  assert.strictEqual(run(wrong, t0).ev, 0, "first attempt, wrong");
+  assert.strictEqual(run(q.answer, t0 + day).ev, 0, "a repeat the next day does not overwrite it");
+  assert.strictEqual(run(q.answer, t0 + (C.COLD_DAYS + 2) * day).ev, 1, "after a long gap it counts again");
+  const st2 = C.freshState(); st.qstats = st2.qstats;
+  assert.strictEqual(run(q.answer, t0, true).ev, -1, "a hinted first attempt is not evidence");
+  assert.strictEqual(C.coldOutcome(st.qstats[q.id]), -1);
+});
+t("an estimate needs every topic covered, not just enough answers", () => {
+  const q = {}; bank.questions.filter(x => x.obj >= "2").forEach(x => q[x.id] = { seen: 1, right: 1, last: true, ev: 1 });
+  const p = C.passPrediction(bank, q); assert.strictEqual(p.chance, null); assert.deepStrictEqual(p.thinTopics, ["1"]); assert.strictEqual(p.more, 0);
 });
 t("exam plan: countdown, daily target and phases", () => {
   const now = new Date(2026, 9, 10, 12).getTime();

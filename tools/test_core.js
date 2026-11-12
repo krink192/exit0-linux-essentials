@@ -74,7 +74,8 @@ t("progress from storage, an export code or a sync server is rebuilt with safe t
   const bad = JSON.parse(JSON.stringify(st));
   Object.assign(bad.tests[0], { score: X, total: X, pct: X, secs: X, id: 't"><b>', label: X, mode: X, qids: [X, "1.1-01"], flags: X, answers: { "1.1-01": { a: X } } });
   bad.tests.push({ id: "t9", score: X, extra: X, nested: { a: X } }, X, null, 7);
-  bad.qstats[X] = { seen: 1 }; bad.qstats["1.1-01"] = { seen: X, right: -5, last: X, box: 99, due: X, at: X, note: X };
+  bad.qstats[X] = { seen: 1 }; bad.qstats["1.1-01"] = { seen: X, right: -5, last: X, box: 99, due: X, at: X, note: X, conf: X, cw: -1, cdays: [X, 10, "y"], cdrop: ["z", 11, -3] };
+  bad.tests[0].conf = { "1.1-01": X, "bad": true, [X]: false };
   bad.qstats["__proto__x"] = X; bad.cards = X; bad.days = { "2026-11-10": X, [X]: 3, "2026-11-09": 4 }; bad.badges = { ready: X, [X]: 1 };
   bad.labs = { "2.1.1-a": { done: [X, 1, 1, -2, 1.5], completedAt: X }, p2: X };
   bad.settings = { theme: X, goal: 0, review: X, examDate: X, remindAt: X, deck: X, study: { objMode: X, objs: X, levels: [X, 9, 2], source: X, count: X }, cmd: { mode: X, cmds: [X, 5], count: X, source: X }, junk: X };
@@ -84,7 +85,8 @@ t("progress from storage, an export code or a sync server is rebuilt with safe t
   assert(!m.tests.some(t => /[<"]/.test(t.id))); assert.strictEqual(m.tests.filter(t => t.id === "t9").length, 1); assert.strictEqual(m.tests.find(t => t.id === "t9").score, 0);
   for (const t of m.tests) { for (const k of ["score", "total", "pct", "secs", "date"]) assert(Number.isFinite(t[k]), k); assert(/^[a-z]+$/.test(t.mode)); delete t.label; }
   noMarkup(m.tests); noMarkup(m.qstats); noMarkup(m.cards); noMarkup(m.days); noMarkup(m.badges); noMarkup(m.labs); noMarkup(m.settings);
-  assert.deepStrictEqual(m.qstats["1.1-01"], { seen: 0, right: 0, last: null, box: 5 });
+  assert.deepStrictEqual(m.qstats["1.1-01"], { seen: 0, right: 0, last: null, box: 5, cw: 0, cdays: [10], cdrop: [11] });
+  assert.deepStrictEqual((m.tests.find(t => t.conf) || { conf: {} }).conf, {});   // non-boolean conf values dropped
   assert.deepStrictEqual(m.days, { "2026-11-09": 4 }); assert.deepStrictEqual(m.badges, {}); assert.deepStrictEqual(m.labs, { "2.1.1-a": { done: [1] } });
   assert.deepStrictEqual(m.cards, {}); assert.strictEqual(m.current, null);
   assert.deepStrictEqual([m.settings.theme, m.settings.goal, m.settings.examDate, m.settings.remindAt, m.settings.deck], ["system", 1, null, "19:00", "concepts"]);
@@ -714,6 +716,72 @@ t("mastery days survive cleanDoc and merge as a union across devices", () => {
   assert.deepStrictEqual(cleaned.qstats["1.1-01"].cdays, [10, 11, 12]);
   assert.strictEqual(cleaned.qstats["1.1-01"].ev, 1);
   assert.deepStrictEqual(C.coldDaysOf({ ev: 1, at: new Date(2026, 9, 10, 12).getTime() }), [C.dayNum(new Date(2026, 9, 10, 12).getTime())], "legacy ev seeds one day");
+});
+t("mastery: demotion drops the objective-wide latest day across questions", () => {
+  const now = new Date(2026, 9, 10, 12).getTime(), d0 = C.dayNum(now);
+  const st = C.freshState(), obj = "1.1";
+  const idA = bank.byObj[obj][0], idB = bank.byObj[obj][1];
+  // Pre-seed every question in the objective so the exam cannot mint a new cold day that steals "latest".
+  for (const id of bank.byObj[obj]) st.qstats[id] = { seen: 1, right: 0, last: false, at: now, box: 0, due: d0 };
+  st.qstats[idA] = { seen: 2, right: 2, last: true, ev: 1, at: now, cdays: [10, 20, 30], box: 2, due: d0 + 2 };
+  st.qstats[idB] = { seen: 2, right: 2, last: true, ev: 1, at: now, cdays: [10, 15, 25], box: 2, due: d0 + 2 };
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].coldDays, 5);
+  const s = C.buildTest(bank, {}, { seed: 3 });
+  if (!s.qids.includes(idA)) s.qids[0] = idA;
+  s.qids.forEach(qid => {
+    const qq = bank.byId[qid];
+    s.answers[qid] = qid === idA ? (qq.type === "fill" ? "nope" : [qq.answer[0] === 0 ? 1 : 0])
+      : (qq.type === "fill" ? qq.accept[0] : qq.answer);
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s), now);
+  assert.deepStrictEqual(C.coldDaysOf(st.qstats[idA]), [10, 20]);
+  assert.deepStrictEqual(st.qstats[idA].cdrop, [30]);
+  assert.deepStrictEqual(C.coldDaysOf(st.qstats[idB]), [10, 15, 25]);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].coldDays, 4);
+});
+t("mastery: demotion applies to legacy ev/at stats with no cdays yet", () => {
+  const now = new Date(2026, 9, 10, 12).getTime(), d0 = C.dayNum(now);
+  const st = C.freshState(), obj = "1.1";
+  const idA = bank.byObj[obj][0], idB = bank.byObj[obj][1];
+  for (const id of bank.byObj[obj]) st.qstats[id] = { seen: 1, right: 0, last: false, at: now, box: 0, due: d0 };
+  st.qstats[idA] = { seen: 2, right: 2, last: true, ev: 1, at: now, cdays: [d0 - 2, d0 - 1], box: 2, due: d0 + 2 };
+  st.qstats[idB] = { seen: 1, right: 1, last: true, ev: 1, at: now };   // contributes d0 via legacy fallback
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].coldDays, 3);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].level, "mastered");
+  const s = C.buildTest(bank, {}, { seed: 5 });
+  if (!s.qids.includes(idA)) s.qids[0] = idA;
+  s.qids.forEach(qid => {
+    const qq = bank.byId[qid];
+    s.answers[qid] = qid === idA ? (qq.type === "fill" ? "nope" : [qq.answer[0] === 0 ? 1 : 0])
+      : (qq.type === "fill" ? qq.accept[0] : qq.answer);
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s), now);
+  assert.deepStrictEqual(C.coldDaysOf(st.qstats[idB]), []);
+  assert.deepStrictEqual(st.qstats[idB].cdays, []);
+  assert.deepStrictEqual(st.qstats[idB].cdrop, [d0]);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].coldDays, 2);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[obj].level, "proficient");
+});
+t("mastery: sync keeps a demotion when a peer still has the old days", () => {
+  const a = C.freshState(), b = C.freshState();
+  a.qstats["1.1-01"] = { seen: 1, right: 1, last: true, at: 200, ev: 1, cdays: [10, 11], cdrop: [12], box: 2, due: 14, cw: 2 };
+  b.qstats["1.1-01"] = { seen: 1, right: 1, last: true, at: 100, ev: 1, cdays: [10, 11, 12], box: 1, due: 12, cw: 3 };
+  const view = C.mergeStates([a, b]);
+  assert.deepStrictEqual(view.qstats["1.1-01"].cdays, [10, 11, 12]);
+  assert.deepStrictEqual(view.qstats["1.1-01"].cdrop, [12]);
+  assert.deepStrictEqual(C.coldDaysOf(view.qstats["1.1-01"]), [10, 11], "dropped day stays dropped after merge");
+  assert.strictEqual(view.qstats["1.1-01"].cw, 5, "confident-wrong counts add across devices");
+  assert.deepStrictEqual(C.coldDaysOf({ cdays: [], ev: 1, at: 1000, cdrop: [C.dayNum(1000)] }), []);
+});
+t("repairSession drops conf (and other maps) for removed question ids", () => {
+  const id = bank.questions[0].id, gone = "9.9-99";
+  const s = C.buildStudy(bank, {}, { ids: [id], count: 1 }, { seed: 1 });
+  s.qids = [id, gone]; s.conf[gone] = true; s.conf[id] = false; s.flags[gone] = 1; s.answers[gone] = "x";
+  const fixed = C.repairSession(bank, s);
+  assert.deepStrictEqual(fixed.qids, [id]);
+  assert.strictEqual(fixed.conf[gone], undefined);
+  assert.strictEqual(fixed.conf[id], false);
+  assert.strictEqual(fixed.flags[gone], undefined);
 });
 t("command panel links: related questions, flashcards and study by question ids", () => {
   global.window.LE_LABINDEX || require(path.join(__dirname, "../docs/data/labindex.js"));

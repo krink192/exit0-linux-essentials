@@ -197,8 +197,14 @@
       const o = s.optOrder[id], n = q.options.length;
       if (!Array.isArray(o) || o.length !== n || new Set(o).size !== n || o.some(i => !(i >= 0 && i < n))) s.optOrder[id] = q.options.map((_, i) => i);
     }
-    if (qids.length === s.qids.length) return s;
-    return Object.assign(s, { qids, cur: Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0)) });
+    if (qids.length !== s.qids.length) {
+      const trim = m => { if (!m || typeof m !== "object") return {}; const out = {}; for (const id of qids) if (m[id] !== undefined) out[id] = m[id]; return out; };
+      s.optOrder = trim(s.optOrder); s.answers = trim(s.answers); s.flags = trim(s.flags);
+      s.checked = trim(s.checked); s.hints = trim(s.hints); s.conf = trim(s.conf);
+      s.cur = Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0));
+      s.qids = qids;
+    }
+    return s;
   }
 
   /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden.
@@ -340,9 +346,15 @@
   function coldDaysOf(s) {
     if (!s) return [];
     // An explicit cdays array wins, even when empty (demotion must not be undone by the ev fallback).
-    if (Array.isArray(s.cdays)) return s.cdays.filter(d => isFinite(d));
-    if (s.ev === 1 && s.at) return [dayNum(s.at)];
-    return [];
+    let days = Array.isArray(s.cdays) ? s.cdays.filter(d => isFinite(d))
+      : (s.ev === 1 && s.at ? [dayNum(s.at)] : []);
+    // cdrop = days removed by mixed-exam demotion; sync unions both lists so a peer cannot restore a dropped day.
+    if (Array.isArray(s.cdrop) && s.cdrop.length) {
+      const drop = {};
+      for (const d of s.cdrop) if (isFinite(d)) drop[d] = 1;
+      days = days.filter(d => !drop[d]);
+    }
+    return days;
   }
   function noteColdDay(st, q, day) {
     if (coldDayCredit(q) < 1) return st;
@@ -350,6 +362,8 @@
     if (days.indexOf(day) < 0) days.push(day);
     days.sort((a, b) => a - b);
     st.cdays = days.slice(-16);
+    // Re-earning a day clears it from the demotion list so it can count again.
+    if (Array.isArray(st.cdrop) && st.cdrop.length) st.cdrop = st.cdrop.filter(d => d !== day);
     return st;
   }
   function masteryLevel(coldDays, seen) {
@@ -434,22 +448,26 @@
       scheduleQuestion(st, res.perQ[id], today, exDay);
       state.qstats[id] = st;
     }
-    // A miss in a mixed exam demotes the whole objective: drop its latest mastery day from every question that has it.
+    // A miss in a mixed exam demotes the whole objective: drop the latest day in the objective-wide union.
     if (mixed) {
       const hit = {};
       for (const id of s.qids) if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
       for (const o in hit) {
         let latest = -1;
         for (const id of bank.byObj[o] || []) {
-          const qs = state.qstats[id]; if (!qs || !(qs.cdays || []).length) continue;
-          latest = Math.max(latest, qs.cdays[qs.cdays.length - 1]);
+          const qs = state.qstats[id]; if (!qs) continue;
+          for (const d of coldDaysOf(qs)) latest = Math.max(latest, d);
         }
         if (latest < 0) continue;
         for (const id of bank.byObj[o] || []) {
           const qs = state.qstats[id]; if (!qs) continue;
-          const days = Array.isArray(qs.cdays) ? qs.cdays : coldDaysOf(qs);
-          if (!days.length) continue;
+          const days = coldDaysOf(qs);
+          if (days.indexOf(latest) < 0) continue;
           qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
+          const drop = Array.isArray(qs.cdrop) ? qs.cdrop.slice() : [];
+          if (drop.indexOf(latest) < 0) drop.push(latest);
+          drop.sort((a, b) => a - b);
+          qs.cdrop = drop.slice(-16);
         }
       }
     }
@@ -1081,18 +1099,27 @@
     for (const k in cur) if (JSON.stringify(cur[k]) !== JSON.stringify(snap[k])) ts[k] = now || Date.now();
     return { snap: cur, ts };
   }
-  // Counters (seen, right) add up; the schedule (last, at, box, due) comes from whichever copy is newest.
+  // Counters (seen, right, cw) add up; the schedule (last, at, box, due) comes from whichever copy is newest.
   // Mastery days (cdays) are a union so two devices never lose a day the other earned.
+  // Demotion days (cdrop) also union, so a drop on one device is not undone by a peer that still has the day.
   function mergeSched(map, id, s) {
     const o = map[id];
     if (!o) { map[id] = Object.assign({}, s); return; }
     const newer = (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && (s.box || 0) > (o.box || 0));
     const m = newer ? Object.assign({}, o, s) : Object.assign({}, s, o);
     m.seen = (o.seen || 0) + (s.seen || 0); m.right = (o.right || 0) + (s.right || 0);
+    const cw = (o.cw || 0) + (s.cw || 0);
+    if (cw || o.cw != null || s.cw != null) m.cw = cw; else delete m.cw;
+    const hadCdays = Array.isArray(o.cdays) || Array.isArray(s.cdays);
+    const hadCdrop = Array.isArray(o.cdrop) || Array.isArray(s.cdrop);
     const days = {};
     for (const d of [].concat(o.cdays || [], s.cdays || [])) if (isFinite(d)) days[d] = 1;
     const merged = Object.keys(days).map(Number).sort((a, b) => a - b);
-    if (merged.length) m.cdays = merged; else delete m.cdays;
+    if (merged.length) m.cdays = merged; else if (hadCdays || hadCdrop) m.cdays = []; else delete m.cdays;
+    const drop = {};
+    for (const d of [].concat(o.cdrop || [], s.cdrop || [])) if (isFinite(d)) drop[d] = 1;
+    const drops = Object.keys(drop).map(Number).sort((a, b) => a - b);
+    if (drops.length) m.cdrop = drops; else if (hadCdrop) m.cdrop = []; else delete m.cdrop;
     map[id] = m;
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
@@ -1216,6 +1243,11 @@
                   conf: v => v === 1 || v === 0 ? v : undefined,
                   cw: count,
                   cdays: v => {
+                    if (!Array.isArray(v)) return undefined;
+                    const days = v.filter(x => Number.isInteger(x) && x >= 0 && x < 100000);
+                    return Array.from(new Set(days)).sort((a, b) => a - b).slice(-16);
+                  },
+                  cdrop: v => {
                     if (!Array.isArray(v)) return undefined;
                     const days = v.filter(x => Number.isInteger(x) && x >= 0 && x < 100000);
                     return Array.from(new Set(days)).sort((a, b) => a - b).slice(-16);

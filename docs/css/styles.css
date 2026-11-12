@@ -70,7 +70,9 @@
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; }
-html { accent-color: var(--accent); scrollbar-color: var(--line-2) transparent; }
+html { accent-color: var(--accent); scrollbar-color: var(--line-2) transparent; scroll-padding-top: 80px; }
+/* Keyboard focus and scrollIntoView stop clear of the sticky top bars and the fixed bottom bars on phones (WCAG 2.4.11). */
+@media (max-width: 900px) { html { scroll-padding-top: 72px; scroll-padding-bottom: calc(96px + env(safe-area-inset-bottom)); } }
 body { background: var(--bg); color: var(--ink); font: var(--fs-body)/1.6 var(--ui); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
 ::selection { background: var(--accent); color: var(--accent-ink); }
 h1, h2, h3 { margin: 0; line-height: 1.25; text-wrap: balance; letter-spacing: -0.01em; }
@@ -127,7 +129,7 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .nav a:hover { background: var(--hover); }
 .nav a.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .nav a.on svg { color: var(--accent-text); }
-.nav .count { margin-left: auto; font: 600 var(--fs-xs) var(--ui); background: var(--warm-soft); color: var(--warm); padding: 2px 7px; border-radius: 999px; }
+.nav .count { margin-left: auto; font: 600 var(--fs-xs) var(--ui); background: var(--accent-soft); color: var(--accent-text); padding: 2px 7px; border-radius: 999px; }
 .nav-label { font: 500 var(--fs-sm) var(--ui); color: var(--muted); padding: 14px 10px 4px; }
 .side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding-top: 14px; }
 .today { color: inherit; text-decoration: none; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; display: flex; gap: 12px; align-items: center; }
@@ -180,13 +182,16 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 
 /* chips / badges */
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 var(--fs-xs)/1 var(--ui); padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
-.lv-new { background: var(--sunk); color: var(--muted); }
-.lv-attempted { background: var(--warm-soft); color: var(--warm); }
-.lv-familiar { background: var(--accent-soft); color: var(--accent-text); }
-.lv-proficient { background: var(--good-soft); color: var(--good); }
-.lv-learning { background: var(--accent-soft); color: var(--accent-text); }
+/* Mastery is a ladder of one green, each step visibly different and always labelled:
+   Not started (outline) - Attempted (grey) - Familiar/Learning (light green) - Proficient (mid green) - Mastered (solid green).
+   Needs work stays red: it is a warning. */
+.lv-new { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); }
+.lv-attempted { background: var(--sunk); color: var(--ink-2); }
+.lv-familiar, .lv-learning { background: var(--accent-soft); color: var(--accent-text); }
+.lv-proficient { background: color-mix(in srgb, var(--accent) 30%, var(--surface)); color: var(--ink); }
+.lv-mastered { background: var(--accent); color: var(--on-solid); }
 .lv-weak { background: var(--bad-soft); color: var(--bad); }
-.lv-mastered { background: var(--good-soft); color: var(--good); }
+.lv-due { background: var(--accent-soft); color: var(--accent-text); }
 .v-good { background: var(--good-soft); color: var(--good); }
 .v-mid { background: var(--flag-soft); color: var(--flag); }
 .v-bad { background: var(--bad-soft); color: var(--bad); }
@@ -243,9 +248,9 @@ pre.code { margin: 0; font: 400 var(--fs-body)/1.6 var(--mono); background: var(
 .opt.sel { background: var(--accent-soft); }
 .opt.sel .key { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
 .opt .t { min-width: 0; overflow-wrap: anywhere; padding-top: 1px; }
-.opt.k { background: var(--good-soft); }
+.opt.k { background: var(--good-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--good) 55%, transparent); }
 .opt.k .key { color: var(--good); font-weight: 700; }
-.opt.w { background: var(--bad-soft); }
+.opt.w { background: var(--bad-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--bad) 55%, transparent); }
 .opt.w .key { color: var(--bad); font-weight: 700; }
 .opt.k .key, .opt.w .key { background: transparent; box-shadow: none; }
 .opt.locked { cursor: default; }
@@ -371,9 +376,9 @@ textarea { width: 100%; min-height: 140px; font: 400 var(--fs-sm)/1.5 var(--mono
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 #ctopic { width: min(300px, 100%); }
 .chip.lvl { }
-.lvl1 { background: var(--sunk); color: var(--muted); }
-.lvl2 { background: var(--accent-soft); color: var(--accent-text); }
-.lvl3 { background: var(--warm-soft); color: var(--warm); }
+.lvl1 { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); }
+.lvl2 { background: var(--sunk); color: var(--ink-2); }
+.lvl3 { background: var(--sunk); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line-2); }
 
 .wordmark { font-family: var(--mono); font-weight: 600; letter-spacing: -.02em; }
 .brand .wordmark { font-size: var(--fs-row); }
@@ -399,9 +404,9 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .flabel { font-weight: 600; font-size: var(--fs-body); color: var(--ink-2); }
 .frow .seg { flex-wrap: wrap; justify-self: start; }
 .startbar { position: sticky; bottom: 12px; box-shadow: var(--shadow); z-index: 5; }
-.hintbox { display: flex; gap: 12px; align-items: flex-start; background: var(--warm-soft); border-radius: var(--r); padding: 14px 16px; }
-.hintbox svg.i { color: var(--warm); margin-top: 3px; }
-.hintbox b { color: var(--warm); margin-right: 4px; }
+.hintbox { display: flex; gap: 12px; align-items: flex-start; background: var(--sunk); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+.hintbox svg.i { color: var(--accent-text); margin-top: 3px; }
+.hintbox b { color: var(--ink); margin-right: 4px; }
 .studyref { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 10px; margin-top: 4px; border-top: 1px solid var(--line); font-size: var(--fs-sm); }
 .studyref a { display: inline-flex; align-items: center; gap: 6px; }
 .studyref svg.i { width: 16px; height: 16px; }
@@ -521,7 +526,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .tabs a { padding: 9px 14px 11px; color: var(--muted); text-decoration: none; font: 600 var(--fs-body) var(--ui); border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; display: inline-flex; gap: 6px; align-items: center; }
 .tabs a:hover { color: var(--ink); }
 .tabs a.on { color: var(--accent-text); border-bottom-color: var(--accent); }
-.tabs .count { font: 600 var(--fs-xs) var(--ui); background: var(--warm-soft); color: var(--warm); padding: 1px 6px; border-radius: 999px; }
+.tabs .count { font: 600 var(--fs-xs) var(--ui); background: var(--accent-soft); color: var(--accent-text); padding: 1px 6px; border-radius: 999px; }
 .bottomnav { display: none; }
 @media (max-width: 900px) {
   .bottomnav { display: grid; grid-template-columns: repeat(4, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--side);
@@ -529,7 +534,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
   .bottomnav a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; color: var(--muted); text-decoration: none; font: 600 var(--fs-xs) var(--ui); position: relative; border-radius: var(--r-sm); }
   .bottomnav a svg.i { width: 22px; height: 22px; }
   .bottomnav a.on { color: var(--accent-text); }
-  .bottomnav .dot-count { position: absolute; top: 2px; left: calc(50% + 6px); font: 700 var(--fs-xs) var(--ui); font-style: normal; background: var(--warm); color: var(--on-solid); padding: 1px 5px; border-radius: 999px; }
+  .bottomnav .dot-count { position: absolute; top: 2px; left: calc(50% + 6px); font: 700 var(--fs-xs) var(--ui); font-style: normal; background: var(--accent); color: var(--on-solid); padding: 1px 5px; border-radius: 999px; }
   .page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .toast { bottom: calc(80px + env(safe-area-inset-bottom)); }
 }
@@ -729,7 +734,7 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .cpips i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); }
 .cpips i.ok { background: var(--accent); }
 .cpips i.miss { background: var(--warm); }
-.cdue { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--warm); }
+.cdue { position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 .csel { position: absolute; bottom: 6px; right: 6px; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); display: grid; place-items: center; }
 .csel svg.i { width: 12px; height: 12px; color: var(--surface); }
 .cpanel-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 28px 10px; color: var(--muted); }

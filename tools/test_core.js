@@ -418,7 +418,10 @@ t("xp, levels, streaks and badges come from saved progress", () => {
   C.recordResult(st, bank, s, C.grade(bank, s, s.start + 600000), now);
   const x = C.xpInfo(st); assert.strictEqual(x.xp, 80); assert.strictEqual(x.level, 1); assert.strictEqual(x.next, 100);
   const got = C.awardBadges(st, bank, cards, now).map(b => b.id).sort();
-  assert.deepStrictEqual(got, ["first-exam", "obj-1", "perfect", "ready", "speed"]);  // 3.3 (weight 4) all right = mastered
+  assert.deepStrictEqual(got, ["first-exam", "perfect", "ready", "speed"]);  // mastery needs three separate days, not one sitting
+  const d0 = C.dayNum(now);
+  bank.byObj["3.3"].forEach(id => { st.qstats[id] = Object.assign({ seen: 1, right: 1, last: true, ev: 1, at: now }, st.qstats[id], { cdays: [d0 - 2, d0 - 1, d0] }); });
+  assert.deepStrictEqual(C.awardBadges(st, bank, cards, now).map(b => b.id), ["obj-1"]);
   assert.strictEqual(C.awardBadges(st, bank, cards, now).length, 0, "badges are only awarded once");
   const days = {}; for (let i = 0; i < 5; i++) { const d = new Date(2026, 9, 1 + i); days[C.dayKey(d)] = 30; } days[C.dayKey(new Date(2026, 9, 9))] = 30;
   assert.strictEqual(C.longestStreak(days, 20), 5);
@@ -614,6 +617,78 @@ t("a correct fill answer with an extra leading sudo is flagged, still marked wro
   assert(!C.isCorrect(q, "sudo rm -rf old_logs")); assert(C.extraSudo(q, "sudo rm -rf old_logs")); assert(C.extraSudo(q, "  sudo  rm -r old_logs "));
   assert(!C.extraSudo(q, "rm -rf old_logs"), "right answers aren't flagged"); assert(!C.extraSudo(q, "sudo rmdir old_logs"), "wrong commands aren't flagged");
   for (const q2 of bank.questions) if (q2.type === "fill") for (const a of q2.accept) assert(!C.extraSudo(q2, a), q2.id + " accepted answer flagged");
+});
+t("mastery: cold corrects on three different days; same day and hints do not advance it", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
+  const obj = "1.1", id = bank.byObj[obj][0], q = bank.byId[id];
+  const st = C.freshState();
+  const run = (at, hint) => {
+    const s = C.buildStudy(bank, {}, { ids: [id], count: 1 }, { seed: 1 });
+    s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; if (hint) s.hints[id] = 1;
+    // force a cold attempt after the first by answering far enough apart, or first attempt
+    C.recordResult(st, bank, s, C.grade(bank, s), at); return C.objectiveStats(bank, st.qstats)[obj];
+  };
+  assert.strictEqual(C.objectiveStats(bank, {})[obj].level, "new");
+  assert.strictEqual(run(t0, true).level, "attempted", "hinted first attempt is not a mastery day");
+  assert.strictEqual(run(t0 + day).coldDays, 0, "still no day until a cold correct");
+  // clear and rebuild with real cold corrects spaced by COLD_DAYS so each counts
+  st.qstats = {};
+  const cold = (n) => t0 + n * (C.COLD_DAYS + 1) * day;
+  assert.strictEqual(run(cold(0)).level, "familiar");
+  assert.strictEqual(run(cold(0) + day).level, "familiar", "same mastery day does not double-count");
+  assert.strictEqual(run(cold(1)).level, "proficient");
+  assert.strictEqual(run(cold(2)).level, "mastered");
+  assert.strictEqual(C.coldDayCredit({ variantOf: "1.1-01" }), 0, "variants hook returns no day credit");
+  assert.strictEqual(C.coldDayCredit(q), 1);
+});
+t("mastery: a miss in a mixed exam drops one cold day for that objective", () => {
+  const now = new Date(2026, 9, 10, 12).getTime(), d0 = C.dayNum(now);
+  const st = C.freshState(), id = bank.byObj["1.1"][0], q = bank.byId[id];
+  // Only this question carries the three mastery days, so sibling corrects in the exam cannot mask the demotion.
+  st.qstats[id] = { seen: 3, right: 3, last: true, ev: 1, at: now, cdays: [d0 - 2, d0 - 1, d0], box: 3, due: d0 + 4 };
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].level, "mastered");
+  const s = C.buildTest(bank, {}, { seed: 7 });
+  // Put the mastered question in the exam and miss it; answer everything else right.
+  if (!s.qids.includes(id)) s.qids[0] = id;
+  s.qids.forEach(qid => {
+    const qq = bank.byId[qid];
+    s.answers[qid] = qid === id ? (qq.type === "fill" ? "nope" : [qq.answer[0] === 0 ? 1 : 0])
+      : (qq.type === "fill" ? qq.accept[0] : qq.answer);
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s), now);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].coldDays, 2);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].level, "proficient");
+});
+t("review gaps are capped by days left before the exam date", () => {
+  const today = 20000;
+  const s = { box: 0 }; C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 1); assert.strictEqual(s.box, 1);
+  C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 2);
+  C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 4);
+  C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 8);
+  C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 16);
+  const near = { box: 4 }; C.scheduleQuestion(near, true, today, today + 10);
+  assert.strictEqual(near.due, today + 4, "40% of 10 days left caps a 16-day box");
+  const past = { box: 3 }; C.scheduleQuestion(past, true, today, today);
+  assert.strictEqual(past.due, today + 1, "exam day keeps gaps tight");
+  assert.strictEqual(C.reviewGapCap(today, today + 5), 2);
+  const cards = {}; C.reviewCard(cards, "c1", true, today, today * 86400000, today + 10);
+  assert.strictEqual(cards.c1.due, today + 1);
+  C.reviewCard(cards, "c1", true, today, today * 86400000, today + 10);
+  assert.strictEqual(cards.c1.due, today + 2);
+  C.reviewCard(cards, "c1", true, today, today * 86400000, today + 10);
+  assert.ok(cards.c1.due - today <= 4);
+});
+t("mastery days survive cleanDoc and merge as a union across devices", () => {
+  const a = C.freshState(), b = C.freshState();
+  a.qstats["1.1-01"] = { seen: 1, right: 1, last: true, at: 100, ev: 1, cdays: [10, 11], box: 1, due: 12 };
+  b.qstats["1.1-01"] = { seen: 1, right: 1, last: true, at: 200, ev: 1, cdays: [11, 12], box: 2, due: 14 };
+  const view = C.mergeStates([a, b]);
+  assert.deepStrictEqual(view.qstats["1.1-01"].cdays, [10, 11, 12]);
+  assert.strictEqual(view.qstats["1.1-01"].seen, 2);
+  const cleaned = C.cleanDoc({ qstats: { "1.1-01": { seen: 2, right: 2, last: true, at: 200, ev: 1, cdays: [10, 11, 12, "x", -1], box: 2, due: 14 } } });
+  assert.deepStrictEqual(cleaned.qstats["1.1-01"].cdays, [10, 11, 12]);
+  assert.strictEqual(cleaned.qstats["1.1-01"].ev, 1);
+  assert.deepStrictEqual(C.coldDaysOf({ ev: 1, at: new Date(2026, 9, 10, 12).getTime() }), [C.dayNum(new Date(2026, 9, 10, 12).getTime())], "legacy ev seeds one day");
 });
 t("command panel links: related questions, flashcards and study by question ids", () => {
   global.window.LE_LABINDEX || require(path.join(__dirname, "../docs/data/labindex.js"));

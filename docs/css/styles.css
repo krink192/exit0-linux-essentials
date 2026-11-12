@@ -181,6 +181,9 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 /* chips / badges */
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 var(--fs-xs)/1 var(--ui); padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
 .lv-new { background: var(--sunk); color: var(--muted); }
+.lv-attempted { background: var(--warm-soft); color: var(--warm); }
+.lv-familiar { background: var(--accent-soft); color: var(--accent-text); }
+.lv-proficient { background: var(--good-soft); color: var(--good); }
 .lv-learning { background: var(--accent-soft); color: var(--accent-text); }
 .lv-weak { background: var(--bad-soft); color: var(--bad); }
 .lv-mastered { background: var(--good-soft); color: var(--good); }
@@ -590,9 +593,10 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .objcard .pct { font: 600 var(--fs-sm) var(--ui); font-variant-numeric: tabular-nums; text-align: right; }
 .objcard .tbody { background: var(--sunk); border-radius: var(--r-sm); padding: 4px 12px; margin: 0 0 12px 1.3em; }
 .objcard .tbody.flat { margin: 0; }
-.orow2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(60px, 160px) 3.4em auto; gap: 12px; align-items: center; padding: 7px 0; }
+.orow2 { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(60px, 140px) 3.4em auto; gap: 10px; align-items: center; padding: 7px 0; }
 .orow2 + .orow2 { border-top: 1px solid var(--line); }
 .orow2 .o { font: 600 var(--fs-sm) var(--ui); color: var(--muted); margin-right: 4px; }
+.orow2 .chip { justify-self: end; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 .orow2 button { padding: .4rem .7rem; }
 .okmark svg.i { width: 15px; height: 15px; color: var(--good); vertical-align: -2px; }
 .nextbadges { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
@@ -609,7 +613,8 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
   .readyhero { padding: 20px; gap: 20px; }
   .objcard .trow > summary { grid-template-columns: minmax(0, 1fr) 3.4em; }
   .objcard .trow > summary .track2, .orow2 .track2 { display: none; }
-  .orow2 { grid-template-columns: minmax(0, 1fr) 3.4em auto; }
+  .orow2 { grid-template-columns: minmax(0, 1fr) auto 3.4em auto; }
+  .orow2 .chip { max-width: 7.5rem; }
   .objcard .tbody { margin-left: 0; }
 }
 

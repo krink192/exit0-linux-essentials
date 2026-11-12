@@ -70,7 +70,8 @@
   const col = p => p >= 80 ? "var(--accent)" : "var(--bar-low)";      // bar fills
   const tcol = p => p >= 80 ? "var(--accent-text)" : "var(--ink)";   // score text
   const vclass = p => p >= 80 ? "v-good" : p >= 65 ? "v-mid" : "v-bad";
-  const LV = { new: "Not started", learning: "Learning", weak: "Weak", mastered: "Mastered" };
+  const LV = { new: "Not started", attempted: "Attempted", familiar: "Familiar", proficient: "Proficient", mastered: "Mastered",
+               learning: "Learning", weak: "Weak" };   // learning/weak still used by flashcards and commands
   const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
   const lvChip = q => `<span class="chip lvl lvl${q.level || 1}" title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>`;
   function levelBars(byLevel) {
@@ -560,7 +561,7 @@
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
       <div class="quick">
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
-        <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " below 80%" : "None yet. Take an exam to find them."}</span></button>
+        <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " short of mastery" : "None yet. Answer on separate days to build mastery."}</span></button>
         <button class="qs" data-start="unseen" ${unseen ? "" : "disabled"}>${icon("bulb")}<b>New questions</b><span>${unseen ? plural(unseen, "question") + " you haven't seen" : "You've seen every question"}</span></button>
         <button class="qs" data-start="quick">${icon("drill")}<b>Quick 10</b><span>Ten questions across the exam, split by weight</span></button>
         <div class="qs qs-split">${icon("clock")}<b>Timed quiz</b><span>As many as you can answer before the clock runs out</span>
@@ -678,7 +679,10 @@
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;
     const row = o => { const s = os[o];
+      const days = s.coldDays || 0, need = C.MASTERY_DAYS || 3;
+      const mlabel = s.level === "new" ? "Not started" : `${LV[s.level] || s.level} · ${days}/${need} days`;
       return `<div class="orow2"><span class="oname"><span class="o">${o}</span> ${esc(OBJ[o].name)}${s.level === "mastered" ? ` <span class="okmark" title="Mastered">${icon("check")}<span class="sr">mastered</span></span>` : ""}</span>
+        <span class="chip lv-${s.level}" title="Mastery needs a correct first attempt on ${need} different days">${esc(mlabel)}</span>
         ${bar(s.pct, s.pct == null ? "var(--line-2)" : ocol(s.pct))}<span class="pct">${s.pct == null ? "—" : s.pct + "%"}</span><button class="ghost small" data-study="${o}">Study</button></div>`; };
     const objsOf = t => Object.keys(OBJ).filter(o => C.topicOf(o) === t);
     const rank = o => os[o].pct == null ? 101 : os[o].pct;
@@ -692,7 +696,7 @@
     return `<section class="card stack objcard"><div class="row spread"><h2>Objectives</h2>
         <div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
       <div>${body}</div>
-      <p class="small muted">${ds.mastered}/${ds.total} flashcards mastered · <a href="#commands">${cm.filter(c => c.level === "mastered").length}/${cm.length} commands mastered</a></p></section>`;
+      <p class="small muted">An objective is mastered after correct first attempts on ${C.MASTERY_DAYS || 3} different days (not the same sitting). ${ds.mastered}/${ds.total} flashcards mastered · <a href="#commands">${cm.filter(c => c.level === "mastered").length}/${cm.length} commands mastered</a></p></section>`;
   }
 
   // Level, the three badges closest to unlocking, and the full set folded away.
@@ -851,7 +855,7 @@
   }
   function gradeCard(knew) {
     const c = cs.queue[cs.i];
-    C.reviewCard(st.cards, c.id, knew, C.dayNum(), Date.now());
+    C.reviewCard(st.cards, c.id, knew, C.dayNum(), Date.now(), C.examDayNum(st));
     C.addActivity(st, 1); save();
     if (cs.i + 1 >= cs.queue.length) celebrate();
     cs.done++; if (knew) cs.knew++;

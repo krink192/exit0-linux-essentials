@@ -328,27 +328,64 @@
     return { questions: qs.slice(0, limit).map(q => q.id), cards: cs.slice(0, limit).map(c => c.id), more: qs.length > limit || cs.length > limit, total: qs.length + cs.length };
   }
 
+  // Mastery is successive relearning: unique calendar days with a cold correct answer in the objective.
+  // Attempted → Familiar (1 day) → Proficient (2) → Mastered (3). Same-day repeats do not advance it.
+  const MASTERY_DAYS = 3;
+  /** How much of a mastery day a cold correct is worth (1 = full day). Item 6 variants will return less than 1. */
+  function coldDayCredit(q) {
+    if (q && q.variantOf) return 0;   // placeholder: a pure variant never fills a day on its own
+    return 1;
+  }
+  /** Day numbers that already count toward mastery for this question (legacy: one day from ev === 1). */
+  function coldDaysOf(s) {
+    if (!s) return [];
+    // An explicit cdays array wins, even when empty (demotion must not be undone by the ev fallback).
+    if (Array.isArray(s.cdays)) return s.cdays.filter(d => isFinite(d));
+    if (s.ev === 1 && s.at) return [dayNum(s.at)];
+    return [];
+  }
+  function noteColdDay(st, q, day) {
+    if (coldDayCredit(q) < 1) return st;
+    const days = coldDaysOf(st).slice();
+    if (days.indexOf(day) < 0) days.push(day);
+    days.sort((a, b) => a - b);
+    st.cdays = days.slice(-16);
+    return st;
+  }
+  function masteryLevel(coldDays, seen) {
+    if (!seen) return "new";
+    if (coldDays >= MASTERY_DAYS) return "mastered";
+    if (coldDays === 2) return "proficient";
+    if (coldDays === 1) return "familiar";
+    return "attempted";
+  }
   function objectiveStats(bank, qstats) {
     const out = {};
     for (const o of Object.keys(bank.objectives)) {
       let right = 0, seen = 0, missedNow = 0, touched = 0;
+      const daySet = {};
       for (const id of bank.byObj[o]) {
         const s = qstats[id]; if (!s) continue;
         right += s.right; seen += s.seen; touched++;
         if (s.last === false) missedNow++;
+        for (const d of coldDaysOf(s)) daySet[d] = 1;
       }
+      const coldDays = Object.keys(daySet).length;
       const pct = seen ? Math.round(100 * right / seen) : null;
-      let level = "new";
-      if (seen) level = pct >= TARGET && touched >= Math.min(4, bank.byObj[o].length) ? "mastered" : pct < 65 && seen >= 2 ? "weak" : "learning";
-      out[o] = { right, seen, pct, touched, total: bank.byObj[o].length, missedNow, level };
+      out[o] = { right, seen, pct, touched, total: bank.byObj[o].length, missedNow, coldDays, level: masteryLevel(coldDays, seen) };
     }
     return out;
   }
 
   function weakObjectives(bank, qstats, limit) {
     const st = objectiveStats(bank, qstats);
-    return Object.keys(st).filter(o => st[o].seen >= 2 && st[o].pct < TARGET)
-      .sort((a, b) => st[a].pct - st[b].pct || st[b].missedNow - st[a].missedNow).slice(0, limit || 5);
+    const rank = { attempted: 0, familiar: 1, proficient: 2, mastered: 3, new: 4 };
+    return Object.keys(st).filter(o => st[o].level === "attempted" || st[o].level === "familiar"
+        || (st[o].level === "proficient" && st[o].pct != null && st[o].pct < TARGET))
+      .sort((a, b) => (rank[st[a].level] - rank[st[b].level])
+        || (st[a].pct == null ? 101 : st[a].pct) - (st[b].pct == null ? 101 : st[b].pct)
+        || st[b].missedNow - st[a].missedNow)
+      .slice(0, limit || 5);
   }
 
   function missedIds(bank, qstats) {
@@ -371,19 +408,46 @@
     return { score, total, pct: total ? Math.round(100 * score / total) : 0, secs, perQ, byObj, byTopic, byLevel, answered: answeredN };
   }
 
+  /** Local day number of the booked exam, or null when none is set. */
+  function examDayNum(state, now) {
+    const d = parseDate(state && state.settings && state.settings.examDate); return d ? dayNum(d) : null;
+  }
   /** Apply a finished session to the saved state. Returns the stored record. */
   function recordResult(state, bank, s, res, now) {
     now = now || Date.now();
+    const today = dayNum(now), exDay = examDayNum(state, now);
+    const mixed = s.mode === "test" && !s.study && (s.qids || []).length === 40;
     for (const id of s.qids) {
       if (!answered(bank.byId[id], s.answers[id]) && s.mode !== "test") continue; // drills: skip untouched
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
       const cold = !st.seen || (st.at != null && now - st.at >= COLD_DAYS * DAY_MS);
-      if (cold && !(s.hints && s.hints[id])) st.ev = res.perQ[id] ? 1 : 0;
+      const hinted = !!(s.hints && s.hints[id]);
+      if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
       else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
-      scheduleQuestion(st, res.perQ[id], dayNum(now));
+      if (res.perQ[id] && cold && !hinted) noteColdDay(st, bank.byId[id], today);
+      scheduleQuestion(st, res.perQ[id], today, exDay);
       state.qstats[id] = st;
+    }
+    // A miss in a mixed exam demotes the whole objective: drop its latest mastery day from every question that has it.
+    if (mixed) {
+      const hit = {};
+      for (const id of s.qids) if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
+      for (const o in hit) {
+        let latest = -1;
+        for (const id of bank.byObj[o] || []) {
+          const qs = state.qstats[id]; if (!qs || !(qs.cdays || []).length) continue;
+          latest = Math.max(latest, qs.cdays[qs.cdays.length - 1]);
+        }
+        if (latest < 0) continue;
+        for (const id of bank.byObj[o] || []) {
+          const qs = state.qstats[id]; if (!qs) continue;
+          const days = Array.isArray(qs.cdays) ? qs.cdays : coldDaysOf(qs);
+          if (!days.length) continue;
+          qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
+        }
+      }
     }
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
@@ -398,9 +462,21 @@
 
   // ------------------------------------------------------------- daily review (spaced repetition for questions)
   // A miss comes back tomorrow. Each right answer pushes the next review further out: 1, 2, 4, 8, then 16 days.
-  function scheduleQuestion(s, ok, today) {
+  // When an exam date is set, the gap is capped at ~40% of the days left (Cepeda) and never past the exam.
+  function reviewGapCap(today, examDay) {
+    if (examDay == null) return Infinity;
+    const left = examDay - today;
+    if (left <= 0) return 1;
+    return Math.max(1, Math.floor(left * 0.4));
+  }
+  function scheduleQuestion(s, ok, today, examDay) {
     s.box = ok ? Math.min((s.box || 0) + 1, BOX_DAYS.length - 1) : 0;
-    s.due = today + (ok ? BOX_DAYS[s.box] : 1);
+    let gap = ok ? BOX_DAYS[s.box] : 1;
+    if (ok) {
+      gap = Math.min(gap, reviewGapCap(today, examDay));
+      if (examDay != null && examDay > today) gap = Math.min(gap, examDay - today);
+    }
+    s.due = today + gap;
     return s;
   }
   function questionDue(s) {                 // older saved data has no schedule yet
@@ -532,7 +608,7 @@
     now = now || Date.now(); state.cmdstats = state.cmdstats || {};
     const s = state.cmdstats[skillId] || { seen: 0, right: 0, last: null };
     s.seen++; if (ok) s.right++; s.last = !!ok; s.at = now;
-    scheduleQuestion(s, !!ok, dayNum(now));
+    scheduleQuestion(s, !!ok, dayNum(now), examDayNum(state, now));
     state.cmdstats[skillId] = s; addActivity(state, 1, now);
     return s;
   }
@@ -919,12 +995,17 @@
     const fresh = pool.filter(c => !cstate[c.id]);
     return due.concat(fresh).slice(0, limit);
   }
-  function reviewCard(cstate, id, knew, today, now) {
+  function reviewCard(cstate, id, knew, today, now, examDay) {
     today = today == null ? dayNum() : today;
     const s = cstate[id] || { box: 0, seen: 0, right: 0 };
     s.seen++; if (knew) s.right++; s.at = now || Date.now();   // `at` lets sync tell which device reviewed it last
     s.box = knew ? Math.min(s.box + 1, BOX_DAYS.length - 1) : 0;
-    s.due = today + (knew ? BOX_DAYS[s.box] : 0);
+    let gap = knew ? BOX_DAYS[s.box] : 0;
+    if (knew) {
+      gap = Math.min(gap, reviewGapCap(today, examDay));
+      if (examDay != null && examDay > today) gap = Math.min(gap, examDay - today);
+    }
+    s.due = today + gap;
     cstate[id] = s;
     return s;
   }
@@ -975,12 +1056,17 @@
     return { snap: cur, ts };
   }
   // Counters (seen, right) add up; the schedule (last, at, box, due) comes from whichever copy is newest.
+  // Mastery days (cdays) are a union so two devices never lose a day the other earned.
   function mergeSched(map, id, s) {
     const o = map[id];
     if (!o) { map[id] = Object.assign({}, s); return; }
     const newer = (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && (s.box || 0) > (o.box || 0));
     const m = newer ? Object.assign({}, o, s) : Object.assign({}, s, o);
     m.seen = (o.seen || 0) + (s.seen || 0); m.right = (o.right || 0) + (s.right || 0);
+    const days = {};
+    for (const d of [].concat(o.cdays || [], s.cdays || [])) if (isFinite(d)) days[d] = 1;
+    const merged = Object.keys(days).map(Number).sort((a, b) => a - b);
+    if (merged.length) m.cdays = merged; else delete m.cdays;
     map[id] = m;
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
@@ -1099,7 +1185,13 @@
     return out;
   }
   const SCHED = { seen: count, right: count, last: v => v === true || v === false ? v : null, at: numOr(undefined),
-                  box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined };
+                  box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined,
+                  ev: v => v === 1 || v === 0 || v === -1 ? v : undefined,
+                  cdays: v => {
+                    if (!Array.isArray(v)) return undefined;
+                    const days = v.filter(x => Number.isInteger(x) && x >= 0 && x < 100000);
+                    return Array.from(new Set(days)).sort((a, b) => a - b).slice(-16);
+                  } };
   const cleanSched = s => isObj(s) ? shape(s, SCHED) : undefined;
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
@@ -1185,11 +1277,12 @@
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
   }
 
-  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
-           scheduleQuestion, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
+  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
+           scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum,
            recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,

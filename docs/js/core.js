@@ -10,6 +10,7 @@
 
   const EXAM_SECONDS = 3600;
   const TARGET = 80;
+  const DAY_MS = 86400000, COLD_DAYS = 30;  // an answer this long after the last attempt counts as fresh evidence again
   const BOX_DAYS = [0, 1, 2, 4, 8, 16];   // Leitner intervals for flashcards
 
   // ------------------------------------------------------------- utilities
@@ -376,6 +377,10 @@
     for (const id of s.qids) {
       if (!answered(bank.byId[id], s.answers[id]) && s.mode !== "test") continue; // drills: skip untouched
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
+      // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
+      const cold = !st.seen || (st.at != null && now - st.at >= COLD_DAYS * DAY_MS);
+      if (cold && !(s.hints && s.hints[id])) st.ev = res.perQ[id] ? 1 : 0;
+      else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
       scheduleQuestion(st, res.perQ[id], dayNum(now));
       state.qstats[id] = st;
@@ -760,7 +765,7 @@
   // questions is then beta-binomial, and convolving the 19 objectives gives the exact score distribution for a fresh
   // 40-question exam. Pass chance = P(score >= PASS_PCT). LPI doesn't publish the raw cutoff (500 on a 200-800 scale),
   // so 70% is a deliberately cautious stand-in.
-  const PASS_PCT = 70, PASS_MIN_SEEN = 30;
+  const PASS_PCT = 70, PASS_MIN_SEEN = 40, PASS_MIN_TOPIC = 3;
   function lgamma(x) {                        // Lanczos approximation, |error| < 1e-10 for x > 0
     const g = 7, c = [0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059,
       12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7];
@@ -780,19 +785,37 @@
     for (let i = 0; i < p.length; i++) for (let j = 0; j < q.length; j++) out[i + j] += p[i] * q[j];
     return out;
   }
-  /** Per-objective evidence: right/wrong counts from the latest answer to each question seen. */
+  /** For progress saved before cold evidence was tracked: the first attempt when it can be known (seen once, always right,
+   *  always wrong), otherwise the share of answers that were right. Dropping the mixed ones instead would keep exactly the
+   *  questions that were never missed and push the estimate up. */
+  function coldFromHistory(s) {
+    if (!s || !s.seen) return -1;
+    if (s.seen === 1 && (s.last === true || s.last === false)) return s.last ? 1 : 0;
+    return Math.max(0, Math.min(1, (s.right || 0) / s.seen));
+  }
+  /** Evidence from a cold (first, or after a long gap, unhinted) answer to this question: 1 right, 0 wrong, a share in
+   *  between for old progress, or -1 when there is none. */
+  function coldOutcome(s) {
+    if (!s || !s.seen) return -1;
+    if (s.ev == null) return coldFromHistory(s);
+    return typeof s.ev === "number" && s.ev >= 0 && s.ev <= 1 ? s.ev : -1;
+  }
+  /** Per-objective evidence: right/wrong counts from cold answers only. Repeats of a question you've seen the answer to
+   *  measure memory of that item, not readiness for new ones, so they are left out (counted in `repeats`). */
   function passEvidence(bank, qstats) {
-    const ev = {}; let n = 0;
+    const ev = {}, byTopic = {}; let n = 0, repeats = 0;
     for (const o of Object.keys(bank.objectives)) {
-      ev[o] = { right: 0, wrong: 0 };
+      ev[o] = { right: 0, wrong: 0 }; const t = topicOf(o); byTopic[t] = byTopic[t] || 0;
       for (const id of bank.byObj[o]) {
         const s = qstats[id]; if (!s || !s.seen) continue;
-        const ok = s.last == null ? s.right * 2 >= s.seen : s.last;
-        if (ok) ev[o].right++; else ev[o].wrong++;
+        const c = coldOutcome(s);
+        if (c < 0) { repeats++; continue; }
+        ev[o].right += c; ev[o].wrong += 1 - c;
+        byTopic[t]++;
       }
       n += ev[o].right + ev[o].wrong;
     }
-    return { ev, seen: n };
+    return { ev, seen: n, repeats, byTopic };
   }
   function scoreDist(bank, ev) {
     let dist = [1];
@@ -811,11 +834,13 @@
     });
     return { chance: Math.max(0, Math.min(1, chance)), mean, low, high, total, need };
   }
-  /** Estimated chance of passing a fresh exam. chance is null until PASS_MIN_SEEN questions have been answered. */
+  /** Estimated chance of passing a fresh exam, from cold answers only. chance is null until there are PASS_MIN_SEEN of them
+   *  and every topic has at least PASS_MIN_TOPIC (`more` and `thinTopics` say what is missing). */
   function passPrediction(bank, qstats) {
-    const { ev, seen } = passEvidence(bank, qstats);
-    const base = { seen, minSeen: PASS_MIN_SEEN, passPct: PASS_PCT };
-    if (seen < PASS_MIN_SEEN) return Object.assign(base, { chance: null, more: PASS_MIN_SEEN - seen, focus: [] });
+    const { ev, seen, repeats, byTopic } = passEvidence(bank, qstats);
+    const thinTopics = Object.keys(byTopic).filter(t => byTopic[t] < PASS_MIN_TOPIC).sort();
+    const base = { seen, repeats, minSeen: PASS_MIN_SEEN, passPct: PASS_PCT, thinTopics };
+    if (seen < PASS_MIN_SEEN || thinTopics.length) return Object.assign(base, { chance: null, more: Math.max(0, PASS_MIN_SEEN - seen), focus: [] });
     const d = distStats(scoreDist(bank, ev));
     // Where 3 more right answers would raise the pass chance most.
     const focus = Object.keys(bank.objectives).map(o => {
@@ -1165,7 +1190,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
-           recordResult, readiness, PASS_PCT, passPrediction, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

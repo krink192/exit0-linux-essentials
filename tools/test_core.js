@@ -7,10 +7,15 @@ require(path.join(__dirname, "../docs/data/bank.js"));
 require(path.join(__dirname, "../docs/data/cards.js"));
 const C = require(path.join(__dirname, "../docs/js/core.js"));
 const bank = C.indexBank(window.LE_BANK), cards = window.LE_CARDS;
+// the ten fixed sets only: for tests that follow single questions through the review schedule, where a variant would be swapped in
+const sets = C.indexBank(Object.assign({}, window.LE_BANK, { questions: window.LE_BANK.questions.filter(q => !q.variantOf) }));
 let n = 0; const t = (name, fn) => { fn(); n++; console.log("ok -", name); };
 
-t("bank has 400 questions (ten blueprint sets of 40) and weights sum to 40", () => {
-  assert.strictEqual(bank.questions.length, 400); assert.strictEqual(bank.forms.length * 40, bank.questions.length);
+t("bank has 400 questions in ten blueprint sets of 40, plus variants outside the sets, and weights sum to 40", () => {
+  const sets = bank.questions.filter(q => q.form), variants = bank.questions.filter(q => q.variantOf);
+  assert.strictEqual(sets.length, 400); assert.strictEqual(bank.forms.length * 40, sets.length);
+  assert.strictEqual(sets.length + variants.length, bank.questions.length); assert(variants.length >= 50);
+  assert(variants.every(q => !q.form), "a variant belongs to no fixed exam");
   assert.strictEqual(Object.values(bank.objectives).reduce((a, o) => a + o.weight, 0), 40);
 });
 t("every practice test matches the blueprint exactly", () => {
@@ -187,6 +192,7 @@ t("apportion: totals, caps and leftovers", () => {
 });
 t("daily review: when more is due than fits, the due questions are split by exam weight, oldest first inside each objective", () => {
   const today = C.dayNum(), st = C.freshState(); st.settings.review = { on: true, size: 20, fresh: 0 };
+  const bank = sets;
   bank.questions.forEach((q, i) => { st.qstats[q.id] = { seen: 1, right: 0, last: false, box: 0, due: today - 1 - (i % 5) }; });   // all 400 due
   const mean = {};
   for (let seed = 1; seed <= 200; seed++) {
@@ -353,7 +359,7 @@ t("daily review: misses return tomorrow, right answers space out", () => {
   st.settings.review = { on: true, size: 20, fresh: 0 };
   const r = C.buildReview(bank, st, { today: today + 1, seed: 3 });
   assert.strictEqual(r.qids.length, 20); assert.strictEqual(r.mode, "review"); assert(r.study);
-  assert(r.qids.every(id => ex.qids.includes(id)));
+  assert(r.qids.every(id => C.familyOf(bank, id).some(f => ex.qids.includes(f))), "only facts from the exam, in any wording");
   const legacy = { "1.1-01": { seen: 1, right: 0, last: false }, "1.1-02": { seen: 1, right: 1, last: true, at: now } };
   assert.deepStrictEqual(C.dueIds(bank, legacy, today), ["1.1-01"]);
 });
@@ -372,7 +378,7 @@ t("daily review is the size the learner picks, not the whole backlog", () => {
   assert.strictEqual(d.backlog, 200); assert.strictEqual(d.left, 20); assert.strictEqual(d.due, 15); assert.strictEqual(d.fresh, 5);
   const s1 = C.buildReview(bank, st, { today, seed: 1 });
   assert.strictEqual(s1.qids.length, 20); assert.strictEqual(new Set(s1.qids).size, 20);
-  assert.strictEqual(s1.qids.filter(id => !st.qstats[id]).length, 5, "five new questions mixed in");
+  assert.strictEqual(s1.qids.filter(id => !C.familyOf(bank, id).some(f => st.qstats[f])).length, 5, "five new questions mixed in");
   // finish 12 of them: 8 left today, same mix
   const part = Object.assign({}, s1, { answers: {} }); s1.qids.slice(0, 12).forEach(id => { const q = bank.byId[id]; part.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
   C.recordResult(st, bank, part, C.grade(bank, part, now), now);
@@ -405,7 +411,8 @@ t("daily review always has something new: fills with new questions when little i
 t("new questions spread across objectives, least-seen first, easier first", () => {
   const ids = C.newIds(bank, {}, 19, C.rng ? C.rng(5) : Math.random);
   assert.strictEqual(new Set(ids.map(id => bank.byId[id].obj)).size, Math.min(19, Object.keys(bank.objectives).length), "one per objective before any repeats");
-  const all = C.newIds(bank, {}, 1000, Math.random); assert.strictEqual(all.length, bank.questions.length);
+  const all = C.newIds(bank, {}, 1000, Math.random); assert.strictEqual(all.length, C.factCount(bank), "one wording per new fact");
+  assert.strictEqual(new Set(all.map(id => bank.byId[id].variantOf || id)).size, all.length);
   const qs = {}; bank.byObj["1.1"].forEach(id => qs[id] = { seen: 1, right: 1 });
   assert(!C.newIds(bank, qs, 18, Math.random).some(id => bank.byId[id].obj === "1.1"), "a fully seen objective gives none");
   const first = bank.byId[C.newIds(bank, {}, 1, Math.random)[0]];
@@ -665,7 +672,7 @@ t("mastery: cold corrects on three different days; same day and hints do not adv
   assert.strictEqual(run(cold(0) + day).level, "familiar", "same mastery day does not double-count");
   assert.strictEqual(run(cold(1)).level, "proficient");
   assert.strictEqual(run(cold(2)).level, "mastered");
-  assert.strictEqual(C.coldDayCredit({ variantOf: "1.1-01" }), 0, "variants hook returns no day credit");
+  assert.strictEqual(C.coldDayCredit({ variantOf: "1.1-01" }), 1, "a variant answered cold is worth a full day; isCold decides whether it was cold");
   assert.strictEqual(C.coldDayCredit(q), 1);
 });
 t("mastery: a miss in a mixed exam drops one cold day for that objective", () => {
@@ -795,5 +802,188 @@ t("command panel links: related questions, flashcards and study by question ids"
   const kc = C.relatedCards(cards, "tar"); assert(kc.length && kc.every(id => /tar/.test(cards.find(c => c.id === id).front)), "tar cards are about tar");
   const ids = rq("grep"), s = C.buildStudy(bank, {}, { ids, count: 50, label: "Questions about grep" }, { seed: 3 });
   assert.strictEqual(s.qids.length, ids.length); assert(s.qids.every(id => ids.includes(id))); assert(/grep/.test(s.label));
+});
+// ---------------------------------------------------------------- item 6: variants, typed answers, navigator, explanations
+t("variants: each rewords an original of the same objective, shares its conflict set and has its own wording", () => {
+  const variants = bank.questions.filter(q => q.variantOf);
+  const texts = new Set(bank.questions.map(q => q.q));
+  assert.strictEqual(texts.size + bank.questions.filter(q => /^What does this|^Which command produced this/.test(q.q)).length >= bank.questions.length, true);
+  for (const v of variants) {
+    const base = bank.byId[v.variantOf];
+    assert(base && !base.variantOf, v.id + ": the original exists and is not itself a variant");
+    assert.strictEqual(v.obj, base.obj, v.id); assert(v.conflict != null && v.conflict === base.conflict, v.id + ": same conflict set");
+    assert.notStrictEqual(v.q, base.q, v.id);
+    assert.deepStrictEqual(C.familyOf(bank, v.id), C.familyOf(bank, base.id)); assert(C.familyOf(bank, base.id).includes(v.id));
+  }
+  for (const o in bank.objectives) assert(variants.filter(v => v.obj === o).length >= 2, o + " has variants");
+  assert(variants.filter(v => v.type === "fill").length >= 20, "a good share of the variants are typed");
+  assert.deepStrictEqual(C.familyOf(bank, "nope"), ["nope"]);
+  assert.strictEqual(C.factCount(bank), 400); assert.strictEqual(C.factsSeen(bank, {}), 0);
+  const v = variants[0];
+  assert.strictEqual(C.factsSeen(bank, { [v.id]: { seen: 1 }, [v.variantOf]: { seen: 2 } }), 1, "two wordings of one fact count once");
+});
+t("variants: the fixed practice exams are unchanged, and no exam or study set holds two wordings of one fact", () => {
+  for (const f of bank.forms) { const s = C.buildTest(bank, {}, { form: f }); assert.strictEqual(s.qids.length, 40); assert(s.qids.every(id => !bank.byId[id].variantOf), "form " + f); }
+  const fam = ids => ids.map(id => bank.byId[id].variantOf || id);
+  let used = 0;
+  for (let seed = 1; seed <= 200; seed++) {
+    const ex = C.buildTest(bank, {}, { seed }).qids; assert.strictEqual(new Set(fam(ex)).size, 40, "exam, seed " + seed);
+    used += ex.filter(id => bank.byId[id].variantOf).length;
+    const st = C.buildStudy(bank, {}, { count: 40 }, { seed }).qids; assert.strictEqual(new Set(fam(st)).size, st.length, "study, seed " + seed);
+  }
+  assert(used > 200, "random exams draw on the variants");
+});
+t("exam: a randomly drawn exam holds at least EXAM_TYPED_MIN typed questions and still matches the blueprint", () => {
+  assert(C.EXAM_TYPED_MIN >= 5);
+  for (const f of bank.forms) assert(bank.questions.filter(q => q.form === f && q.type === "fill").length >= C.EXAM_TYPED_MIN, "form " + f);
+  const seenAll = {}; bank.questions.forEach((q, i) => { seenAll[q.id] = q.type === "fill" ? { seen: 3, right: 3, last: true } : { seen: 1, right: 0, last: false }; });   // typed ones are the least needed
+  for (const qs of [{}, seenAll]) for (let seed = 1; seed <= 150; seed++) {
+    const s = C.buildTest(bank, qs, { seed });
+    assert(s.qids.filter(id => bank.byId[id].type === "fill").length >= C.EXAM_TYPED_MIN, "seed " + seed);
+    assert.strictEqual(new Set(s.qids).size, 40);
+    const c = C.objCounts(bank, s.qids); for (const o in bank.objectives) assert.strictEqual(c[o], bank.objectives[o].weight, o);
+    const cs = s.qids.map(id => bank.byId[id].conflict).filter(x => x != null); assert.strictEqual(new Set(cs).size, cs.length, "no conflict set twice, seed " + seed);
+  }
+});
+t("exam: an untimed run has no deadline, is labelled, and stays out of the exam average", () => {
+  const s = C.buildTest(bank, {}, { seed: 4, timed: false });
+  assert.strictEqual(s.deadline, null); assert.strictEqual(s.timed, false); assert.strictEqual(s.label, "Exam · untimed"); assert.strictEqual(s.qids.length, 40);
+  assert.strictEqual(C.buildTest(bank, {}, { seed: 4 }).label, "Exam");
+  const full = { mode: "test", total: 40, study: false };
+  assert.strictEqual(C.readiness([Object.assign({ pct: 90, timed: true }, full), Object.assign({ pct: 10, timed: false }, full)]), 90);
+  assert.strictEqual(C.readiness([Object.assign({ pct: 60 }, full)]), 60, "records saved before the timed field count as timed");
+});
+t("checkTyped: listed spellings, spacing, blanks and strict case", () => {
+  const q = { type: "fill", accept: ["ls -lh", "ls -hl"] };
+  let r = C.checkTyped(q, "  ls   -hl ");
+  assert.deepStrictEqual(r, { ok: true, answered: true, typed: "ls -hl", how: "listed", near: null, best: "ls -hl" });
+  r = C.checkTyped(q, "   "); assert.deepStrictEqual(r, { ok: false, answered: false, typed: "", how: null, near: null, best: "ls -lh" });
+  assert.strictEqual(C.checkTyped(q, null).ok, false); assert.strictEqual(C.checkTyped(q, undefined).answered, false);
+  assert.deepStrictEqual(C.checkTyped(q, "ls -la"), { ok: false, answered: true, typed: "ls -la", how: null, near: null, best: "ls -lh" });
+  assert.strictEqual(C.checkTyped({ accept: [] }, "x").best, ""); assert.strictEqual(C.checkTyped(null, "x").ok, false);
+  assert.strictEqual(C.checkTyped({ accept: ["$#"] }, "$#").ok, true); assert.strictEqual(C.checkTyped({ accept: ["0"] }, 0).ok, true, "a number is graded as its text");
+});
+t("checkTyped: near misses are still wrong, and say what to fix", () => {
+  const near = (accept, a) => { const r = C.checkTyped({ type: "fill", accept }, a); assert.strictEqual(r.ok, false, a); return [r.near, r.best]; };
+  assert.deepStrictEqual(near(["ls -lh", "ls -hl"], "LS -HL"), ["case", "ls -hl"]);
+  assert.deepStrictEqual(near(["FLOSS"], "floss"), ["case", "FLOSS"]);
+  assert.deepStrictEqual(near(["-v"], "v"), ["dash", "-v"]);
+  assert.deepStrictEqual(near(["--help"], "help"), ["dash", "--help"]);
+  assert.deepStrictEqual(near(["pwd"], "$ pwd"), ["prompt", "pwd"]);
+  assert.deepStrictEqual(near(["id"], "# id"), ["prompt", "id"]);
+  assert.deepStrictEqual(near(["unset temp"], "`unset temp`"), ["quoted", "unset temp"]);
+  assert.deepStrictEqual(near(["/etc/shadow"], '"/etc/shadow"'), ["quoted", "/etc/shadow"]);
+  assert.deepStrictEqual(near(["ls -l"], "ls-l"), ["space", "ls -l"]);
+  assert.deepStrictEqual(near(["chown tom report.txt"], "sudo chown tom report.txt"), ["sudo", "chown tom report.txt"]);
+  assert.deepStrictEqual(near(["pwd"], "cd"), [null, "pwd"]);
+  assert.deepStrictEqual(near(["$?"], "$ ?"), ["space", "$?"], "a variable is not mistaken for a prompt");
+  assert.strictEqual(C.checkTyped({ accept: ["sudo passwd dave"] }, "sudo passwd dave").ok, true, "sudo is right when the listed answer uses it");
+  assert.deepStrictEqual(near(["sudo passwd dave"], "passwd dave"), [null, "sudo passwd dave"]);
+  for (const k of ["sudo", "prompt", "quoted", "dash", "case", "space"]) assert(C.TYPED_NEAR[k] && C.TYPED_NEAR[k].length > 20, k + " has a note");
+  const q = { type: "fill", accept: ["chgrp sales report.txt"] };
+  assert.strictEqual(C.extraSudo(q, "sudo " + q.accept[0]), true); assert.strictEqual(C.extraSudo(q, q.accept[0]), false); assert.strictEqual(C.extraSudo(q, null), false);
+  assert.strictEqual(C.extraSudo(bank.byId["1.1-01"], "sudo x"), false, "only typed questions");
+});
+t("checkTyped agrees with isCorrect and answered for every typed question in the bank", () => {
+  let n = 0;
+  for (const q of bank.questions.filter(x => x.type === "fill" && !x.lab)) {
+    for (const a of q.accept) { const r = C.checkTyped(q, a); assert(r.ok && r.how === "listed" && r.best === a, q.id + ": " + a); assert(C.isCorrect(q, " " + a + " ")); n++; }
+    assert(!C.isCorrect(q, q.accept[0] + "x")); assert(!C.isCorrect(q, "")); assert(!C.answered(q, " "));
+    const up = q.accept[0].toUpperCase();
+    if (up !== q.accept[0] && !q.accept.includes(up)) assert.strictEqual(C.checkTyped(q, up).near, "case", q.id);
+  }
+  assert(n > 100, "checked " + n);
+});
+t("cold evidence treats a fact's wordings as one: a variant right after its original is a repeat", () => {
+  const v = bank.questions.find(q => q.variantOf && q.type !== "fill"), base = bank.byId[v.variantOf];
+  const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime(), st = C.freshState();
+  const answer = (id, now, ok) => { const q = bank.byId[id], s = C.newSession(bank, "study", "x", [id], { study: true, now });
+    s.answers[id] = ok === false ? (q.type === "fill" ? "zzz" : [q.options.findIndex((_, i) => !q.answer.includes(i))]) : q.type === "fill" ? q.accept[0] : q.answer;
+    C.recordResult(st, bank, s, C.grade(bank, s, now), now); };
+  assert.strictEqual(C.isCold(bank, st.qstats, v.id, t0), true, "nothing seen yet");
+  answer(base.id, t0);
+  assert.strictEqual(st.qstats[base.id].ev, 1); assert.deepStrictEqual(C.coldDaysOf(st.qstats[base.id]), [C.dayNum(t0)]);
+  assert.strictEqual(C.isCold(bank, st.qstats, v.id, t0 + day), false, "the original was answered yesterday");
+  answer(v.id, t0 + day);
+  assert.strictEqual(st.qstats[v.id].ev, -1, "no fresh evidence from a reworded repeat"); assert.deepStrictEqual(C.coldDaysOf(st.qstats[v.id]), [], "and no mastery day");
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[v.obj].coldDays, 1);
+  assert.strictEqual(C.isCold(bank, st.qstats, base.id, t0 + 2 * day), false, "and the other way round");
+  const later = t0 + (C.COLD_DAYS + 2) * day;
+  assert.strictEqual(C.isCold(bank, st.qstats, v.id, later), true, "after COLD_DAYS without any wording it counts again");
+  answer(v.id, later);
+  assert.strictEqual(st.qstats[v.id].ev, 1); assert.strictEqual(C.objectiveStats(bank, st.qstats)[v.obj].coldDays, 2);
+  // a variant met first is a real first attempt, and then the original is the repeat
+  const st2 = C.freshState(); const keep = st.qstats; st.qstats = st2.qstats;
+  answer(v.id, t0); assert.strictEqual(st.qstats[v.id].ev, 1); assert.strictEqual(C.coldDaysOf(st.qstats[v.id]).length, 1);
+  answer(base.id, t0 + day, false); assert.strictEqual(st.qstats[base.id].ev, -1, "a miss on the repeat doesn't count against the estimate either");
+  st.qstats = keep;
+  const other = bank.questions.find(q => !q.variantOf && C.familyOf(bank, q.id).length === 1);
+  assert.strictEqual(C.isCold(bank, { [other.id]: { seen: 1, at: t0 } }, other.id, t0 + day), false);
+  assert.strictEqual(C.isCold(bank, { [other.id]: { seen: 1, at: t0 } }, other.id, t0 + C.COLD_DAYS * day), true);
+});
+t("daily review: one schedule per fact, and a due fact comes back in the wording seen longest ago", () => {
+  const v = bank.questions.find(q => q.variantOf), base = bank.byId[v.variantOf];
+  const day = 86400000, now = new Date(2026, 9, 10, 12).getTime(), today = C.dayNum(now);
+  const st = C.freshState(); st.settings.review = { on: true, size: 5, fresh: 0 };
+  st.qstats[base.id] = { seen: 3, right: 3, last: true, at: now - 4 * day, box: 3, due: today };
+  assert.deepStrictEqual(C.dueIds(bank, st.qstats, today), [base.id]);
+  assert.strictEqual(C.familyLead(bank, st.qstats, v.id), base.id); assert.strictEqual(C.rotateVariant(bank, st.qstats, base.id, C.rng(1)), v.id, "the unseen wording");
+  const s = C.buildReview(bank, st, { today, seed: 2 });
+  assert(s.qids.includes(v.id) && !s.qids.includes(base.id), "the review asks the variant");
+  s.answers[v.id] = v.type === "fill" ? v.accept[0] : v.answer;
+  C.recordResult(st, bank, s, C.grade(bank, s, now), now);
+  assert.strictEqual(st.qstats[v.id].box, 4, "the variant carries on from the original's review step");
+  assert.strictEqual(st.qstats[v.id].due, today + 8);
+  assert.strictEqual(C.familyLead(bank, st.qstats, base.id), v.id);
+  assert.deepStrictEqual(C.dueIds(bank, st.qstats, today), [], "the original is no longer due: the fact was just reviewed");
+  assert.strictEqual(C.reviewForecast(bank, st.qstats, today).due, 0); assert.strictEqual(C.reviewForecast(bank, st.qstats, today + 8).due, 1, "counted once, not per wording");
+  assert.strictEqual(C.rotateVariant(bank, st.qstats, v.id, C.rng(1)), base.id, "next time it is the original's turn");
+  const again = C.buildReview(bank, st, { today: today + 8, seed: 2 }).qids; assert(again.includes(base.id) && !again.includes(v.id));
+  const lone = bank.questions.find(q => C.familyOf(bank, q.id).length === 1).id;
+  assert.strictEqual(C.rotateVariant(bank, st.qstats, lone, C.rng(1)), lone); assert.strictEqual(C.familyLead(bank, {}, lone), lone);
+  assert.strictEqual(C.dailyReview(bank, st, today).unseen, 399, "new questions are counted as facts");
+  assert(!C.newIds(bank, st.qstats, 1000, C.rng(3)).some(id => C.familyOf(bank, id).includes(base.id)), "a seen fact isn't offered as new in another wording");
+});
+t("exam navigator: Answered, Unanswered (seen), Unseen and Flagged, with filters", () => {
+  const s = C.buildTest(bank, {}, { seed: 9 }), ans = id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; };
+  let c = C.navCounts(bank, s);
+  assert.deepStrictEqual(c, { answered: 0, unanswered: 1, unseen: 39, flagged: 0, open: 40 }, "only the current question has been seen");
+  s.seen = { [s.qids[0]]: 1, [s.qids[1]]: 1, [s.qids[2]]: 1 }; ans(s.qids[0]); ans(s.qids[5]); s.flags[s.qids[1]] = true; s.flags[s.qids[5]] = true; s.flags[s.qids[7]] = false; s.cur = 2;
+  const typed = s.qids.findIndex(id => bank.byId[id].type === "fill"); s.seen[s.qids[typed]] = 1; s.answers[s.qids[typed]] = "   ";
+  const st = C.navStates(bank, s);
+  assert.strictEqual(st.length, 40); assert.deepStrictEqual(st[0], { i: 0, id: s.qids[0], flagged: false, state: "answered" });
+  assert.strictEqual(st[1].state, "unanswered"); assert.strictEqual(st[1].flagged, true); assert.strictEqual(st[2].state, "unanswered"); assert.strictEqual(st[5].state, "answered");
+  assert.strictEqual(st[typed].state, typed === 0 || typed === 5 ? "answered" : "unanswered", "a typed question with only spaces is not answered");
+  assert.strictEqual(st[39].state, typed === 39 ? "unanswered" : "unseen");
+  c = C.navCounts(bank, s); assert.strictEqual(c.answered + c.unanswered + c.unseen, 40); assert.strictEqual(c.flagged, 2); assert.strictEqual(c.open, 40 - c.answered);
+  assert.deepStrictEqual(C.navFilter(bank, s, "flagged"), [1, 5]);
+  assert.strictEqual(C.navFilter(bank, s, "open").length, c.open); assert(!C.navFilter(bank, s, "open").includes(0));
+  assert.strictEqual(C.navFilter(bank, s, "all").length, 40);
+  assert.strictEqual(C.navNext([1, 5], 0), 1); assert.strictEqual(C.navNext([1, 5], 1), 5); assert.strictEqual(C.navNext([1, 5], 5), 1, "wraps round"); assert.strictEqual(C.navNext([], 3), -1);
+  // the seen marks and the hidden timer survive a reload; junk does not
+  const back = C.cleanSession(JSON.parse(JSON.stringify(Object.assign({}, s, { hideTimer: true, seen: Object.assign({ "<img>": 1, ok: "x" }, s.seen) }))));
+  assert.strictEqual(back.hideTimer, true); assert.strictEqual(back.seen[s.qids[1]], 1); assert(!("<img>" in back.seen) && !("ok" in back.seen));
+  assert.strictEqual(C.cleanSession(Object.assign({}, s, { hideTimer: "yes" })).hideTimer, false);
+});
+t("splitExplanation: first sentence, then the rest; short or single-sentence text stays whole", () => {
+  const one = "Ubuntu is built from Debian packages.";
+  assert.deepStrictEqual(C.splitExplanation(one), { short: one, rest: "" });
+  assert.deepStrictEqual(C.splitExplanation(null), { short: "", rest: "" });
+  const long = "`-l` gives the long format and `-h` turns byte counts into units such as K, M and G. Short options can be combined behind one dash in any order, e.g. as -lh or -hl. Either works.";
+  assert.deepStrictEqual(C.splitExplanation(long), { short: "`-l` gives the long format and `-h` turns byte counts into units such as K, M and G.",
+    rest: "Short options can be combined behind one dash in any order, e.g. as -lh or -hl. Either works." });
+  const code = "Run `tar -xzf a.tar.gz. Then` nothing special happens because that text is inside a code span and must not be split there at all. `-x` extracts. Done here.";
+  assert.strictEqual(C.splitExplanation(code).short, "Run `tar -xzf a.tar.gz. Then` nothing special happens because that text is inside a code span and must not be split there at all.");
+  const abbr = "Debian-family systems use .deb packages, e.g. Ubuntu and Mint, with dpkg and apt as the tools that install and manage them on disk. Red Hat uses RPM.";
+  assert.strictEqual(C.splitExplanation(abbr).rest, "Red Hat uses RPM.");
+  let split = 0;
+  for (const q of bank.questions) {
+    const { short, rest } = C.splitExplanation(q.explanation);
+    assert(short.length >= 20, q.id + ": first part too short: " + short);
+    assert.strictEqual((short.match(/`/g) || []).length % 2, 0, q.id + ": split inside code");
+    assert.strictEqual(rest ? short + " " + rest : short, q.explanation.trim().replace(/\s+/g, " ") === q.explanation.trim() ? q.explanation.trim() : rest ? short + " " + rest : short);
+    if (rest) { split++; assert(/[.?!]$/.test(short), q.id); }
+  }
+  assert(split > 200, "most explanations have a second tier");
 });
 console.log(`\n${n} tests passed`);

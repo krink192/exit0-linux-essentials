@@ -771,6 +771,107 @@
   /** Grade one task: right only when it was solved without hints or the answer (and in time, when timed). */
   function cmdTaskOk(r) { return !!(r && r.solved && !r.hint && !r.revealed && !r.timeout); }
 
+  // ------------------------------------------------------------- labs: challenges, catalogue rows and "Checked when"
+  // Beside the per-lesson labs there are four tracks. Each lab of a track is one catalogue row with a type
+  // (what kind of work it is), a difficulty and a status.
+  const LAB_TRACKS = {
+    chain: ["The vault", "Ten locked levels. Each one hides a key: find it, hand it in, and the next level opens."],
+    oneliner: ["One-liners", "One task, one command line. Any command that does the job counts, and afterwards you see other ways to do it."],
+    scenario: ["Scenarios", "A situation and a goal, with no step list. The clock is only a suggestion."],
+    troubleshoot: ["Troubleshooting", "Something's broken: find out why and fix it, one step at a time."],
+  };
+  const LAB_KINDS = { find: ["Find", "Read the system and report what you find"], change: ["Change", "Leave the system in the state asked for"],
+                      fix: ["Fix", "Something is broken: find the cause and repair it"] };
+  const LAB_LEVELS = { 1: "Easy", 2: "Medium", 3: "Hard" };
+  const labKind = x => x && LAB_KINDS[x.kind] ? x.kind : "change";
+  /** Difficulty of a lab or lesson as { n: 1-3, word }. */
+  function labLevel(x) { const n = Math.max(1, Math.min(3, Math.round(Number(x && x.level)) || 1)); return { n, word: LAB_LEVELS[n] }; }
+  /** Progress of a lesson for its catalogue row. `parts` = [{ id, n }], `labs` = saved lab progress.
+   *  Returns { state: "new" | "started" | "done", done, total, text }. */
+  function labStatus(parts, labs) {
+    labs = labs || {}; parts = parts || [];
+    const done = parts.filter(p => labs[p.id] && labs[p.id].completedAt).length, total = parts.length;
+    const begun = parts.some(p => labs[p.id] && ((labs[p.id].done || []).length || labs[p.id].completedAt));
+    const state = total && done === total ? "done" : begun ? "started" : "new";
+    return { state, done, total, text: state === "done" ? "Done" : state === "new" ? "New" : total > 1 ? done + " of " + total + " parts" : "Started" };
+  }
+  /** A chain opens in order. For each lab ID in `ids`: the ID of the first earlier level that isn't cleared yet
+   *  (the one to finish first), or null when the level is open. */
+  function chainLocks(ids, labs) {
+    labs = labs || {}; const out = {}; let need = null;
+    for (const id of ids || []) { out[id] = need; if (need == null && !(labs[id] && labs[id].completedAt)) need = id; }
+    return out;
+  }
+  /** The advisory clock of a scenario: time spent against the suggested minutes. It never fails anything. */
+  function advisoryClock(elapsedMs, minutes) {
+    const secs = Math.max(0, Math.floor((Number(elapsedMs) || 0) / 1000)), over = minutes > 0 && secs > minutes * 60;
+    const mmss = String(Math.floor(secs / 60)).padStart(2, "0") + ":" + String(secs % 60).padStart(2, "0");
+    return { over, text: mmss + (minutes > 0 ? " of about " + minutes + " min" : ""),
+             note: over ? "Past the suggested time. Nothing is lost: take a hint if you're stuck." : "" };
+  }
+  /** Help for a task, from least to most revealing: first the commands it may need (shown as chips), then its written hints. */
+  function hintTiers(task, commands) {
+    const tiers = [];
+    if (commands && commands.length) tiers.push({ type: "cmds", cmds: commands.slice() });
+    for (const h of (task && task.hints) || []) tiers.push({ type: "text", text: h });
+    return tiers;
+  }
+  const tilde = p => String(p).replace(/^\/home\/student(?=\/|$)/, "~");
+  const tick = p => "`" + tilde(p) + "`";
+  /** What a declarative lab check (shell.js evalCheck) tests, in words: the part after "Checked when". */
+  function describeCheck(c) {
+    if (!c || typeof c !== "object") return "the system is in the state the task describes";
+    const list = (xs, word) => { xs = xs.map(describeCheck).filter((x, i, a) => a.indexOf(x) === i); return xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " " + word + " " + xs[xs.length - 1]; };
+    switch (c.type) {
+      case "all": return list(c.checks || [], "and");
+      case "any": return (c.checks || []).length > 1 ? "either " + list(c.checks, "or") : list(c.checks || [], "or");
+      case "not": return "it is not true that " + describeCheck(c.check);
+      case "exists": return (c.kind === "dir" ? "the directory " : c.kind === "file" ? "the file " : "") + tick(c.path) + " exists";
+      case "absent": return tick(c.path) + " no longer exists";
+      case "mode": return tick(c.path) + " has the mode " + c.mode;
+      case "perms": return tick(c.path) + " has the permissions `" + c.perms + "`";
+      case "owner": return tick(c.path) + " belongs to " + [c.user ? "the user " + c.user : "", c.group ? "the group " + c.group : ""].filter(Boolean).join(" and ");
+      case "contains": return c.regex ? tick(c.path) + " has the expected contents" : tick(c.path) + " contains `" + String(c.text).trim() + "`";
+      case "equals": return tick(c.path) + " has exactly the expected contents";
+      case "lines": return tick(c.path) + " has " + c.count + (c.count === 1 ? " line" : " lines");
+      case "link": return tick(c.path) + " is a symbolic link" + (c.target ? " to " + tick(c.target) : "");
+      case "hardlink": return tick(c.path) + " and " + tick(c.other) + " are hard links to the same file";
+      case "archive": return tick(c.path) + " is a " + (c.compression ? c.compression + "-compressed " : "") + (c.format || "tar") + " archive" + ((c.has || []).length ? " that contains " + c.has.map(tick).join(", ") : "");
+      case "compressed": return tick(c.path) + " is compressed with " + c.kind;
+      case "user": return "the user " + c.name + " exists" + (c.shell ? " with the shell " + c.shell : "") + (c.home ? " and the home directory " + tick(c.home) : "") +
+        ((c.groups || []).length ? " and is in the group" + (c.groups.length > 1 ? "s " : " ") + c.groups.join(", ") : "") +
+        (c.password ? { set: " and has a usable password", locked: " and is locked", "locked-set": " and is locked" }[c.password] || "" : "");
+      case "nouser": return "the user " + c.name + " no longer exists";
+      case "group": return "the group " + c.name + " exists" + (c.gid != null ? " with GID " + c.gid : "") + ((c.members || []).length ? " and has the member" + (c.members.length > 1 ? "s " : " ") + c.members.join(", ") : "");
+      case "nogroup": return "the group " + c.name + " no longer exists";
+      case "cwd": return "your current directory is " + tick(c.path);
+      case "env": return "the variable " + c.name + (c.exported === false ? " is not exported" : " is exported") + (c.value != null ? " with the value `" + c.value + "`" : "");
+      case "var": return "the variable " + c.name + (c.value != null ? " has the value `" + c.value + "`" : c.regex ? " has the value asked for" : " is set");
+      case "novar": return "the variable " + c.name + " is no longer set";
+      case "alias": return "the alias " + c.name + " is defined";
+      case "history": return "you have run the command the task asks for";
+      case "last": return "your last command printed what the task asks for";
+      case "script": return "the script " + tick(c.path) + " runs and prints what is expected";
+      case "proc": return "the process " + (c.cmd || "") + " is running";
+      case "noproc": return "the process " + c.cmd + " is no longer running";
+      case "addr": return "the interface " + c.dev + (c.present === false ? " no longer has" : " has") + " the address " + c.addr;
+      case "route": return (c.present === false ? "there is no longer a route to " : "there is a route to ") + c.dst + (c.via ? " through " + c.via : "");
+      case "iface": return "the interface " + c.dev + (c.state ? " is " + String(c.state).toLowerCase() : " exists");
+      case "unit": return "the service " + c.name + " is " + [c.active == null ? "" : c.active ? "running" : "stopped", c.enabled == null ? "" : c.enabled ? "enabled" : "disabled"].filter(Boolean).join(" and ");
+      case "whoami": return "you are working as " + c.name;
+      case "shell": return "you are back in your own login shell";
+      case "located": return "the locate database knows " + tick(c.path);
+      case "sametime": return tick(c.path) + " and " + tick(c.other) + " have the same modification time";
+      case "unlocked": return "you have handed in this level's key with `unlock`";
+      default: return "the system is in the state the task describes";
+    }
+  }
+  /** The "Checked when..." sentence of a lab task: its own `goal` when it has one, else the check in words. */
+  function checkedWhen(task) {
+    const g = task && task.goal ? String(task.goal).trim() : describeCheck(task && task.check);
+    return /[.!?]$/.test(g) ? g : g + ".";
+  }
+
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
@@ -1340,6 +1441,7 @@
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
+           LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,

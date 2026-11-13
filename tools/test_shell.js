@@ -232,7 +232,7 @@ require(path.join(__dirname, "../docs/data/labs.js"));
 const runLines = (sh, text) => { let out = "", buf = null; for (const line of text.split("\n")) { const src = buf == null ? line : buf + "\n" + line; const r = sh.exec(src); if (r.incomplete) { buf = src; continue; } buf = null; out += r.out; } assert.strictEqual(buf, null, "solution ends mid-command: " + text); return out; };
 const mistakeHits = (mk, line, out) => (mk.cmd == null || new RegExp(mk.cmd).test(line)) && (mk.out == null || new RegExp(mk.out).test(out)) && (mk.cmd != null || mk.out != null);
 const usesCmd = (sol, cmd) => new RegExp("(^|[\\s;|&(`$]|sudo\\s+)" + cmd.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?=$|[\\s;|&)])", "m").test(sol);
-let labTasks = 0, mistakes = 0; const ids = new Set();
+let labTasks = 0, mistakes = 0, ways = 0; const ids = new Set();
 for (const lab of window.LE_LABS) {
   assert.ok(!ids.has(lab.id), "duplicate lab id " + lab.id); ids.add(lab.id);
   assert.ok(lab.title && lab.intro && lab.lesson && lab.url && Array.isArray(lab.commands) && lab.tasks.length, lab.id + ": missing title/intro/lesson/url/commands/tasks");
@@ -252,6 +252,12 @@ for (const lab of window.LE_LABS) {
     }
     const out = runLines(sh, t.solution);
     assert.strictEqual(sh.check(t.check), true, `${lab.id} task ${i + 1} not complete after its solution. Output:\n${out}`);
+    for (const w of t.ways || []) {             // "other ways" shown after success: each must do the job by itself
+      const tmp = S.createMachine({ setup: lab.setup }); lab.tasks.slice(0, i).forEach(p => runLines(tmp, p.solution));
+      const o2 = runLines(tmp, w.cmd);
+      assert.ok(w.note && tmp.check(t.check), `${lab.id} task ${i + 1}: the other way '${w.cmd}' doesn't complete the task. Output:\n${o2}`);
+      ways++;
+    }
     labTasks++;
   });
 }
@@ -285,5 +291,5 @@ for (const lab of window.LE_LABS) {
         const was = S.createMachine({ setup: lab.setup }); was.restore(snap);
         assert.ok(!was.canComplete(x.check, x.solution), `${lab.id}: the correct line '${src}' wrongly flags task ${j + 1} as impossible`); }); } }
 }
-console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length} parts, ${labTasks} tasks and ${mistakes} coaching tips verified`);
+console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length} parts, ${labTasks} tasks, ${ways} other ways and ${mistakes} coaching tips verified`);
 process.exit(fail ? 1 : 0);

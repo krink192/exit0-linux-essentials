@@ -11,7 +11,9 @@
   const LABS = LABX.parts, LESSONS = LABX.lessons;
   const TROUBLE = "troubleshoot";       // the troubleshooting track: scenario labs listed after the per-lesson labs
   const lessonNo = p => LESSONS.filter(x => x.obj === p.obj && !x.track).length > 1 ? "." + p.lesson.split(".").pop() : "";
-  const partLabel = p => p.track === TROUBLE ? `Troubleshooting ${p.lesson}${p.parts > 1 ? ", part " + p.part : ""}` : `Lab ${p.obj}${lessonNo(p)}, part ${p.part}`;
+  const GAME = { chain: 1, oneliner: 1, scenario: 1 };   // challenge tracks: each lab is one part with one task (tools/game_labs.py)
+  const gameLabel = p => p.track === "chain" ? "The vault, level " + String(p.lesson).slice(1) : p.track === "oneliner" ? "One-liner" : "Scenario";
+  const partLabel = p => GAME[p.track] ? gameLabel(p) : p.track === TROUBLE ? `Troubleshooting ${p.lesson}${p.parts > 1 ? ", part " + p.part : ""}` : `Lab ${p.obj}${lessonNo(p)}, part ${p.part}`;
   const QBYPART = {}; for (const qid in LABX.q) for (const pid of LABX.q[qid]) (QBYPART[pid] = QBYPART[pid] || []).push(qid);
   let labsLoading = null, shellLoading = null;
   const addScript = f => new Promise((res, rej) => { const v = LABX.assets || {};          // content hashes, so an updated app never runs an old cached copy
@@ -115,6 +117,7 @@
     ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
     chevron: '<path d="M9 6l6 6-6 6"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
   // Screen readers: one live region outside #app, which is redrawn on every render. A region inserted with the new
@@ -958,19 +961,22 @@
   // One lab per LPI lesson, split into parts; progress is stored per part (st.labs[partId]).
   const machines = {};          // one live machine per part for this visit; reloading the page starts fresh
   const hintLevel = {};         // partId -> [hints shown per task]
+  const termFocus = {}, labClock = {};   // partId -> terminal enlarged; partId -> { start, end } for a scenario's advisory clock
+  let labTick = null;
+  const chainIds = () => LABS.filter(l => l.track === "chain").map(l => l.id);
   const coachTip = {};          // partId -> { task, say } from the last command
   const undoSnap = {};          // partId -> { snap, line }: the machine before the last command, for "Undo last command"
   const stuck = {};             // partId -> { task, line }: the last command made this task impossible to finish
   const labState = id => (st.labs[id] = st.labs[id] || { done: [] });
   const partsOf = code => LABS.filter(l => l.lesson === code);
-  const lessonName = L => L.track === TROUBLE ? L.lesson + " · uses " + L.obj : L.obj + (partsOf(L.lesson).length && LESSONS.filter(x => x.obj === L.obj && !x.track).length > 1 ? " · Lesson " + L.num : "");
+  const lessonName = L => GAME[L.track] ? gameLabel(L) : L.track === TROUBLE ? L.lesson + " · uses " + L.obj : L.obj + (partsOf(L.lesson).length && LESSONS.filter(x => x.obj === L.obj && !x.track).length > 1 ? " · Lesson " + L.num : "");
   // Labs: one "continue" card, then every lesson in one list folded by topic, troubleshooting folded at the end.
   let labFilter = "all";
   function renderLabs() {
     const doneParts = LABS.filter(l => labState(l.id).completedAt).length;
     const lessonDone = L => partsOf(L.lesson).every(p => labState(p.id).completedAt);
     const lessonStarted = L => partsOf(L.lesson).some(p => labState(p.id).done.length);
-    const doneLessons = LESSONS.filter(lessonDone).length;
+    const doneLessons = LESSONS.filter(L => !GAME[L.track] && lessonDone(L)).length;
     const next = LABS.find(l => !labState(l.id).completedAt && labState(l.id).done.length) || LABS.find(l => !labState(l.id).completedAt);
     const nextL = next && LESSONS.find(L => L.lesson === next.lesson);
     const segs = parts => `<span class="psegs" aria-hidden="true">${parts.map(p => { const ls = labState(p.id);
@@ -982,7 +988,6 @@
         ${segs(parts)}<span class="small muted lcount">${done}/${parts.length}</span><a href="#lab/${go.id}" class="${label === "Continue" ? "strong" : ""}">${label}</a></div>`; };
     const keep = L => labFilter === "all" || !lessonDone(L);
     const byTopic = {}; LESSONS.filter(L => !L.track).forEach(L => (byTopic[C.topicOf(L.obj)] = byTopic[C.topicOf(L.obj)] || []).push(L));
-    const trouble = LESSONS.filter(L => L.track === TROUBLE);
     const openT = nextL && !nextL.track ? C.topicOf(nextL.obj) : null;
     const topics = Object.keys(byTopic).sort().map(t => { const ls = byTopic[t], shown = ls.filter(keep);
         if (!shown.length) return "";
@@ -991,11 +996,31 @@
         return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${t}. ${esc(TOP[t])}</span>
           <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
           <div class="tbody">${shown.map(row).join("")}</div></details>`; }).join("");
-    const tParts = trouble.reduce((a, L) => a.concat(partsOf(L.lesson)), []), tDone = tParts.filter(p => labState(p.id).completedAt).length;
+    // Challenges: every lab of a track is one row with its type, difficulty and status; opening a row shows what is
+    // checked, the commands it may need and the way in. Levels of the chain open in order.
+    const locks = C.chainLocks(chainIds(), st.labs);
+    const dots = n => `<span class="ldots" aria-hidden="true">${[1, 2, 3].map(k => `<i class="${k <= n ? "on" : ""}"></i>`).join("")}</span>`;
+    const crow = L => { const parts = partsOf(L.lesson), stt = C.labStatus(parts, st.labs), lv = C.labLevel(L), kind = C.LAB_KINDS[C.labKind(L)];
+      const to = parts.find(p => !labState(p.id).completedAt) || parts[0], need = locks[to.id], needL = need && LABS.find(l => l.id === need);
+      return `<details class="crow ${stt.state}${need ? " locked" : ""}"><summary>
+          <span class="cname"><b>${esc(L.title)}</b><span class="small muted">${esc(L.blurb || "")}</span></span>
+          <span class="cmeta"><span class="ktag" title="${esc(kind[1])}">${kind[0]}</span><span class="clevel">${dots(lv.n)}${lv.word}</span>
+            <span class="cstat">${need ? icon("lock") + "Locked" : (stt.state === "done" ? icon("check") : "") + stt.text}</span></span></summary>
+        <div class="cbody small">${need ? `<p class="muted">Opens when you clear level ${esc(String(needL.lesson).slice(1))}, “${esc(needL.title)}”.</p>` : `
+          ${to.goal ? `<p><b>Checked when</b> ${rich(to.goal)}</p>` : `<p><b>${parts.length} parts:</b> ${parts.map(q => esc(q.title)).join(" · ")}</p>`}
+          <p><span class="muted">Commands you may need:</span> ${L.covers.map(c => `<code>${esc(c)}</code>`).join(" ")}${L.minutes ? ` <span class="muted">· about ${L.minutes} min, as a suggestion</span>` : ""}</p>
+          <a class="btn" href="#lab/${to.id}">${stt.state === "done" ? "Run it again" : stt.state === "started" ? "Continue" : "Start"}${icon("right", "after")}</a>`}</div></details>`; };
+    const group = tr => { const ls = LESSONS.filter(L => L.track === tr); if (!ls.length) return "";
+      const shown = ls.filter(keep), parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(q => labState(q.id).completedAt).length, all = pd === parts.length;
+      return `<details class="trow"${nextL && nextL.track === tr ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${esc(C.LAB_TRACKS[tr][0])}</span>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="tbody clist"><p class="small muted cintro">${esc(C.LAB_TRACKS[tr][1])}</p>${shown.map(crow).join("") || `<p class="muted small">All finished. Switch to All to run one again.</p>`}</div></details>`; };
+    const challenges = `<section class="card stack objcard labscard"><div class="row spread"><h2>Challenges</h2><span class="small muted">A goal and a check of the result, no recipe</span></div>
+        <div>${["chain", "oneliner", "scenario", TROUBLE].map(group).join("")}</div></section>`;
     shell("labs", `<div class="page-head row spread progress-head"><div><h1>Labs</h1><p class="lead">One lab per LPI lesson, in short parts. Each task is checked as you type. It's simulated, so nothing can break.</p></div>
-        <div class="row pills"><span class="pill"><b>${doneParts} / ${LABS.length}</b> parts</span><span class="pill"><b>${doneLessons} / ${LESSONS.length}</b> lessons</span></div></div>
+        <div class="row pills"><span class="pill"><b>${doneParts} / ${LABS.length}</b> parts</span><span class="pill"><b>${doneLessons} / ${LESSONS.filter(L => !GAME[L.track]).length}</b> lessons</span><span class="pill"><b>${LESSONS.filter(L => GAME[L.track] && lessonDone(L)).length} / ${LESSONS.filter(L => GAME[L.track]).length}</b> challenges</span></div></div>
       ${next ? `<section class="card continue"><div class="cic">${icon("terminal")}</div>
-        <div class="u-g6 stack grow"><p class="hero-head">Part ${next.part}: ${esc(next.title)}</p><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
+        <div class="u-g6 stack grow"><p class="hero-head">${next.parts > 1 ? "Part " + next.part + ": " : ""}${esc(next.title)}</p><span class="eyebrow">${labState(next.id).done.length || doneParts ? "Continue" : "Start here"} · ${esc(nextL ? lessonName(nextL) : next.lesson)}</span><p class="muted small">${esc(next.lessonTitle)} · ${plural(next.n, "task")}${labState(next.id).done.length ? `, ${labState(next.id).done.length} done` : ""}</p>
           <div class="u-g10 u-aic row">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
       : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="u-jc row"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
@@ -1003,9 +1028,7 @@
           <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
         <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
         <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
-      ${trouble.length ? `<details class="card troublecard"><summary><div class="u-g2 stack"><b>Troubleshooting · ${plural(trouble.length, "scenario")}${tDone ? ` · ${tDone}/${tParts.length} parts done` : ""}</b>
-          <span class="small muted">Something's broken: find out why and fix it, using only exam commands. Best after the lessons each one uses.</span></div><span class="tlink">Show scenarios</span></summary>
-        <div class="tbody flat">${trouble.filter(keep).map(row).join("") || `<p class="muted small">All scenarios finished.</p>`}</div></details>` : ""}`);
+      ${challenges}`);
     $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
   }
   // A light "did you mean" for typos, like command-not-found on real systems.
@@ -1019,6 +1042,15 @@
   const focusTask = {};         // partId -> task shown on phones (one task at a time above the terminal)
   function renderLab(id) {
     const meta = LABS.find(l => l.id === id); if (!meta) return go("labs");
+    clearInterval(labTick);
+    const need = meta.track === "chain" ? C.chainLocks(chainIds(), st.labs)[id] : null;
+    if (need) {                       // a level of the chain opens when the one before it is cleared
+      const nl = LABS.find(l => l.id === need), no = esc(String(nl.lesson).slice(1));
+      shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(meta.title)}</h1><span class="u-mt8 eyebrow">${esc(gameLabel(meta))} · locked</span>
+          <p class="lead">This level opens when you clear level ${no}, “${esc(nl.title)}”.</p></div>
+        <div class="row"><a class="btn primary" href="#lab/${nl.id}">Go to level ${no}${icon("right", "after")}</a></div>`, { noTabs: true });
+      return;
+    }
     if (!window.LEShell || !window.LE_LABS) {
       shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(meta.title)}</h1><p class="lead muted">Starting the lab system…</p></div>`, { noTabs: true });
       loadLabs().then(() => { if ((location.hash || "").slice(1) === "lab/" + id) renderLab(id); },
@@ -1033,34 +1065,44 @@
     const hl = hintLevel[id] = hintLevel[id] || lab.tasks.map(() => 0);
     const nextIdx = lab.tasks.findIndex((_, i) => !ls.done.includes(i));
     const tip = coachTip[id];
+    if (lab.minutes && !labClock[id] && !ls.completedAt) labClock[id] = { start: Date.now(), end: null };
+    const lc = labClock[id]; if (lc && ls.completedAt && !lc.end) lc.end = Date.now();
+    const clock = lc ? C.advisoryClock((lc.end || Date.now()) - lc.start, lab.minutes) : null;
+    const clockHTML = clock ? `<p class="advclock${clock.over ? " over" : ""}" id="advClock">${icon("clock")}<span id="advTime">${clock.text}</span>${lc.end ? `<span class="muted">Finished</span>` : `<span class="muted" id="advNote">${clock.note || "The clock only advises."}</span>`}</p>`
+      : lab.minutes ? `<p class="advclock">${icon("clock")}<span>About ${lab.minutes} min, as a suggestion</span></p>` : "";
     const fi = typeof focusTask[id] === "number" ? focusTask[id] : (stuck[id] ? stuck[id].task : tip ? tip.task : nextIdx < 0 ? lab.tasks.length - 1 : nextIdx);
-    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(lab.title)}</h1><span class="u-mt8 eyebrow">${lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)} · ${esc(lab.lessonTitle)}</span><p class="lead">${rich(lab.intro)}</p>
-        <nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav></div>
-      ${ls.completedAt ? `<div class="card banner done-banner"><div class="u-g10 row">${icon("trophy")}<div><b>Part complete.</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a><h1>${esc(lab.title)}</h1><span class="u-mt8 eyebrow">${GAME[lab.track] ? esc(gameLabel(lab)) + " · " + C.LAB_KINDS[C.labKind(lab)][0] + " · " + C.labLevel(lab).word + " · objective " + esc(lab.obj) : (lab.track === TROUBLE ? "Troubleshooting " + esc(lab.lesson) + " · objective " + esc(lab.obj) : "Lesson " + esc(lab.obj) + lessonNo(lab)) + " · " + esc(lab.lessonTitle)}</span>${clockHTML}<p class="lead">${rich(lab.intro)}</p>
+        ${parts.length < 2 ? "" : `<nav class="partnav" aria-label="Parts of this lesson">${parts.map(p => `<a href="#lab/${p.id}" class="${p.id === id ? "on" : ""} ${labState(p.id).completedAt ? "done" : ""}">${labState(p.id).completedAt ? icon("check") : ""}Part ${p.part}</a>`).join("")}</nav>`}</div>
+      ${ls.completedAt ? `<div class="card banner done-banner"><div class="u-g10 row">${icon("trophy")}<div><b>${{ chain: "Level cleared.", oneliner: "Solved.", scenario: "Resolved." }[lab.track] || "Part complete."}</b> <span class="muted">${related.length ? "Lock it in with the exam questions on what you just practised." : "Keep experimenting, or restart it for another run."}</span></div></div>
         <div class="row">${related.length ? `<button class="primary" id="labQs">${icon("drill")}Answer ${plural(Math.min(10, related.length), "related question")}</button>` : ""}
-        ${next ? `<a class="btn ${related.length ? "" : "primary"}" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : next.track === TROUBLE ? "Next: troubleshooting " + esc(next.lesson) : "Next lesson: " + esc(next.lesson)}${icon("right", "after")}</a>` : `<a class="btn" href="#labs">All labs</a>`}</div></div>` : ""}
-      <div class="labwrap ${focusTask[id] === "all" ? "" : "one"}">
+        ${next ? `<a class="btn ${related.length ? "" : "primary"}" href="#lab/${next.id}">${next.lesson === lab.lesson ? "Next: part " + next.part : GAME[next.track] ? (next.track === "chain" ? "Next level: " : "Next: ") + esc(next.title) : next.track === TROUBLE ? "Next: troubleshooting " + esc(next.lesson) : "Next lesson: " + esc(next.lesson)}${icon("right", "after")}</a>` : `<a class="btn" href="#labs">All labs</a>`}</div></div>` : ""}
+      <div class="labwrap ${focusTask[id] === "all" ? "" : "one"}${termFocus[id] ? " termfocus" : ""}${lab.tasks.length < 2 ? " single" : ""}">
         <div class="stack tasks">
           <div class="taskpager"><button class="ghost small" data-tp="-1" ${fi <= 0 ? "disabled" : ""} aria-label="Previous task">${icon("left")}</button>
             <span class="small"><b>Task ${fi + 1}</b> <span class="muted">of ${lab.tasks.length} · ${ls.done.length} done</span></span>
             <button class="ghost small" data-tp="1" ${fi >= lab.tasks.length - 1 ? "disabled" : ""} aria-label="Next task">${icon("right")}</button><span class="grow"></span>
             <button class="linkbtn" id="allTasks">${focusTask[id] === "all" ? "One at a time" : "All tasks"}</button></div>
           ${lab.tasks.map((t, i) => { const done = ls.done.includes(i); const shown = hl[i];
-          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="u-g10 u-ais row"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}
-            ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>` : `
+          // Help from least to most revealing: the commands the task may need (challenges and troubleshooting), then the written hints.
+          const tiers = C.hintTiers(t, lab.track ? lab.commands : null), texts = tiers.filter(x => x.type === "text").length; let hn = 0;
+          const hintBox = x => x.type === "cmds" ? `<div class="tip-box"><b>Commands you may need.</b> <span class="cmdrow">${x.cmds.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</span></div>`
+            : `<div class="tip-box">${texts > 1 ? `<b>Hint ${++hn}.</b> ` : ""}${rich(x.text)}</div>`;
+          return `<div class="task ${done ? "done" : ""} ${i === nextIdx ? "next" : ""} ${i === fi ? "focus" : ""}"><div class="u-g10 u-ais row"><span class="tnum">${done ? icon("check") : i + 1}</span><div class="grow">${rich(t.text)}${done ? "" : `<p class="checked">${icon("check")}<span><b>Checked when</b> ${rich(C.checkedWhen(t))}</span></p>`}
+            ${done ? `<div class="explain"><b>Why it works.</b> ${rich(t.explain)}</div>${(t.ways || []).length ? `<div class="ways"><b>Other ways to do it</b><ul>${t.ways.map(w => `<li><code>${esc(w.cmd)}</code><span>${rich(w.note)}</span></li>`).join("")}</ul></div>` : ""}` : `
             ${stuck[id] && stuck[id].task === i ? `<div class="coach stuck" role="alert"><b>Heads-up:</b> after <code>${esc(stuck[id].line)}</code> this task can't be finished the usual way.${/^\s*sudo\s/.test(stuck[id].line) ? " (Without <code>sudo</code> the system would have stopped that with “Permission denied”: in your own home folder you never need it.)" : ""}
               <div class="u-g10 u-mt8 row"><button class="small primary" data-undo>Undo last command</button><button class="small ghost" data-restart>Restart part</button></div></div>` : ""}
             ${tip && tip.task === i ? `<div class="coach" role="status"><b>Coach:</b> ${rich(tip.say)}</div>` : ""}
-            ${t.hints.slice(0, shown).map((h, k) => `<div class="tip-box">${t.hints.length > 1 ? `<b>Hint ${k + 1}.</b> ` : ""}${rich(h)}</div>`).join("")}
-            <div class="u-g12 u-mt6 row small">${shown < t.hints.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
+            ${tiers.slice(0, shown).map(hintBox).join("")}
+            <div class="u-g12 u-mt6 row small">${shown < tiers.length ? `<button class="linkbtn" data-hint="${i}">${icon("bulb")}${shown ? "Another hint" : "Hint"}</button>` : ""}<button class="linkbtn" data-sol="${i}">Show solution</button></div>`}
             <pre class="code sol" id="sol${i}" hidden>${esc(t.solution)}</pre></div></div></div>`; }).join("")}
           <div class="u-g14 row small hide-one"><span class="muted">${ls.done.length} of ${lab.tasks.length} done</span><span class="grow"></span>${undoSnap[id] ? `<button class="ghost small" data-undo title="Undo: ${esc(undoSnap[id].line)}">Undo last command</button>` : ""}<button class="ghost small" id="labReset">Restart part</button></div></div>
-        <div class="term" id="term"><div class="term-out" id="termOut"></div>
-          <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>
+        <div class="termcol"><div class="termbar"><span class="small muted">Terminal</span><button class="ghost small" id="termFocus" aria-pressed="${!!termFocus[id]}">${termFocus[id] ? "Show all tasks" : "Focus terminal"}</button></div>
+        <div class="term" id="term" role="region" aria-label="Terminal"><div class="term-out" id="termOut"></div>
+          <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div></div>
       </div>
       <div class="labfoot stack small">
-        <div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>
-        <div class="u-g16 u-wrap row"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track === TROUBLE ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
+        ${lab.track ? "" : `<div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>`}
+        <div class="u-g16 u-wrap row"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
       <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
@@ -1078,7 +1120,7 @@
       if (coachTip[id] && fresh.includes(coachTip[id].task)) delete coachTip[id];
       if (typeof focusTask[id] === "number") delete focusTask[id];        // follow the next unfinished task
       fresh.forEach((i, k) => setTimeout(() => toast(`Task ${i + 1} complete`), k * 900));
-      if (ls.done.length === lab.tasks.length && !ls.completedAt) { ls.completedAt = Date.now(); setTimeout(() => toast(parts.every(p => labState(p.id).completedAt) ? "Lesson complete!" : "Part complete!"), fresh.length * 900); }
+      if (ls.done.length === lab.tasks.length && !ls.completedAt) { ls.completedAt = Date.now(); setTimeout(() => toast({ chain: "Level cleared!", oneliner: "Solved!", scenario: "Resolved!" }[lab.track] || (parts.every(p => labState(p.id).completedAt) ? "Lesson complete!" : "Part complete!")), fresh.length * 900); }
       save(); celebrate(); return true;
     };
     // Coaching: the first unfinished task whose known mistakes match what was typed and printed.
@@ -1143,10 +1185,16 @@
     };
     $("#term").onclick = () => { if (!getSelection().toString()) inp.focus(); };
     inp.onfocus = () => { if (matchMedia("(max-width: 900px)").matches) setTimeout(() => $("#term") && $("#term").scrollIntoView({ block: "end", behavior: "smooth" }), 250); };   // keep the prompt above the phone keyboard
-    $$("[data-hint]").forEach(b => b.onclick = () => { const i = +b.dataset.hint; hl[i] = Math.min(lab.tasks[i].hints.length, hl[i] + 1); const y = scrollY; renderLab(id); scrollTo(0, y); });
+    $$("[data-hint]").forEach(b => b.onclick = () => { const i = +b.dataset.hint; hl[i] = Math.min(C.hintTiers(lab.tasks[i], lab.track ? lab.commands : null).length, hl[i] + 1); const y = scrollY; renderLab(id); scrollTo(0, y); });
     $$("[data-sol]").forEach(b => b.onclick = () => { const el = $("#sol" + b.dataset.sol); el.hidden = !el.hidden; b.textContent = el.hidden ? "Show solution" : "Hide solution"; });
     $$("[data-man]").forEach(b => b.onclick = () => { inp.value = "man " + b.dataset.man; inp.focus(); });
-    const reset = () => { delete machines[id]; delete hintLevel[id]; delete coachTip[id]; delete focusTask[id]; delete undoSnap[id]; delete stuck[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
+    $("#termFocus").onclick = e => { e.stopPropagation(); termFocus[id] = !termFocus[id]; const y = scrollY; renderLab(id); scrollTo(0, y); const b = $("#termFocus"); if (b) b.focus({ preventScroll: true }); };
+    if (lc && !lc.end) labTick = setInterval(() => {            // the advisory clock: it counts up and says so when the suggested time has passed
+      const el = $("#advClock"), c = labClock[id]; if (!el || !c || c.end) return clearInterval(labTick);
+      const a = C.advisoryClock(Date.now() - c.start, lab.minutes); $("#advTime").textContent = a.text;
+      if (a.over && !el.classList.contains("over")) { el.classList.add("over"); $("#advNote").textContent = a.note; }
+    }, 1000);
+    const reset = () => { delete machines[id]; delete hintLevel[id]; delete labClock[id]; delete coachTip[id]; delete focusTask[id]; delete undoSnap[id]; delete stuck[id]; st.labs[id] = { done: [] }; save(); renderLab(id); };
     $("#labReset").onclick = reset; $("#labReset2").onclick = reset;
     $$("[data-undo]").forEach(b => b.onclick = undo); $$("[data-restart]").forEach(b => b.onclick = reset);
     $$("[data-tp]").forEach(b => b.onclick = () => { focusTask[id] = Math.max(0, Math.min(lab.tasks.length - 1, fi + +b.dataset.tp)); const y = scrollY; renderLab(id); scrollTo(0, y); });

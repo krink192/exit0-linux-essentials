@@ -388,9 +388,17 @@
   const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
     : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
   const estimateBasis = pp => `From ${plural(pp.seen, "first attempt")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
+  // Likely range is the main mark; the mean is a thin tick; the target line is labelled for contrast (not colour alone).
   function scoreBand(est, T, label) {
-    return `<div class="scorebar band" role="img" aria-label="${label} ${est.mean} percent, likely between ${est.low} and ${est.high}. The target is ${T} percent.">
-      <i style="width:${est.low}%"></i><b style="left:${est.low}%;width:${Math.max(1, est.high - est.low)}%"></b><span class="mark" style="left:${T}%"></span></div>`;
+    const span = Math.max(1, est.high - est.low);
+    return `<div class="scorebar band" role="img" aria-label="${label} if you sat it today: likely ${est.low} to ${est.high} percent. Point estimate ${est.mean} percent. The target is ${T} percent. An estimate, not a guarantee.">
+      <b class="range" style="left:${est.low}%;width:${span}%"></b>
+      <span class="tick" style="left:${est.mean}%" title="Point estimate ${est.mean}%"></span>
+      <span class="mark" style="left:${T}%"><span class="mark-label">${T}%</span></span></div>`;
+  }
+  function scoreBandSkeleton(T) {
+    return `<div class="scorebar band skeleton" role="img" aria-label="Estimated score not ready yet. The target is ${T} percent.">
+      <span class="mark" style="left:${T}%"><span class="mark-label">${T}%</span></span></div>`;
   }
   function renderToday() {
     const sk = C.streak(st.days, st.settings.goal), pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80;
@@ -403,9 +411,10 @@
       ${goalOpen ? `<div class="card stack goalcard"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div>` : ""}
       <div class="today-grid">${pipelineHTML(todaySteps())}
         <div class="today-side">
-          <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>${est.mean}%</b>of ${T}% target</span>`}</div>
-            ${est == null ? `<p class="muted small">${estimateWait(pp)} It counts only first attempts, so repeating questions can't inflate it.</p>`
-              : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">Likely ${est.low}–${est.high}%. ${estimateBasis(pp)}</p>`}</section>
+          <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>Likely ${est.low}–${est.high}%</b><span class="score-mean">mean ${est.mean}% · ${T}% target</span></span>`}</div>
+            ${est == null
+              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only first attempts, so repeating questions can't inflate it.</p>`
+              : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">If you sat it today: likely ${est.low}–${est.high}%. Mean about ${est.mean}%. An estimate, not a guarantee. ${estimateBasis(pp)}</p>`}</section>
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
               : `<p class="u-pad-x muted small">Nothing is below ${T}% yet. Once you've answered a few questions, the objectives you score lowest on are listed here.</p>`}</section>
@@ -654,12 +663,13 @@
   const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
-      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a promise.`;
+      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.`;
   const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   function heroCard() {
     const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
     const pct = p.chance == null ? null : Math.round(p.chance * 100);
     const focus = p.focus.map(f => f.obj);
+    const T = C.TARGET || 80;
     const head = est == null ? "Not enough fresh answers for an estimate yet."
       : est.mean >= 80 ? "You're in the ready range."
       : est.mean >= 65 ? "Close." : "Keep building.";
@@ -667,17 +677,20 @@
       : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
       : est.low >= 80 ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above 80%.";
     const nums = est == null
-      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><b class="big">—</b><span class="small muted">${plural(p.seen, "first attempt")} so far</span></div>`
-      : `<div class="u-g2 stack"><span class="small muted">Estimated score</span><b class="big">${est.mean}%</b><span class="small muted">Likely ${est.low}–${est.high}%</span></div>
+      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "first attempt")} so far</span></div>`
+      : `<div class="u-g2 stack"><span class="small muted">If you sat it today</span><b class="big">Likely ${est.low}–${est.high}%</b><span class="small muted">Mean ${est.mean}% · an estimate, not a guarantee</span></div>
         <div class="u-g2 stack"><span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Need ${p.need} of ${p.total} right</span></div>`;
     const btns = focus.length
       ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
       : est == null ? `<button class="primary" data-start="unseen">Answer new questions</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
+    const band = est == null
+      ? `<div class="hero-band">${scoreBandSkeleton(T)}<p class="small muted band-note">${estimateWait(p)}</p></div>`
+      : `<div class="hero-band">${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">${estimateBasis(p)}</p></div>`;
     return `<section class="card readyhero">
       <div class="hero-nums">${nums}
         <div class="u-g2 stack"><span class="small muted">Exam average</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No full exams yet" : "Last 3 full exams"}</span></div></div>
-      ${est == null ? "" : `<div class="hero-band">${scoreBand(est, C.TARGET || 80, "Estimated score")}<p class="small muted band-note">${estimateBasis(p)}</p></div>`}
+      ${band}
       <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
         <details class="small muted"><summary>How are these worked out?</summary><p>${passWhy(p)} Exam average is the plain average of your last three full exams, including questions you'd seen before, so it can read higher than the estimate.</p></details></div></section>`;
   }

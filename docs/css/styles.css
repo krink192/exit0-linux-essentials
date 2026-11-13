@@ -860,18 +860,29 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
 .pipe-row.next:focus-visible { outline-color: var(--pipe-next-ink); }
 .sect-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .sect-head h2, .weak-head h2 { font-size: var(--fs-row); }
-.score-now { color: var(--muted); font-size: var(--fs-sm); }
-.score-now b { font-size: var(--fs-q); font-weight: 700; color: var(--ink); margin-right: 3px; }
+.score-now { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--muted); font-size: var(--fs-sm); text-align: right; }
+.score-now b { font-size: var(--fs-q); font-weight: 700; color: var(--ink); line-height: 1.2; }
+.score-now .score-mean { font-weight: 400; color: var(--muted); font-size: var(--fs-xs); }
 .scorebar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin-top: 12px; }
 .scorebar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .scorebar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-/* likely range: solid up to the low end, lighter across the range */
-.scorebar.band i { border-radius: 999px 0 0 999px; }
-.scorebar.band b { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 40%, var(--track)); border-radius: 0 999px 999px 0; }
+/* Likely range is the main mark; mean is a thin tick; target line is full-ink + label (3:1, not colour alone). */
+.scorebar.band { height: 10px; margin-top: 22px; overflow: visible; }
+.scorebar.band .range { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, var(--track)); border-radius: 999px; }
+.scorebar.band .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
+.scorebar.band .mark { top: -6px; bottom: -6px; width: 2px; background: var(--ink); opacity: 1; }
+.scorebar.band .mark-label { position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+  font: 600 var(--fs-xs) var(--ui); color: var(--ink); white-space: nowrap; line-height: 1; }
+.scorebar.band.skeleton { background: var(--sunk); border: 1px solid var(--line); }
+.scorebar.band.skeleton .mark { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .scorebar.band.skeleton { animation: none; }
+}
 .band-note { margin-top: 8px; }
 .hero-nums { flex-wrap: wrap; row-gap: 16px; }
 .hero-band { flex: 1 1 100%; }
-.hero-band .scorebar { margin-top: 0; }
+.hero-band .scorebar { margin-top: 22px; }
+.hero-band .scorebar.band.skeleton { margin-top: 8px; }
 .today-side .weak { display: flex; flex-direction: column; margin: 0 -10px; }
 .weak-head, .weak-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.5em 3.5em; gap: 12px; align-items: center; padding: 0 10px; }
 .weak-head { align-items: baseline; padding-bottom: 8px; font-size: var(--fs-sm); color: var(--muted); }

@@ -63,7 +63,7 @@ The app isn't code-signed yet. Click **More info → Run anyway**.
 
 ## What's inside
 
-- **400 practice questions** in ten blueprint-matched sets, each with a hint, an explanation and a note on why every wrong option is wrong
+- **459 practice questions**: ten blueprint-matched sets of 40, plus reworded and typed variants of the same facts for random exams and reviews, each with a hint, an explanation and a note on why every wrong option is wrong
 - **Exam mode:** 40 questions, 60 minutes, weighted exactly like the real exam
 - **Quick modes:** question of the day, Quick 10, 5- and 10-minute timed quizzes, and Level Up, a nine-step ladder that gets harder
 - **Fixed practice exams A to J:** ten set exams with no shared questions, so a retake shows real improvement

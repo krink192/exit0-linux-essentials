@@ -118,6 +118,7 @@
     chevron: '<path d="M9 6l6 6-6 6"/>',
     search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
   };
   const icon = (n, extra) => `<svg class="i${extra ? " " + extra : ""}" viewBox="0 0 24 24" aria-hidden="true">${ICON[n]}</svg>`;
   // Screen readers: one live region outside #app, which is redrawn on every render. A region inserted with the new
@@ -209,7 +210,7 @@
   }
   applyTheme();
 
-  let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false;
+  let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, navKind = "all", warned5 = null;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
   let cs = null;            // active flashcard session
   const SP = () => st.settings.study;   // Study builder choices, remembered between visits
@@ -291,8 +292,8 @@
   window.addEventListener("hashchange", render);
 
   // ------------------------------------------------------------------ start sessions
-  function begin(s) { st.current = s; confirming = false; showGrid = false; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
-  function startTest() { begin(C.buildTest(BANK, st.qstats, {})); }
+  function begin(s) { st.current = s; confirming = false; showGrid = false; navKind = "all"; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
+  function startTest(e) { begin(C.buildTest(BANK, st.qstats, { timed: !(e && e.currentTarget && e.currentTarget.dataset.untimed) })); }
   function startForm(f) { const s = C.buildTest(BANK, st.qstats, { form: f }); if (s) begin(s); }
   const startBuilt = s => { if (s) begin(s); else toast("No questions match those choices"); };
   function startMarked() { const ids = C.markedIds(BANK, st); if (ids.length) startStudy({ ids, count: Math.min(20, ids.length), label: "Bookmarked" }); else toast("Nothing bookmarked yet"); }
@@ -549,7 +550,9 @@
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
         <div class="cta"><button class="primary big" data-start="test">${icon("test")}Start exam</button>
           <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
-        <div class="rules"><span>${icon("clock")}60:00 timer</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
+        <div class="rules"><span>${icon("clock")}60:00 timer, which you can hide</span><span>${icon("terminal")}At least ${C.EXAM_TYPED_MIN} typed answers</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
+        <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward readiness.</p>
+          <button data-start="test" data-untimed="1">${icon("clock")}Start an untimed run</button></div>
       </section>
       ${stats}${next}${formsCard()}${tips}`);
     wireResume();
@@ -1726,6 +1729,7 @@
     const hintOn = S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
     S.conf = S.conf || {};
+    (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
     const rated = S.conf[id] === true || S.conf[id] === false;
     if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
@@ -1747,11 +1751,25 @@
     }
     const ok = revealed && C.isCorrect(q, a);
     const confWrong = revealed && rated && S.conf[id] === true && !ok;
-    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" :C.extraSudo(q, a) ? "Right command, but drop sudo" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+    const near = revealed && q.type === "fill" ? C.checkTyped(q, a).near : null;
+    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" : near === "sudo" ? "Right command, but drop sudo" : near ? "Almost" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
         ${confWrong ? `<p class="conf-flag">${icon("flag")} You marked this <b>sure</b>, but it was wrong. Worth another look.</p>` : ""}
-        ${!ok && C.extraSudo(q, a) ? `<p>Nothing in the question needs root, and the exam wants the shortest command that does the job. Running a command like this as root also removes the permission checks that would stop a mistake.</p>` : ""}
         ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
-        <div>${rich(q.explanation)}</div>${studyRef(q)}</div>` : "";
+        ${explain(q)}${studyRef(q)}</div>` : "";
+    const nav = C.navCounts(BANK, S), states = C.navStates(BANK, S);
+    const shown = new Set(C.navFilter(BANK, S, navKind));
+    const cell = x => { let c = x.state === "answered" ? "ans" : x.state === "unseen" ? "uns" : "una", word = x.state;
+      if (S.study && S.checked[x.id]) { const r = C.isCorrect(BANK.byId[x.id], S.answers[x.id]); c = r ? "ok" : "no"; word = r ? "correct" : "wrong"; }
+      return `<button data-jump="${x.i}" class="${c}${x.i === S.cur ? " cur" : ""}" aria-label="Question ${x.i + 1}, ${word}${x.flagged ? ", flagged" : ""}"${x.i === S.cur ? ' aria-current="true"' : ""}>${x.i + 1}${x.flagged ? icon("flag", "nf") : ""}</button>`; };
+    const navPanel = showGrid ? `<section class="card navpanel" aria-label="All questions">
+        <div class="seg" role="group" aria-label="Show questions">
+          <button type="button" data-nav="all" class="${navKind === "all" ? "on" : ""}" aria-pressed="${navKind === "all"}">All ${n}</button>
+          <button type="button" data-nav="open" class="${navKind === "open" ? "on" : ""}" aria-pressed="${navKind === "open"}">Not answered ${nav.open}</button>
+          <button type="button" data-nav="flagged" class="${navKind === "flagged" ? "on" : ""}" aria-pressed="${navKind === "flagged"}">Flagged ${nav.flagged}</button></div>
+        ${shown.size ? `<div class="qgrid">${states.filter(x => shown.has(x.i)).map(cell).join("")}</div>`
+          : `<p class="small muted">${navKind === "flagged" ? "Nothing flagged. Use Flag under a question to mark it for another look." : "Every question has an answer."}</p>`}
+        <ul class="navlegend"><li><i class="nk ans"></i>Answered <b>${nav.answered}</b></li><li><i class="nk una"></i>Unanswered <b>${nav.unanswered}</b></li>
+          <li><i class="nk uns"></i>Unseen <b>${nav.unseen}</b></li><li>${icon("flag", "nf")}Flagged <b>${nav.flagged}</b></li></ul></section>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
     // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
@@ -1766,17 +1784,16 @@
         <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : "Study"} page.">${icon("x")}</button>
         <div class="progress" id="prog" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${100 * done / n}%"></i></div>
         <span class="count hide-sm" id="cnt">${done} of ${n} answered</span>
-        ${S.deadline ? `<span class="timer" id="timer">${fmt((S.deadline - Date.now()) / 1000)}</span>` : ""}
-        ${n > 1 ? `<button class="ghost hide-sm" id="gridBtn" aria-expanded="${showGrid}">${showGrid ? "Hide" : "All"} questions</button>
+        ${S.deadline ? `<button type="button" class="timer${S.hideTimer ? " off" : ""}" id="timer" aria-pressed="${!S.hideTimer}" aria-label="${S.hideTimer ? "Show the timer" : "Hide the timer"}" title="${S.hideTimer ? "Show the timer" : "Hide the timer. It keeps running."}">${icon("clock")}<span id="timeVal"${S.hideTimer ? " hidden" : ""}>${fmt((S.deadline - Date.now()) / 1000)}</span></button>` : ""}
+        ${n > 1 ? `<button class="ghost navbtn" id="gridBtn" aria-expanded="${showGrid}" aria-label="${showGrid ? "Hide the question list" : "All questions"}">${icon("grid")}<span class="hide-sm">${showGrid ? "Hide" : "All"} questions</span></button>
         <button id="submit">${isTest ? "Submit" : "Finish"}</button>` : ""}</div></div>
       <main class="page qpage">
         <h1 class="sr">${esc(S.label)}: question ${S.cur + 1} of ${n}</h1>
         ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : "Finish this study session?"}</h3>
-          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged.` : ""}</p>
-          <div class="row"><button id="keep">Keep working</button><button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
-        ${showGrid ? `<div class="card"><div class="qgrid">${S.qids.map((qid, i) => { let c = C.answered(BANK.byId[qid], S.answers[qid]) ? "ans" : "";
-            if (S.study && S.checked[qid]) c = C.isCorrect(BANK.byId[qid], S.answers[qid]) ? "ok" : "no";
-            return `<button data-jump="${i}" class="${c}${S.flags[qid] ? " fl" : ""}${i === S.cur ? " cur" : ""}" aria-label="Question ${i + 1}">${i + 1}</button>`; }).join("")}</div></div>` : ""}
+          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
+          <div class="row u-wrap"><button id="keep">Keep working</button>${n - done ? `<button data-review="open">Review unanswered</button>` : ""}${flagged ? `<button data-review="flagged">Review flagged</button>` : ""}
+            <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
+        ${navPanel}
         <div class="qmeta"><span class="qpos">Question ${S.cur + 1} of ${n}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
@@ -1800,7 +1817,7 @@
       announcedId = S.start + "|" + id;
       const right = q.type === "fill" ? (q.accept || [])[0] || ""
         : S.optOrder[id].map((oi, pos) => q.answer.includes(oi) ? L[pos] : null).filter(Boolean).join(" and ");
-      announce(ok ? "Correct." : `${C.answered(q, a) ? "Not quite." : "Not answered."} Correct answer: ${right}.`);
+      announce(ok ? "Correct." : `${near ? "Almost. " + C.TYPED_NEAR[near] : C.answered(q, a) ? "Not quite." : "Not answered."} Correct answer: ${right}.`);
     }
     $$("#confSeg button").forEach(b => b.onclick = () => {
       const v = b.dataset.c === "1";
@@ -1809,7 +1826,12 @@
     });
     if ($("#flag")) $("#flag").onclick = () => { S.flags[id] = !S.flags[id]; save(); renderExam(); };
     wireMarks(app, () => { const y = scrollY; renderExam(); scrollTo(0, y); });
-    if ($("#gridBtn")) $("#gridBtn").onclick = () => { showGrid = !showGrid; renderExam(); };
+    if ($("#gridBtn")) $("#gridBtn").onclick = () => { showGrid = !showGrid; if (!showGrid) navKind = "all"; renderExam(); $("#gridBtn").focus(); };
+    $$("[data-nav]").forEach(b => b.onclick = () => { navKind = b.dataset.nav; renderExam(); const f = $(`[data-nav="${navKind}"]`); if (f) f.focus(); });
+    $$("[data-review]").forEach(b => b.onclick = () => {      // from the submit card: open the list on what still needs a look, and go to the first one
+      navKind = b.dataset.review; showGrid = true; confirming = false;
+      const to = C.navNext(C.navFilter(BANK, S, navKind), -1); if (to >= 0) move(to); else renderExam(); });
+    if ($("#timer")) $("#timer").onclick = () => { S.hideTimer = !S.hideTimer; save(); renderExam(); $("#timer").focus(); };
     if ($("#submit")) $("#submit").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
     $("#exit").onclick = () => { save(); go(isTest ? "test" : S.mode === "review" ? "review" : "study"); };
     if ($("#hintBtn")) $("#hintBtn").onclick = () => showHint(S, id);
@@ -1831,10 +1853,14 @@
       });
     }
     timerId = setInterval(() => {
-      const t = $("#timer"); if (!t) return clearInterval(timerId);
-      if (S.deadline) { const r = (S.deadline - Date.now()) / 1000; t.textContent = fmt(r); t.classList.toggle("low", r <= 300); if (r <= 0) { clearInterval(timerId); finish(); } }
-      else t.textContent = fmt((Date.now() - S.start) / 1000);
+      const t = $("#timer"), v = $("#timeVal"); if (!t || !v || !S.deadline) return clearInterval(timerId);
+      const r = (S.deadline - Date.now()) / 1000; v.textContent = fmt(r); t.classList.toggle("low", r <= 300);
+      if (r <= 300 && r > 240 && warned5 !== S.start) {       // said once, so a hidden timer can't spring a surprise
+        warned5 = S.start; announce("5 minutes left."); if (S.hideTimer) toast("5 minutes left");
+      }
+      if (r <= 0) { clearInterval(timerId); finish(); }
     }, 1000);
+    const tl = $("#timer"); if (tl && S.deadline) tl.classList.toggle("low", (S.deadline - Date.now()) / 1000 <= 300);
   }
   function showHint(S, id) {
     if (!S.study || S.checked[id] || !BANK.byId[id].hint) return;
@@ -1845,8 +1871,18 @@
   function fillAnswerInfo(q, a, hideList) {
     const r = q.lab ? C.runLab(q, a) : null;
     const out = r && r.out ? (r.out.length > 1200 ? r.out.slice(0, 1200) + "\n…" : r.out) : "";
-    return (hideList ? "" : `<div class="mono small">${q.lab ? "For example" : "Accepted"}: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>`) +
+    const t = C.checkTyped(q, a);
+    return (t.near ? `<p class="nearnote">${icon("bulb")}<span>${esc(C.TYPED_NEAR[t.near])}${t.near === "sudo" ? " Running a command as root also removes the permission checks that would stop a mistake." : ` You typed <code>${esc(t.typed)}</code>; the answer is <code>${esc(t.best)}</code>.`}</span></p>` : "") +
+      (hideList ? "" : `<div class="mono small">${q.lab ? "For example" : "Accepted"}: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>`) +
       (r ? `<div class="small muted">${r.ok ? "Your command was run on a simulated system and did the job." : "Your command was run on a simulated system and didn't produce the result asked for."}${out ? " It printed:" : ""}</div>${out ? `<pre class="code small">${esc(out)}</pre>` : ""}` : "");
+  }
+  // Two tiers: the first sentence is the answer in short; the rest is the longer explanation. On phones the rest
+  // sits behind a "More" disclosure so the next question stays within reach; on wider screens it is simply shown.
+  function explain(q) {
+    const e = C.splitExplanation(q.explanation);
+    if (!e.rest) return `<div class="expl"><p class="expl-short">${rich(e.short)}</p></div>`;
+    return `<div class="expl"><p class="expl-short">${rich(e.short)}</p><p class="expl-rest">${rich(e.rest)}</p>
+      <details class="expl-more"><summary>More on this</summary><p>${rich(e.rest)}</p></details></div>`;   // styles.css shows one of the two, by screen width
   }
   // "Why that's wrong": a one-line note under each wrong option once the answer is revealed.
   function whyNote(q, oi) {
@@ -1900,7 +1936,7 @@
     const res = C.grade(BANK, S);
     lastRec = C.recordResult(st, BANK, S, res);
     celebrate();
-    st.current = null; confirming = false; showGrid = false; save();
+    st.current = null; confirming = false; showGrid = false; navKind = "all"; save();
     const cal = C.calibration(lastRec, BANK);
     reviewFilter = cal.focus.length ? "focus" : res.score < res.total ? "wrong" : "all";
     go("results");
@@ -1941,7 +1977,7 @@
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}${confLabel(id, ok)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p class="u-fw6">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
-        <div class="ex">${rich(q.explanation)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
+        <div class="ex">${explain(q)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
         <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
     };
     const calLine = cal.sureN

@@ -3,7 +3,7 @@
 import json, sys, os, collections, re
 sys.path.insert(0, os.path.dirname(__file__))
 from common import BANK, MARK
-import t1, t2, t3, t4, t5, t6, t7  # noqa: F401  (populate BANK; t6 = harder pack; t7 = targeted set, form J)
+import t1, t2, t3, t4, t5, t6, t7, t8  # noqa: F401  (populate BANK; t6 = harder pack; t7 = targeted set, form J; t8 = variants)
 from hints import HINTS
 from whys import WHY
 
@@ -71,7 +71,9 @@ def build():
     ids = set()
     for raw in BANK:
         o = raw["o"]
-        seen[o] += 1
+        variant = raw.get("variant_of")
+        if not variant:                   # variants sit outside the blueprint sets, so they don't count toward them
+            seen[o] += 1
         n = seen[o]
         # IDs are written in the question files and never change (see tools/common.py), so progress saved by ID
         # still points at the same question after questions are added, moved or removed.
@@ -83,12 +85,15 @@ def build():
         q = {
             "id": raw["id"],
             "obj": o,
-            "form": raw.get("form") or FORMS[(n - 1) % len(FORMS)],
+            "form": None if variant else raw.get("form") or FORMS[(n - 1) % len(FORMS)],
+            "variantOf": variant,
             "q": raw["q"].strip(),
             "code": raw.get("code"),
             "explanation": raw["ex"].strip(),
         }
-        if raw.get("form") and raw["form"] not in FIXED:
+        if variant and raw.get("form"):
+            errors.append(f"{q['id']}: a variant can't be pinned to a form")
+        elif raw.get("form") and raw["form"] not in FIXED:
             errors.append(f"{q['id']}: pinned to unknown form {raw['form']}")
         if raw["kind"] == "fill":
             q["type"] = "fill"
@@ -115,7 +120,8 @@ def build():
             q["options"], q["answer"] = opts, ans
             if len(ans) > 1:
                 q["type"] = "multi"
-                q["q"] += f" (Choose {WORDS[len(ans)]}.)"
+                if not re.search(r"\(Choose (TWO|THREE)\.\)$", q["q"]):     # some sources already say it
+                    q["q"] += f" (Choose {WORDS[len(ans)]}.)"
             else:
                 q["type"] = "single"
         q["level"] = raw.get("level") or difficulty(q)
@@ -164,6 +170,24 @@ def build():
                 errors.append(f"CONFLICTS: {i} is in two sets")
             else:
                 by_id[i]["conflict"] = n
+    # A variant rewords its original, so the two give each other away: the variant joins the original's conflict
+    # set, or the family gets a set of its own.
+    nset = len(CONFLICTS)
+    for q in out:
+        base = by_id.get(q.get("variantOf") or "")
+        if not q.get("variantOf"):
+            continue
+        if not base or base is q:
+            errors.append(f"{q['id']}: variant of unknown question {q['variantOf']}")
+        elif base.get("variantOf"):
+            errors.append(f"{q['id']}: {base['id']} is itself a variant; name the original")
+        elif base["obj"] != q["obj"]:
+            errors.append(f"{q['id']}: a variant stays in its original's objective ({base['obj']})")
+        else:
+            if "conflict" not in base:
+                nset += 1
+                base["conflict"] = nset
+            q["conflict"] = base["conflict"]
 
     # blueprint checks
     for o, (_, w) in OBJ.items():
@@ -215,7 +239,7 @@ def assign_forms(out):
     rnd = random.Random(10160)
     byobj = collections.defaultdict(list)
     for q in out:
-        if q["form"] not in FIXED:          # pinned sets keep their questions
+        if q["form"] and q["form"] not in FIXED:          # pinned sets keep their questions; variants have no form
             byobj[q["obj"]].append(q)
     cset = {}
     for i, grp in enumerate(CONFLICTS):
@@ -224,7 +248,7 @@ def assign_forms(out):
 
     byid = {q["id"]: q for q in out}
     groups = [[byid[i] for i in grp if i in byid] for grp in CONFLICTS]
-    totals = collections.Counter(q["type"] for q in out if q["form"] not in FIXED)
+    totals = collections.Counter(q["type"] for q in out if q["form"] and q["form"] not in FIXED)
 
     def score():
         s = 0.0
@@ -267,7 +291,9 @@ def stats(out):
         if L[a] == max(L) and L.count(max(L)) == 1:
             longest += 1
     types = collections.Counter(q["type"] for q in out)
+    variants = [q for q in out if q.get("variantOf")]
     print(f"questions: {len(out)}  types: {dict(types)}")
+    print(f"  of which variants: {len(variants)} ({sum(1 for q in variants if q['type'] == 'fill')} typed) on {len({q['variantOf'] for q in variants})} originals")
     print(f"single-answer items where the correct option is the unique longest: {longest}/{len(single)} ({longest/len(single):.0%}; chance with 4 options = 25%)")
     for f in ALL_FORMS:
         t = collections.Counter(q["type"] for q in out if q["form"] == f)

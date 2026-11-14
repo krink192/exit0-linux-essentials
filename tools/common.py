@@ -21,6 +21,8 @@ Optional extras (used by the targeted set in t7.py, which is fixed to form J):
                the check passes, so any working command counts. tools/test_questions.js runs every accepted
                answer (must pass), every reject example (must fail) and the untouched setup (must fail).
   form         pin the question to a form instead of letting build.py assign one
+  variant_of   the ID of the question this one rewords (tools/t8.py). A variant belongs to no fixed practice exam
+               and shares its original's conflict set, so the two never appear in the same exam or study set.
 """
 BANK = []
 MARK = "✔"
@@ -35,11 +37,11 @@ def lab(setup, check, reject=()):
     return {"setup": setup, "check": check, "reject": list(reject)}
 
 
-def S(id, q, opts, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, why=None, form=None):
+def S(id, q, opts, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, why=None, form=None, variant_of=None):
     BANK.append(dict(id=id, o=id.rsplit("-", 1)[0], kind="choice", q=q, opts=opts, ex=ex, code=code,
-                     run=run, expect=expect, user=user, level=level, hint=hint, why=why, form=form))
+                     run=run, expect=expect, user=user, level=level, hint=hint, why=why, form=form, variant_of=variant_of))
 
 
-def F(id, q, acc, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, lab=None, form=None):
+def F(id, q, acc, ex, code=None, run=None, expect=None, user=False, level=None, hint=None, lab=None, form=None, variant_of=None):
     BANK.append(dict(id=id, o=id.rsplit("-", 1)[0], kind="fill", q=q, acc=acc, ex=ex, code=code,
-                     run=run, expect=expect, user=user, level=level, hint=hint, lab=lab, form=form))
+                     run=run, expect=expect, user=user, level=level, hint=hint, lab=lab, form=form, variant_of=variant_of))

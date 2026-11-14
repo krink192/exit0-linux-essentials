@@ -41,22 +41,55 @@
 
   // ------------------------------------------------------------- bank index
   function indexBank(bank) {
-    const byId = {}, byObj = {};
-    for (const q of bank.questions) { byId[q.id] = q; (byObj[q.obj] = byObj[q.obj] || []).push(q.id); }
-    return Object.assign({}, bank, { byId, byObj });
+    const byId = {}, byObj = {}, family = {};
+    for (const q of bank.questions) {
+      byId[q.id] = q; (byObj[q.obj] = byObj[q.obj] || []).push(q.id);
+      const f = q.variantOf || q.id; (family[f] = family[f] || []).push(q.id);
+    }
+    return Object.assign({}, bank, { byId, byObj, family });
   }
   const topicOf = o => o.split(".")[0];
 
+  // ------------------------------------------------------------- variants
+  // A variant (question.variantOf) asks about the same fact as its original in other words. The original and its
+  // variants are a family: one fact for cold evidence, mastery days, "new" questions and the review schedule.
+  /** The IDs that ask about the same fact as `id`, itself included. */
+  function familyOf(bank, id) {
+    const q = bank.byId[id]; if (!q) return [id];
+    return (bank.family && bank.family[q.variantOf || q.id]) || [id];
+  }
+  const wasSeen = (qstats, id) => !!(qstats[id] && qstats[id].seen);
+  /** When another wording of this fact was last answered (ms), or 0 when none has been. */
+  function siblingSeenAt(bank, qstats, id) {
+    let at = 0;
+    for (const f of familyOf(bank, id)) if (f !== id && wasSeen(qstats, f)) at = Math.max(at, qstats[f].at || 1);
+    return at;
+  }
+  /** The wording of this fact that was answered most recently: its review schedule stands for the family. */
+  function familyLead(bank, qstats, id) {
+    const fam = familyOf(bank, id); if (fam.length < 2) return id;
+    let lead = id, best = -1;
+    for (const f of fam) { if (!wasSeen(qstats, f)) continue; const at = qstats[f].at || 0; if (at > best) { best = at; lead = f; } }
+    return lead;
+  }
+  /** Another wording for a question that is due: the family member seen longest ago, never-seen ones first. */
+  function rotateVariant(bank, qstats, id, rand) {
+    const fam = familyOf(bank, id); if (fam.length < 2) return id;
+    const age = f => wasSeen(qstats, f) ? (qstats[f].at || 1) : 0;
+    return shuffle(fam, rand).sort((a, b) => age(a) - age(b))[0];
+  }
+  /** Facts in the bank (families), and how many of them have been answered in any wording. */
+  const factCount = bank => Object.keys(bank.family || {}).length || bank.questions.length;
+  function factsSeen(bank, qstats) {
+    let n = 0; for (const f in bank.family) if (bank.family[f].some(id => wasSeen(qstats, id))) n++;
+    return n;
+  }
+
   // ------------------------------------------------------------- grading
   /** A wrong fill answer that would be right without a leading `sudo`: shown as "drop sudo", still marked wrong. */
-  function extraSudo(q, a) {
-    if (!q || q.type !== "fill" || a == null || isCorrect(q, a)) return false;
-    const n = norm(a); if (!/^sudo /.test(n)) return false;
-    if (q.accept.some(x => norm(x) === n.slice(5))) return true;
-    const r = needlessSudo(q, a) ? runLab(q, n.slice(5)) : null; return !!(r && r.ok);
-  }
+  function extraSudo(q, a) { return !!q && q.type === "fill" && checkTyped(q, a).near === "sudo"; }
   /** A leading sudo on a question none of whose listed answers uses sudo: the task doesn't need root. */
-  function needlessSudo(q, a) { return /^sudo /.test(norm(a)) && !q.accept.some(x => /^sudo /.test(norm(x))); }
+  function needlessSudo(q, a) { return /^sudo /.test(norm(a)) && !(q.accept || []).some(x => /^sudo /.test(norm(x))); }
   function answered(q, a) { return q.type === "fill" ? norm(a) !== "" : Array.isArray(a) && a.length > 0; }
   // Type-the-command questions with a `lab` block ({ setup, check }) are also graded by running the answer in the lab
   // shell (shell.js) on a fresh simulated machine: any command that leaves the machine in the checked state counts,
@@ -84,12 +117,46 @@
     labCache.set(key, res);
     return res;
   }
+  // What makes a wrong typed answer a near miss, and what to tell the learner. The exam marks typed answers
+  // strictly, so a near miss still counts as wrong: the note says what to fix.
+  const TYPED_NEAR = {
+    sudo: "Right command, but drop sudo. Nothing in the question needs root, and the exam wants the shortest command that does the job.",
+    prompt: "Leave out the prompt character and type only the command.",
+    quoted: "Type the answer without quotes around it.",
+    dash: "The dash belongs to the option, so type it too.",
+    case: "Right letters, wrong capitals. Linux is case-sensitive, and so is the exam.",
+    space: "Check the spaces: the parts of a command line are separated by single spaces.",
+  };
+  /** Grade a typed short answer. Self-contained: it needs only the question ({ accept, lab? }) and the text typed.
+   *  Returns { ok, answered, typed, how, near, best }:
+   *    typed  the answer as graded (trimmed, runs of spaces collapsed)
+   *    how    "listed" (one of the accepted spellings) or "ran" (lab-checked: the command did the job); null when wrong
+   *    near   a key of TYPED_NEAR when a wrong answer is one small step from right, else null
+   *    best   the accepted answer to show: the one the near miss was aiming at, else the first listed */
+  function checkTyped(q, a) {
+    const accept = (q && q.accept) || [], typed = norm(a);
+    const res = { ok: false, answered: typed !== "", typed, how: null, near: null, best: accept.length ? accept[0] : "" };
+    if (!res.answered) return res;
+    const listed = x => accept.find(y => norm(y) === x);
+    const ran = x => { if (needlessSudo(q, x)) return false; const r = runLab(q, x); return !!(r && r.ok); };   // "no extra sudo" holds for lab-checked questions too
+    const hit = listed(typed);
+    if (hit != null) return Object.assign(res, { ok: true, how: "listed", best: hit });
+    if (ran(typed)) return Object.assign(res, { ok: true, how: "ran", best: typed });
+    const good = x => { if (!x || x === typed) return null; const l = listed(x); return l != null ? l : ran(x) ? x : null; };
+    const quoted = /^(["'`])(.+)\1$/.exec(typed);
+    const tries = [
+      ["sudo", () => /^sudo /.test(typed) ? good(typed.slice(5)) : null],
+      ["prompt", () => /^[$#] /.test(typed) ? good(typed.slice(2)) : null],
+      ["quoted", () => quoted ? good(norm(quoted[2])) : null],
+      ["dash", () => /^-/.test(typed) ? null : accept.find(y => /^-/.test(norm(y)) && norm(y).replace(/^-+/, "") === typed)],
+      ["case", () => accept.find(y => norm(y).toLowerCase() === typed.toLowerCase())],
+      ["space", () => accept.find(y => norm(y).replace(/ /g, "") === typed.replace(/ /g, ""))],
+    ];
+    for (const [near, find] of tries) { const best = find(); if (best != null) return Object.assign(res, { near, best }); }
+    return res;
+  }
   function isCorrect(q, a) {
-    if (q.type === "fill") {
-      if (a == null) return false; if (q.accept.some(x => norm(x) === norm(a))) return true;
-      if (needlessSudo(q, a)) return false;           // the "no extra sudo" rule holds for lab-checked questions too
-      const r = runLab(q, a); return !!(r && r.ok);
-    }
+    if (q.type === "fill") return checkTyped(q, a).ok;
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
   }
@@ -207,6 +274,32 @@
     return s;
   }
 
+  // The real exam mixes multiple choice with typed (fill-in) questions, and so does every fixed practice exam
+  // (5 to 8 each). A randomly drawn exam holds at least this many typed questions too.
+  const EXAM_TYPED_MIN = 5;
+  /** Swap multiple-choice picks for typed questions of the same objective until `ids` holds `min` typed ones.
+   *  The blueprint stays exact (a swap never leaves its objective) and no conflict set is used twice. The pick that
+   *  goes is the one the learner needs least; the typed one that comes in is the one they need most. */
+  function ensureTyped(bank, ids, qstats, min, rand) {
+    const typed = id => bank.byId[id].type === "fill", set = conflictSet(bank);
+    const out = ids.slice();
+    let have = out.filter(typed).length;
+    for (let pass = 0; have < min && pass < min; pass++) {
+      const before = have;
+      for (const o of shuffle(Object.keys(bank.objectives), rand)) {
+        if (have >= min) break;
+        const drop = shuffle(out.filter(id => bank.byId[id].obj === o && !typed(id)), rand).sort((a, b) => priority(qstats, b) - priority(qstats, a))[0];
+        if (!drop) continue;
+        const used = new Set(out.filter(id => id !== drop).map(set).filter(g => g != null));
+        const add = shuffle((bank.byObj[o] || []).filter(id => typed(id) && out.indexOf(id) < 0 && !used.has(set(id))), rand)
+          .sort((a, b) => Math.floor(priority(qstats, a)) - Math.floor(priority(qstats, b)))[0];
+        if (!add) continue;
+        out[out.indexOf(drop)] = add; have++;
+      }
+      if (have === before) break;
+    }
+    return out;
+  }
   /** Exam mode: 40 questions with exactly `weight` questions from every objective, timed, answers hidden.
    *  No two questions come from the same conflict set, so one question never gives away another. */
   function buildTest(bank, qstats, opts) {
@@ -215,9 +308,12 @@
     // A fixed practice exam is one of the bank's ten sets: always the same 40 questions, each a full blueprint,
     // no question shared with another set. Scores on the same set are comparable from one attempt to the next.
     if (opts.form) ids = bank.questions.filter(q => q.form === opts.form).map(q => q.id);
-    else for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand, conflictSet(bank)));
+    else {
+      for (const o of Object.keys(bank.objectives)) ids = ids.concat(pickBy(bank.byObj[o], qstats || {}, bank.objectives[o].weight, rand, conflictSet(bank)));
+      ids = ensureTyped(bank, ids, qstats || {}, EXAM_TYPED_MIN, rand);
+    }
     if (!ids.length) return null;
-    const label = opts.form ? "Practice exam " + opts.form : opts.study ? "Practice test · answers shown" : "Exam";
+    const label = opts.form ? "Practice exam " + opts.form : opts.study ? "Practice test · answers shown" : opts.timed === false ? "Exam · untimed" : "Exam";
     return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now, form: opts.form });
   }
 
@@ -337,10 +433,16 @@
   // Mastery is successive relearning: unique calendar days with a cold correct answer in the objective.
   // Attempted → Familiar (1 day) → Proficient (2) → Mastered (3). Same-day repeats do not advance it.
   const MASTERY_DAYS = 3;
-  /** How much of a mastery day a cold correct is worth (1 = full day). Item 6 variants will return less than 1. */
-  function coldDayCredit(q) {
-    if (q && q.variantOf) return 0;   // placeholder: a pure variant never fills a day on its own
-    return 1;
+  /** How much of a mastery day a cold correct is worth (1 = full day). A variant is worth as much as its original:
+   *  what keeps a reworded repeat from counting is the cold rule (isCold), which looks at the whole family. */
+  function coldDayCredit(q) { return q ? 1 : 0; }
+  /** Is an answer to `id` at `now` cold evidence: a first attempt at this fact, or one after COLD_DAYS without seeing
+   *  it in any wording? Having just answered a variant makes the original a repeat, and the other way round. */
+  function isCold(bank, qstats, id, now) {
+    const s = qstats[id], gap = COLD_DAYS * DAY_MS;
+    if (s && s.seen && !(s.at != null && now - s.at >= gap)) return false;
+    const sib = siblingSeenAt(bank, qstats, id);
+    return !(sib && now - sib < gap);
   }
   /** Day numbers that already count toward mastery for this question (legacy: one day from ev === 1). */
   function coldDaysOf(s) {
@@ -406,6 +508,51 @@
     return Object.keys(qstats).filter(id => bank.byId[id] && qstats[id].last === false);
   }
 
+  // ------------------------------------------------------------- exam navigator
+  // Every question in a session is Answered, Unanswered (looked at, no answer yet) or Unseen, and may be Flagged.
+  // The app records a question in session.seen when it is shown.
+  function navStates(bank, s) {
+    const seen = s.seen || {};
+    return s.qids.map((id, i) => ({ i, id, flagged: !!(s.flags && s.flags[id]),
+      state: answered(bank.byId[id], s.answers[id]) ? "answered" : seen[id] || i === s.cur ? "unanswered" : "unseen" }));
+  }
+  /** { answered, unanswered, unseen, flagged, open }: open = no answer yet, seen or not. */
+  function navCounts(bank, s) {
+    const c = { answered: 0, unanswered: 0, unseen: 0, flagged: 0, open: 0 };
+    for (const x of navStates(bank, s)) { c[x.state]++; if (x.flagged) c.flagged++; }
+    c.open = c.unanswered + c.unseen;
+    return c;
+  }
+  /** Question indexes for a navigator filter: "open" (no answer yet), "flagged", anything else = all. */
+  function navFilter(bank, s, kind) {
+    return navStates(bank, s).filter(x => kind === "open" ? x.state !== "answered" : kind === "flagged" ? x.flagged : true).map(x => x.i);
+  }
+  /** The first index in `list` after `cur`, wrapping round to the start; -1 when the list is empty. */
+  function navNext(list, cur) {
+    if (!list || !list.length) return -1;
+    const later = list.filter(i => i > cur);
+    return later.length ? later[0] : list[0];
+  }
+
+  // ------------------------------------------------------------- explanations
+  /** Split an explanation into its first sentence (`short`) and the remainder (`rest`) for the two-tier display.
+   *  A sentence ends at ". ", "? " or "! " followed by a capital, a digit or code, outside `code` spans and not
+   *  after an abbreviation. Explanations under 140 characters, or with a single sentence, stay whole. */
+  function splitExplanation(text) {
+    const s = String(text == null ? "" : text).trim();
+    if (s.length < 140) return { short: s, rest: "" };
+    let code = false;
+    for (let i = 0; i < s.length - 2; i++) {
+      const c = s[i];
+      if (c === "`") code = !code;
+      if (code || i < 24 || (c !== "." && c !== "?" && c !== "!") || s[i + 1] !== " ") continue;
+      if (!/[A-Z0-9`"'(\/~$-]/.test(s[i + 2])) continue;
+      if (c === "." && /(?:\b(?:e\.g|i\.e|etc|vs|approx|incl|No))$/.test(s.slice(0, i))) continue;   // abbreviation
+      return { short: s.slice(0, i + 1), rest: s.slice(i + 2).trim() };
+    }
+    return { short: s, rest: "" };
+  }
+
   // ------------------------------------------------------------- results
   function grade(bank, s, now) {
     const perQ = {}; const byObj = {}; const byTopic = {}; const byLevel = {}; let score = 0;
@@ -435,7 +582,9 @@
       if (!answered(bank.byId[id], s.answers[id]) && s.mode !== "test") continue; // drills: skip untouched
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
-      const cold = !st.seen || (st.at != null && now - st.at >= COLD_DAYS * DAY_MS);
+      const cold = isCold(bank, state.qstats, id, now);
+      const lead = familyLead(bank, state.qstats, id);   // another wording answered more recently: carry on from its review step
+      if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
       const hinted = !!(s.hints && s.hints[id]);
       if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
       else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
@@ -530,14 +679,14 @@
   }
   function dueIds(bank, qstats, today) {
     today = today == null ? dayNum() : today;
-    return Object.keys(qstats).filter(id => bank.byId[id] && questionDue(qstats[id]) <= today)
+    return Object.keys(qstats).filter(id => bank.byId[id] && familyLead(bank, qstats, id) === id && questionDue(qstats[id]) <= today)
       .sort((a, b) => questionDue(qstats[a]) - questionDue(qstats[b]) || (qstats[a].box || 0) - (qstats[b].box || 0));
   }
   function reviewForecast(bank, qstats, today) {
     today = today == null ? dayNum() : today;
     let due = 0, tomorrow = 0, week = 0;
     for (const id in qstats) {
-      if (!bank.byId[id]) continue;
+      if (!bank.byId[id] || familyLead(bank, qstats, id) !== id) continue;   // one schedule per fact
       const d = questionDue(qstats[id]);
       if (d <= today) due++; else if (d === today + 1) tomorrow++;
       if (d > today && d <= today + 7) week++;
@@ -561,13 +710,18 @@
     return (tests || []).filter(t => t.mode === "review" && dayNum(t.date) === today)
       .reduce((a, t) => a + (t.answered != null ? t.answered : t.total || 0), 0);
   }
-  /** Unseen questions, spread across objectives: always take from the objective you've seen least of, easier first. */
+  /** New facts, spread across objectives: always take from the objective you've seen least of, easier first.
+   *  A fact with variants gives one of its wordings, picked at random; once any wording is seen it is no longer new. */
   function newIds(bank, qstats, n, rand) {
     const pools = Object.keys(bank.objectives).map(o => {
-      const all = bank.byObj[o] || [];
-      const unseen = shuffle(all.filter(id => !(qstats[id] && qstats[id].seen)), rand)
-        .sort((a, b) => (bank.byId[a].level || 1) - (bank.byId[b].level || 1));
-      return { o, total: all.length, seen: all.length - unseen.length, unseen };
+      const facts = {}, fresh = [];
+      for (const id of shuffle(bank.byObj[o] || [], rand)) {
+        const f = bank.byId[id].variantOf || id; if (facts[f]) continue; facts[f] = 1;
+        if (!familyOf(bank, id).some(x => wasSeen(qstats, x))) fresh.push(id);
+      }
+      const total = Object.keys(facts).length;
+      const unseen = fresh.sort((a, b) => (bank.byId[a].level || 1) - (bank.byId[b].level || 1));
+      return { o, total, seen: total - unseen.length, unseen };
     }).filter(p => p.total);
     const out = [];
     while (out.length < n) {
@@ -590,7 +744,7 @@
     today = today == null ? dayNum() : today;
     const cfg = clampReview(state.settings && state.settings.review);
     const backlog = dueIds(bank, state.qstats, today).length;
-    const unseen = bank.questions.filter(q => !(state.qstats[q.id] && state.qstats[q.id].seen)).length;
+    const unseen = factCount(bank) - factsSeen(bank, state.qstats);
     const done = reviewDoneToday(state.tests, today);
     const avail = cfg.on ? Math.min(Math.max(0, cfg.size - done), backlog + unseen) : 0;
     const mix = reviewMix(avail, cfg, backlog, unseen);
@@ -614,7 +768,8 @@
     let mix;
     if (opts.count) mix = reviewMix(opts.count, cfg, due.length, bank.questions.length);
     else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; }
-    const ids = dueByWeight(bank, due, mix.due, rand).concat(newIds(bank, state.qstats, mix.fresh, rand));
+    // A due fact that has variants comes back in the wording seen longest ago, so a review isn't a memory test of one sentence.
+    const ids = dueByWeight(bank, due, mix.due, rand).map(id => rotateVariant(bank, state.qstats, id, rand)).concat(newIds(bank, state.qstats, mix.fresh, rand));
     if (!ids.length) return null;
     return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
   }
@@ -933,7 +1088,7 @@
     const exams = state.tests.filter(t => t.mode === "test");
     let run = 0, bestRun = 0; exams.forEach(t => { run = t.pct >= TARGET ? run + 1 : 0; bestRun = Math.max(bestRun, run); });
     const streak = longestStreak(state.days, state.settings.goal);
-    const seen = Object.keys(state.qstats).filter(id => bank.byId[id] && state.qstats[id].seen).length;
+    const seen = factsSeen(bank, state.qstats);
     let analyze = 0; for (const id in state.qstats) if (bank.byId[id] && bank.byId[id].level === 3) analyze += state.qstats[id].right || 0;
     const os = objectiveStats(bank, state.qstats); const mastered = Object.values(os).filter(o => o.level === "mastered").length;
     const nObj = Object.keys(bank.objectives).length;
@@ -949,7 +1104,7 @@
       "perfect": flag(exams.some(t => t.pct === 100)), "speed": flag(exams.some(t => t.pct >= TARGET && t.secs < 1800)),
       "streak3": p(streak, 3), "streak7": p(streak, 7), "streak30": p(streak, 30), "review7": p(reviews, 7),
       "no-hints": flag(state.tests.some(t => t.mode !== "test" && t.total >= 10 && t.pct >= TARGET && Array.isArray(t.hints) && !t.hints.length)),
-      "analyst": p(analyze, 50), "seen-all": p(seen, bank.questions.length), "obj-1": p(mastered, 1), "obj-all": p(mastered, nObj),
+      "analyst": p(analyze, 50), "seen-all": p(seen, factCount(bank)), "obj-1": p(mastered, 1), "obj-all": p(mastered, nObj),
       "cards100": p(cardSeen, 100), "cards-all": p(cardsMastered, cards.length),
       "lab1": p(labsDone, 1), "lab-all": p(labsDone, labCount || 12), "fluent": p(drillsRight, 50),
     };
@@ -976,7 +1131,7 @@
 
   /** Average of the last 3 full tests taken under exam conditions (answers hidden until submit). */
   function readiness(tests) {
-    const full = tests.filter(t => t.mode === "test" && t.total === 40 && !t.study).slice(-3);
+    const full = tests.filter(t => t.mode === "test" && t.total === 40 && !t.study && t.timed !== false).slice(-3);   // untimed runs are practice
     return full.length ? Math.round(full.reduce((n, t) => n + t.pct, 0) / full.length) : null;
   }
 
@@ -1082,19 +1237,19 @@
     now = now || Date.now();
     const date = parseDate(state.settings.examDate); if (!date) return null;
     const today = dayNum(now), days = dayNum(date) - today;
-    const seen = Object.keys(state.qstats).filter(id => bank.byId[id] && state.qstats[id].seen).length;
-    const unseen = bank.questions.length - seen;
+    const seen = factsSeen(bank, state.qstats), facts = factCount(bank);   // a fact counts as seen in any of its wordings
+    const unseen = facts - seen;
     const due = dailyReview(bank, state, today).due;    // reviews left in today's batch, not the whole backlog
     const studyDays = days - 2;               // keep the last two days for full exams and review
     const newPerDay = days < 0 || studyDays < 1 ? 0 : Math.ceil(unseen / studyDays);
     const phase = days < 0 ? "past" : days === 0 ? "today" : studyDays < 1 ? "final" : "learn";
-    const full = state.tests.filter(t => t.mode === "test" && t.total === 40 && !t.study);
+    const full = state.tests.filter(t => t.mode === "test" && t.total === 40 && !t.study && t.timed !== false);
     let run = 0; for (let i = full.length - 1; i >= 0 && full[i].pct >= TARGET; i--) run++;
     const pred = passPrediction(bank, state.qstats);
     return { date: state.settings.examDate, days, phase, seen, unseen, due, newPerDay, target: newPerDay + due,
              doneToday: state.days[dayKey(now)] || 0,
              milestones: [
-               { id: "seen", label: "See every question", done: unseen === 0, progress: [seen, bank.questions.length] },
+               { id: "seen", label: "See every question", done: unseen === 0, progress: [seen, facts] },
                { id: "ready", label: "Score " + TARGET + "%+ on three exams in a row", done: run >= 3, progress: [Math.min(run, 3), 3] },
                { id: "pass", label: "Pass chance of 90% or more", done: pred.chance != null && pred.chance >= 0.9, progress: null },
                { id: "due", label: "Finish today's review", done: dailyReview(bank, state, today).left === 0, progress: null }]
@@ -1384,8 +1539,8 @@
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
   function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
-  const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap,
-                    cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
+  const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap, seen: marks,
+                    hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
@@ -1446,6 +1601,8 @@
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
+           familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
+           navStates, navCounts, navFilter, navNext, splitExplanation,
            recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,

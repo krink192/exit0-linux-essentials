@@ -16,7 +16,7 @@ desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm co
                       docker.yml (container image)
 Dockerfile, docker/   App-only container image (nginx serving docs/). exit0-sync builds on it; point users to exit0-sync
 bank.json             The question bank
-tools/                Questions t1.py–t7.py, hints.py, whys.py, cards.py, sheets.py, labs.py, trouble_labs.py, game_labs.py (level chain, one-liners, scenarios), drills.py,
+tools/                Questions t1.py–t8.py (t8 = variants), hints.py, whys.py, cards.py, sheets.py, labs.py, trouble_labs.py, game_labs.py (level chain, one-liners, scenarios), drills.py,
                       build.py, verify.py, test_core.js, test_shell.js, test_sync.js, test_questions.js, test_drills.js,
                       test_man.js
 ```

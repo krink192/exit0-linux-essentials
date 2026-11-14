@@ -226,8 +226,13 @@ label.orow input { width: 18px; height: 18px; accent-color: var(--accent); margi
 .exam-bar .close { width: var(--tap); padding: 0; margin-left: -10px; flex: none; }
 .exam-bar .close svg.i { width: 22px; height: 22px; }
 .exam-bar .count { font-size: var(--fs-sm); color: var(--muted); white-space: nowrap; }
-.timer { font: 600 var(--fs-sm) var(--ui); padding: .4rem .6rem; border-radius: var(--r-sm); background: var(--sunk); white-space: nowrap; }
+/* The timer is a toggle: tap to hide the time (the clock stays as the way back). It keeps running either way. */
+.timer { display: inline-flex; gap: 6px; align-items: center; flex: none; font: 600 var(--fs-sm) var(--ui); font-variant-numeric: tabular-nums; padding: 0 .6rem; border: 0; border-radius: var(--r-sm); background: var(--sunk); white-space: nowrap; }
+.timer svg.i { width: 16px; height: 16px; }
+.timer.off { background: transparent; color: var(--muted); padding: 0; width: var(--tap); justify-content: center; }
 .timer.low { background: var(--bad-soft); color: var(--bad); }
+.exam-bar .navbtn { flex: none; gap: 6px; padding: 0 10px; min-width: var(--tap); }
+.exam-bar .navbtn svg.i { width: 18px; height: 18px; }
 .progress { flex: 1; min-width: 40px; height: 4px; border-radius: 999px; background: var(--track); overflow: hidden; }
 .progress i { display: block; height: 100%; background: var(--accent); transition: width .25s; }
 .page.qpage { max-width: 760px; gap: 20px; padding-top: 28px; }
@@ -280,11 +285,36 @@ pre.code { margin: 0; font: 400 var(--fs-body)/1.6 var(--mono); background: var(
 .feedback h3 svg.i { stroke-width: 2.5; }
 .qgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tap), 1fr)); gap: 6px; }
 .qgrid button { padding: 0; font: 600 var(--fs-sm) var(--ui); position: relative; background: var(--surface); }
-.qgrid button.ans { background: var(--accent-soft); border-color: transparent; }
+/* Status by shape as well as tone: Answered is filled, Unanswered a solid outline, Unseen a dashed outline, Flagged carries a flag. */
+.qgrid button.ans { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); border-color: transparent; }
+.qgrid button.una { border: 1.5px solid var(--field-line); }
+.qgrid button.uns { background: transparent; border: 1.5px dashed var(--field-line); color: var(--muted); }
+.qgrid .nf { position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; stroke-width: 2.5; color: var(--flag); }
+.navpanel { display: flex; flex-direction: column; gap: 14px; }
+.navpanel .seg { align-self: flex-start; flex-wrap: wrap; }
+.navpanel .seg button { min-height: var(--tap); padding: 0 12px; }
+.navlegend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: var(--fs-sm); color: var(--muted); }
+.navlegend li { display: inline-flex; gap: 6px; align-items: center; }
+.navlegend b { color: var(--ink); font-weight: 600; }
+.navlegend .nk { width: 14px; height: 14px; border-radius: 4px; flex: none; }
+.navlegend .nk.ans { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
+.navlegend .nk.una { border: 1.5px solid var(--field-line); background: var(--surface); }
+.navlegend .nk.uns { border: 1.5px dashed var(--field-line); }
+.navlegend .nf { width: 14px; height: 14px; stroke-width: 2.5; color: var(--flag); }
+/* Explanations in two tiers, and the note on a typed answer that was nearly right */
+.expl { display: flex; flex-direction: column; gap: 8px; }
+.expl p { margin: 0; }
+.expl-rest, .expl-more p { color: var(--ink-2); }
+.expl-more { display: none; }
+@media (max-width: 640px) { .expl-rest { display: none; } .expl-more { display: block; } }
+.expl-more summary { cursor: pointer; padding: 12px 0; font: 600 var(--fs-sm) var(--ui); color: var(--accent-text); }
+.nearnote { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; background: var(--sunk); border-radius: var(--r-sm); }
+.nearnote svg.i { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
+.untimed { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.untimed p { margin: 0; max-width: 60ch; }
 .qgrid button.ok { background: var(--good-soft); color: var(--good); border-color: transparent; }
 .qgrid button.no { background: var(--bad-soft); color: var(--bad); border-color: transparent; }
 .qgrid button.cur { outline: 2px solid var(--ink); outline-offset: 1px; }
-.qgrid button.fl::after { content: ""; position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--flag); }
 .kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; font: 600 var(--fs-xs) var(--ui); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: var(--r-xs); padding: 0 5px; color: var(--muted); }
 .kbd svg.i { width: 12px; height: 12px; stroke-width: 2.5; }
 .confirm { background: var(--flag-soft); border-color: transparent; }

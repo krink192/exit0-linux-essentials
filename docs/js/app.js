@@ -607,7 +607,7 @@
         <div class="qs qs-split">${icon("clock")}<b>Timed quiz</b><span>As many as you can answer before the clock runs out</span>
           <span class="row"><button data-start="timed" data-min="5">5 min</button><button data-start="timed" data-min="10">10 min</button></span></div>
         <button class="qs" data-start="levelup" ${lad.finished ? "disabled" : ""}>${icon("trophy")}<b>Level Up</b><span>${lad.finished ? "All " + lad.steps + " steps done" : `Step ${lad.next} of ${lad.steps}: ${["", "Recall", "Apply", "Analyze"][lad.next <= 2 ? 1 : lad.next <= 5 ? 2 : 3]} questions. ${lad.size * lad.pass / 100} of ${lad.size} right moves you up`}</span></button>
-        <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("flag")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
+        <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("bookmark")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
         <button class="qs" data-start="handson" ${HANDSON.length ? "" : "disabled"}>${icon("terminal")}<b>Hands-on</b><span>Match and put in order: ${HANDSON.length} questions that make you do more than pick an answer${hoTried ? ` · ${hoRight} of ${hoTried} right last time` : ""}</span></button>
         <a class="qs" href="#search">${icon("guide")}<b>Search</b><span>Find any question or flashcard by a word or command</span></a>
       </div>
@@ -619,7 +619,7 @@
         <div class="frow"><span class="flabel">Difficulty</span><div><div class="seg" id="flv">${[[0, "Any"], [1, "Recall"], [2, "Apply"], [3, "Analyze"]].map(([k, l]) =>
             `<button data-v="${k}" class="${lv === k ? "on" : ""}">${l}</button>`).join("")}</div>
           <div class="small muted fnote">${LEVEL_TEXT[lv]}</div></div></div>
-        <div class="frow"><span class="flabel">Questions</span><div><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "Not seen yet"], ["missed", "Missed last time"], ["marked", "Bookmarked"], ["unsure", "Unsure"]].map(([k, l]) =>
+        <div class="frow"><span class="flabel">Questions</span><div><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "New"], ["missed", "Missed"], ["marked", "Bookmarked"], ["unsure", "Unsure"]].map(([k, l]) =>
             `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${l}</button>`).join("")}</div>
           <div class="small muted fnote">${srcNote}</div></div></div>
         <div class="frow"><span class="flabel">How many</span><div class="seg" id="fcount">${[10, 20, 40, 0].map(v => `<button data-v="${v}" class="${sp.count === v ? "on" : ""}">${v || "All"}</button>`).join("")}</div></div>

@@ -676,12 +676,55 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .lrow a { text-align: right; text-decoration: none; }
 .lrow a.strong { font-weight: 700; }
 .lrow .lcount { text-align: right; }
-.troublecard > summary { display: flex; gap: 16px; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
-.troublecard > summary::-webkit-details-marker { display: none; }
-.troublecard .tlink { color: var(--accent-text); font-weight: 600; white-space: nowrap; }
-.troublecard .tlink::after { content: ""; }
-.troublecard[open] .tlink::after { content: ""; }
-.troublecard .tbody { margin-top: 14px; background: var(--sunk); border-radius: var(--r-sm); padding: 4px 12px; }
+/* Challenge rows (level chain, one-liners, scenarios, troubleshooting): title and one line of description, then
+   type, difficulty and status. Opening a row shows what is checked, the commands it may need and the way in. */
+.objcard .tbody.clist { padding: 2px 12px 6px; }
+.cintro { margin: 8px 0 4px; }
+.crow + .crow, .cintro + .crow { border-top: 1px solid var(--line); }
+.crow > summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 10px 0; min-height: var(--tap); cursor: pointer; list-style: none; }
+.crow > summary::-webkit-details-marker { display: none; }
+.crow .cname { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.crow .cname b { font: 600 var(--fs-row)/1.35 var(--ui); letter-spacing: 0; }
+.crow[open] .cname b { font-weight: 700; }
+.crow.done .cname b { color: var(--muted); }
+.crow .cmeta { display: grid; grid-template-columns: 4.6em 6.2em 6.4em; gap: 10px; align-items: center; font-size: var(--fs-sm); color: var(--ink-2); }
+.ktag { justify-self: start; font: 600 var(--fs-xs)/1 var(--ui); padding: 5px 8px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink-2); }
+.clevel { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+.ldots { display: inline-flex; gap: 3px; }
+.ldots i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--field-line); }
+.ldots i.on { background: var(--ink-2); border-color: var(--ink-2); }
+.cstat { display: inline-flex; gap: 5px; align-items: center; justify-content: flex-end; white-space: nowrap; color: var(--muted); }
+.cstat svg.i { width: 14px; height: 14px; stroke-width: 2.5; }
+.crow.done .cstat { color: var(--good); font-weight: 600; }
+.crow.started .cstat { color: var(--ink); font-weight: 600; }
+.cbody { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 0 0 14px; }
+.cbody p { margin: 0; }
+@media (max-width: 700px) {
+  .crow > summary { grid-template-columns: minmax(0, 1fr); }
+  .crow .cmeta { grid-template-columns: auto auto 1fr; }
+}
+/* Lab screen: what a task is checked by, other ways shown after success, the advisory clock, and the terminal's focus toggle */
+.checked { display: flex; gap: 6px; align-items: flex-start; margin: 6px 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.checked svg.i { flex: none; width: 14px; height: 14px; margin-top: 3px; stroke-width: 2.5; color: var(--muted); }
+.checked b { font-weight: 600; }
+.ways { margin-top: 10px; font-size: var(--fs-sm); color: var(--ink-2); }
+.ways ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ways li { display: flex; flex-direction: column; gap: 2px; }
+.ways code { align-self: flex-start; }
+.advclock { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; margin: 10px 0 0; font-size: var(--fs-sm); font-variant-numeric: tabular-nums; }
+.advclock svg.i { width: 16px; height: 16px; color: var(--muted); }
+.advclock #advTime { font-weight: 600; }
+.advclock.over svg.i, .advclock.over #advTime { color: var(--warm); }
+.termcol { position: sticky; top: 16px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.termcol .term { position: static; }
+.termbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.termbar button { padding: 0 10px; font-size: var(--fs-sm); margin-right: -10px; }
+.term-out { line-height: 1.3; }
+.labwrap.termfocus { grid-template-columns: minmax(0, 1fr); }
+.labwrap.termfocus .tasks > :not(.task.focus) { display: none; }
+.labwrap.termfocus .task.focus { border-radius: var(--r); }
+.labwrap.termfocus .termcol { position: static; }
+.labwrap.termfocus .term { height: min(78vh, 620px); }
 
 /* Exam guide: contents rail + reference */
 .guidewrap { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
@@ -853,11 +896,10 @@ button.marked { background: var(--accent-soft); border-color: var(--accent); col
 .backlink svg.i, .btn svg.i.after { width: 16px; height: 16px; }
 
 /* ---------- disclosure arrows (drawn, so no font is needed for them) */
-.objcard .trow > summary .tname::before, .bprow > summary .tname::before, .histcard > summary h2::before, .troublecard .tlink::after {
+.objcard .trow > summary .tname::before, .bprow > summary .tname::before, .histcard > summary h2::before {
   content: ""; display: inline-block; width: 7px; height: 7px; border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(-45deg);
   margin: 0 .75em .12em .2em; transition: transform .15s; }
-.troublecard .tlink::after { margin: 0 .2em .12em .6em; }
-.objcard .trow[open] > summary .tname::before, .bprow[open] > summary .tname::before, .histcard[open] > summary h2::before, .troublecard[open] .tlink::after { transform: rotate(45deg); }
+.objcard .trow[open] > summary .tname::before, .bprow[open] > summary .tname::before, .histcard[open] > summary h2::before { transform: rotate(45deg); }
 
 /* ---------- Today: the plan as a shell pipeline, predicted score, weakest objectives */
 .today-head { display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; }
@@ -1062,3 +1104,5 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outlin
   .cq + .cq { border-top: 1px solid var(--line); }
   .cq:focus-visible { outline-offset: -2px; }
 }
+@media (max-width: 900px) { .termcol { position: static; } }
+.labwrap.single .taskpager, .labwrap.single .hide-one > .muted { display: none; }

@@ -390,11 +390,12 @@ def lab_index(bank, labs):
     spans, code blocks, typed answers and command-like options. Questions with no command in common (concepts,
     history, licences) get no link rather than a vague one."""
     import re
-    parts = [{k: L[k] for k in ("id", "obj", "lesson", "lessonTitle", "title", "part", "parts", "url", "commands")} | {"n": len(L["tasks"]), **({"from": L["from"]} if L.get("from") else {}), **({"track": L["track"]} if L.get("track") else {})}
+    parts = [{k: L[k] for k in ("id", "obj", "lesson", "lessonTitle", "title", "part", "parts", "url", "commands")} | {"n": len(L["tasks"]), **{k: L[k] for k in ("from", "track", "kind", "level", "minutes") if L.get(k)}, **({"goal": L["tasks"][0]["goal"]} if L["tasks"][0].get("goal") else {})}
              for L in labs.LABS]
     by_obj = collections.defaultdict(list)
     for p in parts:
-        by_obj[p["obj"]].append(p)
+        if p.get("track") not in ("chain", "oneliner", "scenario"):   # "Try it in a lab" links go to lessons and troubleshooting, not to challenges
+            by_obj[p["obj"]].append(p)
     links = {}
     for q in bank["questions"]:
         cands = by_obj.get(q["obj"])

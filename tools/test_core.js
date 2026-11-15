@@ -803,6 +803,92 @@ t("command panel links: related questions, flashcards and study by question ids"
   const ids = rq("grep"), s = C.buildStudy(bank, {}, { ids, count: 50, label: "Questions about grep" }, { seed: 3 });
   assert.strictEqual(s.qids.length, ids.length); assert(s.qids.every(id => ids.includes(id))); assert(/grep/.test(s.label));
 });
+// ---------------------------------------------------------------- item 7: lab formats (level chain, one-liners, scenarios), catalogue rows, "Checked when"
+require(path.join(__dirname, "../docs/data/labs.js"));
+require(path.join(__dirname, "../docs/data/labindex.js"));
+const LAB_ALL = window.LE_LABS, LAB_LESSONS = window.LE_LESSONS, LABIX = window.LE_LABINDEX;
+t("lab formats: ten chain levels, ten one-liners and four scenarios, each one part with one end-state task", () => {
+  const of = tr => LAB_ALL.filter(l => l.track === tr);
+  assert.strictEqual(of("chain").length, 10); assert.strictEqual(of("oneliner").length, 10); assert.strictEqual(of("scenario").length, 4);
+  for (const l of [].concat(of("chain"), of("oneliner"), of("scenario"))) {
+    assert.strictEqual(l.tasks.length, 1, l.id); assert.strictEqual(l.parts, 1, l.id);
+    const tk = l.tasks[0];
+    assert(tk.goal && tk.goal.length > 15, l.id + " says what is checked");
+    assert(!/"type":"history"/.test(JSON.stringify(tk.check)), l.id + " is checked by end state or output, never by the exact command typed");
+    assert(C.LAB_KINDS[l.kind], l.id + " has a type"); assert([1, 2, 3].includes(l.level), l.id + " has a difficulty");
+    assert(bank.objectives[l.obj], l.id + " belongs to an objective");
+    const L = LAB_LESSONS.find(x => x.lesson === l.lesson); assert(L && L.blurb && L.blurb.length > 20 && L.track === l.track, l.id + " has a catalogue line");
+  }
+  for (const l of of("chain")) { assert.deepStrictEqual(l.tasks[0].check, { type: "unlocked" }); assert(l.setup.key && l.tasks[0].solution.endsWith("\nunlock " + l.setup.key), l.id);
+    assert(!l.intro.includes(l.setup.key) && !l.tasks[0].text.includes(l.setup.key) && !l.tasks[0].hints.join(" ").includes(l.setup.key), l.id + " doesn't give its key away"); }
+  assert.strictEqual(new Set(of("chain").map(l => l.setup.key)).size, 10, "every level has its own key");
+  for (const l of of("oneliner")) { assert(l.tasks[0].ways && l.tasks[0].ways.length, l.id + " shows other ways"); assert(l.tasks[0].ways.every(w => w.cmd && w.note && w.cmd !== l.tasks[0].solution));
+    assert.strictEqual(l.tasks[0].solution.split("\n").length, 1, l.id + " is solved in one line"); }
+  for (const l of of("scenario")) assert(l.minutes >= 3 && l.minutes <= 15, l.id + " suggests a time");
+  for (const L of LAB_LESSONS.filter(x => x.track === "troubleshoot")) assert(L.blurb && L.kind === "fix" && L.level === 2, L.lesson);
+  // the light index the catalogue is drawn from carries what a row needs
+  for (const p of LABIX.parts.filter(x => ["chain", "oneliner", "scenario"].includes(x.track))) assert(p.kind && p.level && p.goal, p.id);
+  assert(!Object.values(LABIX.q).some(ps => ps.some(id => /^[VOS]\d/.test(id))), "exam questions link to lessons and troubleshooting, not to challenges");
+});
+t("lab catalogue: type, difficulty, status and chain locks", () => {
+  assert.strictEqual(C.labKind({ kind: "fix" }), "fix"); assert.strictEqual(C.labKind({ kind: "nope" }), "change"); assert.strictEqual(C.labKind(null), "change");
+  assert.deepStrictEqual(C.labLevel({ level: 3 }), { n: 3, word: "Hard" }); assert.deepStrictEqual(C.labLevel({}), { n: 1, word: "Easy" });
+  assert.deepStrictEqual(C.labLevel({ level: 9 }), { n: 3, word: "Hard" }); assert.deepStrictEqual(C.labLevel({ level: "2" }), { n: 2, word: "Medium" });
+  for (const k of ["chain", "oneliner", "scenario", "troubleshoot"]) assert(C.LAB_TRACKS[k][0] && C.LAB_TRACKS[k][1].length > 30, k);
+  const parts = [{ id: "a" }, { id: "b" }];
+  assert.deepStrictEqual(C.labStatus(parts, {}), { state: "new", done: 0, total: 2, text: "New" });
+  assert.deepStrictEqual(C.labStatus(parts, { a: { done: [0] } }), { state: "started", done: 0, total: 2, text: "0 of 2 parts" });
+  assert.deepStrictEqual(C.labStatus(parts, { a: { done: [0, 1], completedAt: 5 } }), { state: "started", done: 1, total: 2, text: "1 of 2 parts" });
+  assert.deepStrictEqual(C.labStatus(parts, { a: { done: [], completedAt: 5 }, b: { done: [0], completedAt: 6 } }), { state: "done", done: 2, total: 2, text: "Done" });
+  assert.strictEqual(C.labStatus([{ id: "a" }], { a: { done: [0] } }).text, "Started"); assert.strictEqual(C.labStatus([], {}).state, "new");
+  assert.strictEqual(C.labStatus([{ id: "a" }], { a: { done: [] } }).state, "new", "opening a lab without finishing a task is not a start");
+  const ids = ["V1-a", "V2-a", "V3-a", "V4-a"];
+  assert.deepStrictEqual(C.chainLocks(ids, {}), { "V1-a": null, "V2-a": "V1-a", "V3-a": "V1-a", "V4-a": "V1-a" }, "only the first level is open");
+  assert.deepStrictEqual(C.chainLocks(ids, { "V1-a": { completedAt: 1 }, "V2-a": { done: [] } }), { "V1-a": null, "V2-a": null, "V3-a": "V2-a", "V4-a": "V2-a" });
+  assert.deepStrictEqual(C.chainLocks(ids, { "V1-a": { completedAt: 1 }, "V3-a": { completedAt: 1 } }), { "V1-a": null, "V2-a": null, "V3-a": "V2-a", "V4-a": "V2-a" }, "a later level cleared on another device doesn't open the gap");
+  assert(Object.values(C.chainLocks(ids, Object.fromEntries(ids.map(i => [i, { completedAt: 1 }])))).every(x => x === null));
+  assert.deepStrictEqual(C.chainLocks(null, null), {});
+});
+t("advisory clock: counts up against the suggested time and never fails anything", () => {
+  assert.deepStrictEqual(C.advisoryClock(0, 5), { over: false, text: "00:00 of about 5 min", note: "" });
+  assert.deepStrictEqual(C.advisoryClock(192000, 5), { over: false, text: "03:12 of about 5 min", note: "" });
+  assert.strictEqual(C.advisoryClock(300000, 5).over, false, "exactly on time is not over");
+  const late = C.advisoryClock(301000, 5); assert.strictEqual(late.over, true); assert.strictEqual(late.text, "05:01 of about 5 min"); assert(/Nothing is lost/.test(late.note));
+  assert.deepStrictEqual(C.advisoryClock(-5, 5).text, "00:00 of about 5 min"); assert.deepStrictEqual(C.advisoryClock(61000, 0), { over: false, text: "01:01", note: "" });
+  assert.strictEqual(C.advisoryClock("x", 5).text, "00:00 of about 5 min");
+});
+t("hint tiers: the commands a task may need come first, then its written hints", () => {
+  const tk = { hints: ["look around", "ls -a"] };
+  assert.deepStrictEqual(C.hintTiers(tk, ["ls", "cat"]), [{ type: "cmds", cmds: ["ls", "cat"] }, { type: "text", text: "look around" }, { type: "text", text: "ls -a" }]);
+  assert.deepStrictEqual(C.hintTiers(tk, []), [{ type: "text", text: "look around" }, { type: "text", text: "ls -a" }]);
+  assert.deepStrictEqual(C.hintTiers(null, null), []);
+  for (const l of LAB_ALL) for (const tk of l.tasks) { const tiers = C.hintTiers(tk, l.commands); assert(tiers.length >= 2 && tiers[0].type === "cmds", l.id); }
+});
+t("Checked when: every lab task says what is checked, from its goal or from the check itself", () => {
+  const H = "/home/student";
+  assert.strictEqual(C.describeCheck({ type: "exists", path: H + "/projects", kind: "dir" }), "the directory `~/projects` exists");
+  assert.strictEqual(C.describeCheck({ type: "absent", path: H + "/a.tmp" }), "`~/a.tmp` no longer exists");
+  assert.strictEqual(C.describeCheck({ type: "perms", path: H + "/x", perms: "-rw-------" }), "`~/x` has the permissions `-rw-------`");
+  assert.strictEqual(C.describeCheck({ type: "owner", path: "/srv/upload", group: "web" }), "`/srv/upload` belongs to the group web");
+  assert.strictEqual(C.describeCheck({ type: "all", checks: [{ type: "absent", path: "/a" }, { type: "exists", path: "/b" }, { type: "cwd", path: "/tmp" }] }), "`/a` no longer exists, `/b` exists and your current directory is `/tmp`");
+  assert.strictEqual(C.describeCheck({ type: "any", checks: [{ type: "mode", path: "/d", mode: "775" }, { type: "mode", path: "/d", mode: "2775" }] }), "either `/d` has the mode 775 or `/d` has the mode 2775");
+  assert.strictEqual(C.describeCheck({ type: "all", checks: [{ type: "history", regex: "a" }, { type: "history", regex: "b" }] }), "you have run the command the task asks for", "repeats are said once");
+  assert.strictEqual(C.describeCheck({ type: "archive", path: H + "/s.tar.gz", format: "tar", compression: "gzip", has: ["www/i"] }), "`~/s.tar.gz` is a gzip-compressed tar archive that contains `www/i`");
+  assert.strictEqual(C.describeCheck({ type: "user", name: "maria", password: "set" }), "the user maria exists and has a usable password");
+  assert.strictEqual(C.describeCheck({ type: "unlocked" }), "you have handed in this level's key with `unlock`");
+  assert.strictEqual(C.describeCheck({ type: "homestudent", path: "/home/students/x" }), "the system is in the state the task describes");
+  assert.strictEqual(C.describeCheck({ type: "exists", path: "/home/students/x" }), "`/home/students/x` exists", "only the student's own home is shortened");
+  assert.strictEqual(C.describeCheck(null), "the system is in the state the task describes");
+  assert.strictEqual(C.checkedWhen({ goal: "the file is gone" }), "the file is gone."); assert.strictEqual(C.checkedWhen({ goal: "It works!" }), "It works!");
+  assert.strictEqual(C.checkedWhen({ check: { type: "cwd", path: H } }), "your current directory is `~`.");
+  const seen = new Set(); let n = 0;
+  const walk = c => { if (!c) return; seen.add(c.type); (c.checks || []).forEach(walk); walk(c.check); };
+  for (const l of LAB_ALL) for (const tk of l.tasks) { walk(tk.check); const s = C.checkedWhen(tk); n++;
+    assert(s.length > 12 && !/undefined|null|NaN|\[object/.test(s), l.id + ": " + s); }
+  for (const ty of seen) assert.notStrictEqual(C.describeCheck({ type: ty, path: "/p", other: "/o", name: "n", cmd: "c", dev: "d", addr: "a", dst: "x", checks: [], check: { type: "cwd", path: "/" } }),
+    "the system is in the state the task describes", "check type '" + ty + "' used in a lab has its own wording");
+  assert(n > 350);
+});
 // ---------------------------------------------------------------- item 6: variants, typed answers, navigator, explanations
 t("variants: each rewords an original of the same objective, shares its conflict set and has its own wording", () => {
   const variants = bank.questions.filter(q => q.variantOf);

@@ -302,6 +302,7 @@
       m.procs.push(pr); procDir(m, pr);
     }
     for (const k in s.env || {}) m.env[k] = s.env[k];
+    if (s.key) m.key = String(s.key);          // level-chain labs: the key hidden on this machine (see CMDS.unlock)
     if (s.cwd) m.cwd = normPath(m, s.cwd.replace(/^~/, "/home/" + us.name));
     if (us.uid !== 1000) switchUser(m, us, false);
     if (s.cwd) m.env.PWD = m.cwd;
@@ -2250,6 +2251,14 @@
     if (!a) return io.out("Linux\n"); if (a.includes("a")) return io.out("Linux " + m.hostname + " 6.8.0-45-generic #45-Ubuntu SMP x86_64 GNU/Linux\n");
     io.out([..."snrmo"].filter(k => a.includes(k)).map(k => parts[k]).join(" ") + "\n"); };
   CMDS.hostname = (m, args, io) => { io.out(m.hostname + "\n"); };
+  // Lab-only: a level of the chain hides a key somewhere on the machine (setup.key). `unlock KEY` hands it in; the
+  // level's check ("unlocked") then reads the result, so how the key was found doesn't matter.
+  CMDS.unlock = (m, args, io) => {
+    if (!m.key) { io.err("unlock: there is nothing to unlock on this system\n(lab: unlock belongs to the level chain in Labs)\n"); return 1; }
+    if (args.length !== 1) { io.err("unlock: give the key as one word, for example: unlock amber-otter-17\n"); return 2; }
+    if (args[0] !== m.key) { io.err("unlock: that is not the key\n"); return 1; }
+    m.unlocked = true; io.out("Unlocked. Level cleared.\n"); return 0;
+  };
   CMDS.uptime = (m, args, io) => { io.out(" 09:30:00 up 2 days,  3:12,  2 users,  load average: 0.08, 0.05, 0.01\n"); };
   CMDS.free = (m, args, io) => {
     const kib = { total: 8048424, used: 2201848, free: 3145728, shared: 184320, cache: 3040848, avail: 5846576, stotal: 2097148 };
@@ -2664,6 +2673,7 @@
       case "iface": { const l = m.net.links.find(x => x.name === c.dev); return !!l && (!c.state || l.state === c.state); }
       case "unit": { const u0 = (m.units || {})[c.name] || { active: true, enabled: true }; return (c.active == null || u0.active === c.active) && (c.enabled == null || u0.enabled === c.enabled); }
       case "novar": return m.env[c.name] == null;
+      case "unlocked": return m.unlocked === true;
       case "shell": return m.stack.length === (c.depth || 0) && (c.user == null || userById(m, m.realUid != null ? m.realUid : m.uid).name === c.user);
       case "located": return m.locateDb.includes(c.path);
       case "all": return c.checks.every(x => evalCheck(m, x));

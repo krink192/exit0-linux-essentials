@@ -318,6 +318,33 @@ t("study mode filters by objective, difficulty and source", () => {
   const rec = C.recordResult(st, bank, s, C.grade(bank, s));
   assert.deepStrictEqual(rec.hints, [s.qids[0]]); assert.strictEqual(C.readiness(st.tests), null);
 });
+t("study builder: Bookmarked and Unsure sources combine with objective and level", () => {
+  const qA = bank.questions.find(q => q.level === 2), qB = bank.questions.find(q => q.id !== qA.id && q.obj === qA.obj && q.level === 2);
+  const qC = bank.questions.find(q => q.obj !== qA.obj && q.level === 1);
+  assert(qA && qB && qC, "need three sample questions");
+  const marks = { [qA.id]: { on: true, note: "", at: 2 }, [qC.id]: { on: false, note: "keep", at: 1 }, [qB.id]: { on: false, note: "", at: 3 } };
+  const qs = {
+    [qA.id]: { seen: 1, right: 0, last: false, conf: 0, cw: 0, at: 10 },
+    [qB.id]: { seen: 1, right: 1, last: true, conf: 1, cw: 2, at: 11 },   // Sure + cw must stay out of Unsure
+    [qC.id]: { seen: 1, right: 0, last: false, conf: 0, at: 9 }
+  };
+  assert.deepStrictEqual(C.markedIds(bank, { marks }), [qA.id, qC.id]);
+  assert.deepStrictEqual(C.unsureIds(bank, qs), [qA.id, qC.id]);
+  assert.deepStrictEqual(C.studyPool(bank, qs, { source: "marked", marks }).slice().sort(), [qA.id, qC.id].sort());
+  assert.deepStrictEqual(C.studyPool(bank, qs, { source: "marked", marks, objs: [qA.obj] }), [qA.id]);
+  assert.deepStrictEqual(C.studyPool(bank, qs, { source: "unsure", objs: [qA.obj], levels: [2] }), [qA.id]);
+  assert(!C.studyPool(bank, qs, { source: "unsure" }).includes(qB.id), "confident-but-wrong with Sure is not Unsure");
+  const built = C.buildStudy(bank, qs, { source: "unsure", count: 5, marks }, { seed: 1 });
+  assert(built && /Unsure/.test(built.label)); assert(built.qids.every(id => qs[id].conf === 0));
+  const marked = C.buildStudy(bank, qs, { source: "marked", count: 5, marks }, { seed: 2 });
+  assert(marked && /Bookmarked/.test(marked.label));
+  // rating Sure clears Unsure; answering without a new rating leaves it
+  qs[qA.id].conf = 1;
+  assert.deepStrictEqual(C.studyPool(bank, qs, { source: "unsure" }), [qC.id]);
+  assert.strictEqual(C.cleanDoc({ settings: { study: { source: "unsure", count: 10 } } }).settings.study.source, "unsure");
+  assert.strictEqual(C.cleanDoc({ settings: { study: { source: "marked" } } }).settings.study.source, "marked");
+  assert.strictEqual(C.cleanDoc({ settings: { study: { source: "nope" } } }).settings.study.source, "mix");
+});
 t("every question has a hint that doesn't contain the answer", () => {
   for (const q of bank.questions) {
     assert(q.hint && q.hint.length >= 12, q.id + " has no hint");

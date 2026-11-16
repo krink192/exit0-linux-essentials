@@ -110,6 +110,7 @@
     repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     bookmark: '<path d="M6 3h12v18l-6-4.5L6 21z"/>',
+    help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1.1-1.3 2.2V14"/><circle cx="12" cy="17" r="1"/>',
     left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
     right: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -328,6 +329,7 @@
     $$("[data-start=duecards]", root).forEach(b => b.onclick = startDueCards);
     $$("[data-start=cmddue]", root).forEach(b => b.onclick = () => startCmd({ source: "recommended", count: Math.max(5, Math.min(20, cmdDueN())) }));
     $$("[data-start=missed]", root).forEach(b => b.onclick = () => startStudy({ source: "missed", count: 20 }));
+    $$("[data-start=unsure]", root).forEach(b => b.onclick = () => startStudy({ source: "unsure", count: 20 }));
     $$("[data-start=quick]", root).forEach(b => b.onclick = () => startBuilt(C.buildQuick(BANK, st.qstats)));
     $$("[data-start=timed]", root).forEach(b => b.onclick = () => startBuilt(C.buildTimed(BANK, st.qstats, +b.dataset.min)));
     $$("[data-start=levelup]", root).forEach(b => b.onclick = () => startBuilt(C.buildLevelUp(BANK, st)));
@@ -562,6 +564,17 @@
   // ================================================================== STUDY MODE
   const LEVEL_TEXT = { 0: "Every kind of question.", 1: "Recall: remember a fact, term or definition.",
     2: "Apply: pick or type the right command, option or setting.", 3: "Analyze: read output, trace a script, work out permissions or globs." };
+  const SOURCE_TEXT = {
+    mix: "Any question that matches the objectives and difficulty above.",
+    unseen: "Questions you have not answered yet.",
+    missed: "Questions you got wrong the last time you answered them.",
+    marked: "Questions you saved or wrote a note on.",
+    unsure: "Questions you marked Unsure the last time you rated them."
+  };
+  const SOURCE_EMPTY = {
+    marked: "Save a question with the Bookmark button.",
+    unsure: "Nothing marked Unsure yet. Press Sure or Unsure before you check an answer."
+  };
   function studyObjs(sp, weak) { return sp.objMode === "weak" ? weak : sp.objMode === "pick" ? sp.objs : []; }
   function renderStudy() {
     const sp = SP(), sel = new Set(sp.objs);
@@ -571,27 +584,30 @@
     const weak = C.weakObjectives(BANK, st.qstats, 19);
     if (sp.objMode === "weak" && !weak.length) sp.objMode = "all";
     const objs = studyObjs(sp, weak);
-    const pool = sp.objMode === "pick" && !objs.length ? [] : C.studyPool(BANK, st.qstats, Object.assign({}, sp, { objs }));
+    const poolOpts = Object.assign({}, sp, { objs, marks: st.marks });
+    const pool = sp.objMode === "pick" && !objs.length ? [] : C.studyPool(BANK, st.qstats, poolOpts);
     const n = sp.count ? Math.min(sp.count, pool.length) : pool.length;
     const lv = sp.levels.length === 1 ? sp.levels[0] : 0;
     const byWeight = " Split like the real exam: heavier objectives get more questions.";
-    const lad = C.ladder(st.tests), nMarked = C.markedIds(BANK, st).length;
+    const lad = C.ladder(st.tests), nMarked = C.markedIds(BANK, st).length, nUnsure = C.unsureIds(BANK, st.qstats).length;
     const hoStats = HANDSON.map(it => st.cmdstats[it.id]).filter(x => x && x.seen), hoTried = hoStats.length, hoRight = hoStats.filter(x => x.last).length;
     const objNote = sp.objMode === "all" ? "Questions from every objective." + byWeight
       : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
       : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
+    const srcNote = !pool.length && SOURCE_EMPTY[sp.source] ? SOURCE_EMPTY[sp.source] : SOURCE_TEXT[sp.source] || SOURCE_TEXT.mix;
     shell("study", `${resumeBanner()}
       <div class="page-head"><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
       <div class="quick">
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
+        <button class="qs" data-start="unsure" ${nUnsure ? "" : "disabled"}>${icon("help")}<b>Unsure</b><span>${nUnsure ? plural(nUnsure, "question") + " you marked Unsure" : "Press Sure or Unsure when you answer"}</span></button>
         <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " short of mastery" : "None yet. Answer on separate days to build mastery."}</span></button>
         <button class="qs" data-start="unseen" ${unseen ? "" : "disabled"}>${icon("bulb")}<b>New questions</b><span>${unseen ? plural(unseen, "question") + " you haven't seen" : "You've seen every question"}</span></button>
         <button class="qs" data-start="quick">${icon("drill")}<b>Quick 10</b><span>Ten questions across the exam, split by weight</span></button>
         <div class="qs qs-split">${icon("clock")}<b>Timed quiz</b><span>As many as you can answer before the clock runs out</span>
           <span class="row"><button data-start="timed" data-min="5">5 min</button><button data-start="timed" data-min="10">10 min</button></span></div>
         <button class="qs" data-start="levelup" ${lad.finished ? "disabled" : ""}>${icon("trophy")}<b>Level Up</b><span>${lad.finished ? "All " + lad.steps + " steps done" : `Step ${lad.next} of ${lad.steps}: ${["", "Recall", "Apply", "Analyze"][lad.next <= 2 ? 1 : lad.next <= 5 ? 2 : 3]} questions. ${lad.size * lad.pass / 100} of ${lad.size} right moves you up`}</span></button>
-        <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("flag")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
+        <button class="qs" data-start="marked" ${nMarked ? "" : "disabled"}>${icon("bookmark")}<b>Bookmarked</b><span>${nMarked ? plural(nMarked, "question") + " you saved or wrote a note on" : "Save a question with the Bookmark button"}</span></button>
         <button class="qs" data-start="handson" ${HANDSON.length ? "" : "disabled"}>${icon("terminal")}<b>Hands-on</b><span>Match and put in order: ${HANDSON.length} questions that make you do more than pick an answer${hoTried ? ` · ${hoRight} of ${hoTried} right last time` : ""}</span></button>
         <a class="qs" href="#search">${icon("guide")}<b>Search</b><span>Find any question or flashcard by a word or command</span></a>
       </div>
@@ -603,7 +619,9 @@
         <div class="frow"><span class="flabel">Difficulty</span><div><div class="seg" id="flv">${[[0, "Any"], [1, "Recall"], [2, "Apply"], [3, "Analyze"]].map(([k, l]) =>
             `<button data-v="${k}" class="${lv === k ? "on" : ""}">${l}</button>`).join("")}</div>
           <div class="small muted fnote">${LEVEL_TEXT[lv]}</div></div></div>
-        <div class="frow"><span class="flabel">Questions</span><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "Not seen yet"], ["missed", "Missed last time"]].map(([k, l]) => `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${l}</button>`).join("")}</div></div>
+        <div class="frow"><span class="flabel">Questions</span><div><div class="seg" id="fsrc">${[["mix", "Everything"], ["unseen", "New"], ["missed", "Missed"], ["marked", "Bookmarked"], ["unsure", "Unsure"]].map(([k, l]) =>
+            `<button data-v="${k}" class="${sp.source === k ? "on" : ""}">${l}</button>`).join("")}</div>
+          <div class="small muted fnote">${srcNote}</div></div></div>
         <div class="frow"><span class="flabel">How many</span><div class="seg" id="fcount">${[10, 20, 40, 0].map(v => `<button data-v="${v}" class="${sp.count === v ? "on" : ""}">${v || "All"}</button>`).join("")}</div></div>
       </div>
       <div class="card row spread startbar"><span><b>${n}</b> <span class="muted">${n === 1 ? "question" : "questions"}${pool.length > n ? ` (of ${pool.length} that match)` : ""}</span></span>
@@ -615,7 +633,7 @@
     $$("#fcount button").forEach(b => b.onclick = () => keep(() => { sp.count = +b.dataset.v; }));
     $$("[data-obj]").forEach(i => i.onchange = () => keep(() => { const o = i.dataset.obj;
       sp.objs = i.checked ? [...new Set(sp.objs.concat(o))].sort() : sp.objs.filter(x => x !== o); }));
-    $("#sstart").onclick = () => startStudy({ objs, levels: sp.levels, source: sp.source, count: sp.count });
+    $("#sstart").onclick = () => startStudy({ objs, levels: sp.levels, source: sp.source, count: sp.count, marks: st.marks });
     wireResume();
     wireStarts($("#page"));
   }

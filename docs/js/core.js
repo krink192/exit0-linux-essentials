@@ -573,34 +573,50 @@
   function examDayNum(state, now) {
     const d = parseDate(state && state.settings && state.settings.examDate); return d ? dayNum(d) : null;
   }
+  /** Full timed exams that feed readiness / "Exams taken" (untimed and study runs are practice). */
+  function isReadinessExam(t) {
+    return !!(t && t.mode === "test" && t.total === 40 && !t.study && t.timed !== false);
+  }
   /** Apply a finished session to the saved state. Returns the stored record. */
   function recordResult(state, bank, s, res, now) {
     now = now || Date.now();
     const today = dayNum(now), exDay = examDayNum(state, now);
-    const mixed = s.mode === "test" && !s.study && (s.qids || []).length === 40;
+    // Untimed full exams update practice history and the review schedule, but never cold evidence or mastery days.
+    const untimed = s.mode === "test" && !s.study && s.timed === false;
+    const mixed = s.mode === "test" && !s.study && !untimed && (s.qids || []).length === 40;
     for (const id of s.qids) {
-      if (!answered(bank.byId[id], s.answers[id]) && s.mode !== "test") continue; // drills: skip untouched
+      // Blanks count wrong in the exam score (grade) but are not evidence of not knowing the question.
+      if (!answered(bank.byId[id], s.answers[id])) continue;
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
       const cold = isCold(bank, state.qstats, id, now);
       const lead = familyLead(bank, state.qstats, id);   // another wording answered more recently: carry on from its review step
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
       const hinted = !!(s.hints && s.hints[id]);
-      if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
-      else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
+      if (!untimed) {
+        if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
+        else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
+      } else if (st.ev == null) {
+        // Block legacy coldFromHistory from treating this practice answer as readiness evidence.
+        st.ev = -1;
+      }
       st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
       if (s.conf && (s.conf[id] === true || s.conf[id] === false)) {
         st.conf = s.conf[id] ? 1 : 0;                 // last rating: for "low confidence" filters later
         if (s.conf[id] && !res.perQ[id]) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
       }
-      if (res.perQ[id] && cold && !hinted) noteColdDay(st, bank.byId[id], today);
+      if (!untimed && res.perQ[id] && cold && !hinted) noteColdDay(st, bank.byId[id], today);
       scheduleQuestion(st, res.perQ[id], today, exDay);
       state.qstats[id] = st;
     }
-    // A miss in a mixed exam demotes the whole objective: drop the latest day in the objective-wide union.
+    // A miss in a mixed timed exam demotes the whole objective: drop the latest day in the objective-wide union.
+    // Blanks do not demote: never having answered is not a miss.
     if (mixed) {
       const hit = {};
-      for (const id of s.qids) if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
+      for (const id of s.qids) {
+        if (!answered(bank.byId[id], s.answers[id])) continue;
+        if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
+      }
       for (const o in hit) {
         let latest = -1;
         for (const id of bank.byObj[o] || []) {
@@ -1135,7 +1151,7 @@
 
   /** Average of the last 3 full tests taken under exam conditions (answers hidden until submit). */
   function readiness(tests) {
-    const full = tests.filter(t => t.mode === "test" && t.total === 40 && !t.study && t.timed !== false).slice(-3);   // untimed runs are practice
+    const full = tests.filter(isReadinessExam).slice(-3);   // untimed runs are practice
     return full.length ? Math.round(full.reduce((n, t) => n + t.pct, 0) / full.length) : null;
   }
 
@@ -1247,7 +1263,7 @@
     const studyDays = days - 2;               // keep the last two days for full exams and review
     const newPerDay = days < 0 || studyDays < 1 ? 0 : Math.ceil(unseen / studyDays);
     const phase = days < 0 ? "past" : days === 0 ? "today" : studyDays < 1 ? "final" : "learn";
-    const full = state.tests.filter(t => t.mode === "test" && t.total === 40 && !t.study && t.timed !== false);
+    const full = state.tests.filter(isReadinessExam);
     let run = 0; for (let i = full.length - 1; i >= 0 && full[i].pct >= TARGET; i--) run++;
     const pred = passPrediction(bank, state.qstats);
     return { date: state.settings.examDate, days, phase, seen, unseen, due, newPerDay, target: newPerDay + due,
@@ -1607,7 +1623,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

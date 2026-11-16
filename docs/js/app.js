@@ -210,7 +210,7 @@
   }
   applyTheme();
 
-  let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, navKind = "all", warned5 = null;
+  let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, finishing = false, discardOpen = false, navKind = "all", warned5 = null;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
   let cs = null;            // active flashcard session
   const SP = () => st.settings.study;   // Study builder choices, remembered between visits
@@ -292,7 +292,7 @@
   window.addEventListener("hashchange", render);
 
   // ------------------------------------------------------------------ start sessions
-  function begin(s) { st.current = s; confirming = false; showGrid = false; navKind = "all"; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
+  function begin(s) { st.current = s; confirming = false; finishing = false; discardOpen = false; showGrid = false; navKind = "all"; save(); if (needsShell(s)) ensureShell().catch(() => {}); go("exam"); }
   function startTest(e) { begin(C.buildTest(BANK, st.qstats, { timed: !(e && e.currentTarget && e.currentTarget.dataset.untimed) })); }
   function startForm(f) { const s = C.buildTest(BANK, st.qstats, { form: f }); if (s) begin(s); }
   const startBuilt = s => { if (s) begin(s); else toast("No questions match those choices"); };
@@ -343,14 +343,25 @@
   }
   function resumeBanner() {
     const cur = st.current; if (!cur) return "";
+    const nAns = cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length;
+    const what = cur.mode === "test" ? "exam" : "study session";
+    const actions = discardOpen
+      ? `<div class="row card confirm spread"><span>Discard this ${what}? Your answers will be lost.</span><span class="row"><button id="dno">Cancel</button><button class="primary" id="dyes">Discard</button></span></div>`
+      : `<div class="row"><button class="ghost" id="discard">Discard</button><button class="primary" id="resume">Resume</button></div>`;
     return `<div class="card accent banner"><div><b>You have ${cur.mode === "test" ? "an exam" : "a study session"} in progress</b>
-        <div class="small muted">${esc(cur.label)} · ${cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length} of ${cur.qids.length} answered${cur.deadline ? " · " + fmt((cur.deadline - Date.now()) / 1000) + " left" : ""}</div></div>
-        <div class="row"><button class="ghost" id="discard">Discard</button><button class="primary" id="resume">Resume</button></div></div>`;
+        <div class="small muted">${esc(cur.label)} · ${nAns} of ${cur.qids.length} answered${cur.deadline ? " · " + fmt((cur.deadline - Date.now()) / 1000) + " left" : ""}</div></div>
+        ${actions}</div>`;
   }
   function wireResume() {
-    if (!$("#resume")) return;
-    $("#resume").onclick = () => go("exam");
-    $("#discard").onclick = () => { st.current = null; save(); render(); };
+    if ($("#resume")) $("#resume").onclick = () => { discardOpen = false; go("exam"); };
+    if ($("#discard")) $("#discard").onclick = () => {
+      const cur = st.current; if (!cur) return;
+      const nAns = cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length;
+      if (nAns > 0) { discardOpen = true; render(); return; }
+      st.current = null; discardOpen = false; save(); render();
+    };
+    if ($("#dno")) $("#dno").onclick = () => { discardOpen = false; render(); };
+    if ($("#dyes")) $("#dyes").onclick = () => { st.current = null; discardOpen = false; save(); render(); };
   }
 
   // ================================================================== TODAY: one "do this next", then the other good options
@@ -521,7 +532,7 @@
       <div class="formgrid">${"ABCDEFGHIJ".split("").map(f => `<button data-form="${f}" class="${best[f] != null ? "done" : ""}" title="Practice exam ${f}${best[f] != null ? ": best " + best[f] + "%" : ""}"><b>${f}</b><span style="${best[f] != null ? "color:" + col(best[f]) : ""}">${best[f] != null ? best[f] + "%" : "new"}</span></button>`).join("")}</div></section>`;
   }
   function renderTest() {
-    const tests = st.tests.filter(t => t.mode === "test");
+    const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set Readiness uses
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
@@ -1722,7 +1733,11 @@
   // ================================================================== EXAM
   function renderExam() {
     clearInterval(timerId);
-    const S = st.current, n = S.qids.length, id = S.qids[S.cur], q = BANK.byId[id], a = S.answers[id];
+    const S = st.current;
+    if (!S) return;
+    // Resume after the deadline: finish at once (do not allow another second of answering).
+    if (S.deadline && S.deadline <= Date.now()) { finish(); return; }
+    const n = S.qids.length, id = S.qids[S.cur], q = BANK.byId[id], a = S.answers[id];
     const done = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length;
     const flagged = Object.values(S.flags).filter(Boolean).length;
     const revealed = S.study && S.checked[id];
@@ -1927,16 +1942,33 @@
   function finish(shellTried) {
     clearInterval(timerId);
     const S = st.current;
-    if (!shellTried && !window.LEShell && needsShell(S)) return ensureShell().then(() => finish(true), () => finish(true));   // grade typed commands by running them
+    if (!S) return;                          // already finished (timer and Submit must not record twice)
+    if (finishing && !shellTried) return;    // single-flight: a second call while the shell loads is ignored
+    if (!shellTried && !window.LEShell && needsShell(S)) {
+      finishing = true;
+      return ensureShell().then(() => { finishing = false; finish(true); }, () => {
+        finishing = false;
+        toast("Couldn't load the lab shell. Check your connection and try Submit again.");
+      });
+    }
+    // Lab-checked typed answers need the shell; do not quietly grade against the accept list alone.
+    if (needsShell(S) && !window.LEShell) {
+      toast("Couldn't load the lab shell. Check your connection and try Submit again.");
+      return;
+    }
+    finishing = true;
     if (S.mode !== "test") {          // study sessions are scored on the questions you actually answered
       const done = S.qids.filter(id => C.answered(BANK.byId[id], S.answers[id]));
-      if (!done.length) { st.current = null; confirming = false; showGrid = false; save(); toast("Nothing answered, so nothing was saved"); return go("study"); }
+      if (!done.length) {
+        st.current = null; confirming = false; finishing = false; showGrid = false; save();
+        toast("Nothing answered, so nothing was saved"); return go("study");
+      }
       S.qids = done;
     }
     const res = C.grade(BANK, S);
     lastRec = C.recordResult(st, BANK, S, res);
     celebrate();
-    st.current = null; confirming = false; showGrid = false; navKind = "all"; save();
+    st.current = null; confirming = false; finishing = false; showGrid = false; navKind = "all"; save();
     const cal = C.calibration(lastRec, BANK);
     reviewFilter = cal.focus.length ? "focus" : res.score < res.total ? "wrong" : "all";
     go("results");

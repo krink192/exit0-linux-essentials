@@ -264,6 +264,25 @@ t("bookmarks and notes: saved, merged across devices (latest change wins), remov
   assert.deepStrictEqual(m.marks, { "1.1-01": { on: false, note: "", at: 0 } });
   assert.strictEqual(C.importState(C.freshState(), { app: "le010", tests: [], marks: { "2.1-01": { on: true, note: "n", at: 5 } } }).marks["2.1-01"].note, "n");
 });
+t("export code round-trips through import, including bookmarks and notes", () => {
+  const st = C.freshState();
+  const s = C.buildStudy(bank, {}, { count: 5 }, { seed: 4 });
+  const g = C.grade(bank, s); C.recordResult(st, bank, Object.assign({}, s, g), { now: Date.now() });
+  C.setMark(st, s.qids[0], { on: true, note: "keep this" }, 50);
+  C.setMark(st, s.qids[1], { note: "note only" }, 60);
+  st.badges.first = 1; st.labs["1.2.1-a"] = { done: [0], completedAt: 9 };
+  const code = C.exportDoc(st);
+  assert.ok(code.marks && code.marks[s.qids[0]].on, "export includes marks");
+  assert.deepStrictEqual(Object.keys(code).filter(k => k !== "app" && k !== "v").sort(),
+    ["badges", "cards", "cmdstats", "days", "labs", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
+    "export lists every cleanDoc field");
+  const next = C.importState(C.freshState(), JSON.parse(JSON.stringify(code)));
+  assert.deepStrictEqual(next.marks, st.marks);
+  assert.deepStrictEqual(next.qstats, st.qstats);
+  assert.deepStrictEqual(next.tests.map(t => t.id), st.tests.map(t => t.id));
+  assert.deepStrictEqual(next.labs, st.labs);
+  assert.strictEqual(next.badges.first, 1);
+});
 t("search finds questions and flashcards by every word", () => {
   const r = C.search(bank, cards, "chmod octal"); assert(r.questions.length > 0); assert(r.questions.every(id => /chmod/i.test(JSON.stringify(bank.byId[id])) && /octal/i.test(JSON.stringify(bank.byId[id]))));
   assert(C.search(bank, cards, "kernel").cards.length > 0);

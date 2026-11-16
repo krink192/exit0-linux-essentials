@@ -1542,6 +1542,12 @@
                 marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
   function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
+  /** Export payload for another device: every cleanDoc field, so a new state field can't be left out of the code. */
+  function exportDoc(state) {
+    const raw = {};
+    for (const k of Object.keys(DOC)) raw[k] = state[k];
+    return Object.assign({ app: "le010", v: 3 }, cleanDoc(raw));
+  }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
   const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap, seen: marks,
                     hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
@@ -1609,6 +1615,6 @@
            navStates, navCounts, navFilter, navNext, splitExplanation,
            recordResult, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
-           clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, cleanSession, importState,
+           clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };
 });

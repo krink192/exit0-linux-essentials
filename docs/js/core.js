@@ -925,9 +925,13 @@
     const byId = {}; for (const s of drills.skills) byId[s.id] = s;
     const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
     if (!picks.length) return null;
-    const used = {};
+    // A skill that comes up again moves on to its next template, and the same task (same template, same values) isn't
+    // asked twice in a session while the template still has other values to offer.
+    const used = {}, asked = new Set();
     const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
-      return instantiateDrill(sk, k % sk.templates.length, rand); });
+      let t = instantiateDrill(sk, k % sk.templates.length, rand);
+      for (let tries = 0; tries < 12 && asked.has(sk.id + "\n" + t.text); tries++) t = instantiateDrill(sk, k % sk.templates.length, rand);
+      asked.add(sk.id + "\n" + t.text); return t; });
     const mode = ["guided", "recall", "timed"].indexOf(opts.mode) >= 0 ? opts.mode : "guided";
     return { mode, seconds: mode === "timed" ? (opts.seconds || 90) : null, tasks, i: 0, results: [], label: opts.label || "Command practice", start: opts.now || Date.now() };
   }

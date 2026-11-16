@@ -76,6 +76,17 @@ assert.ok(s1.tasks.slice(0, 3).every(t => X.skills.find(s => s.id === t.skill).o
 // the same seed gives the same session, a different seed different values
 assert.deepStrictEqual(C.buildCmdSession(D, index, st, { count: 10, seed: 3 }).tasks.map(t => t.text), C.buildCmdSession(D, index, st, { count: 10, seed: 3 }).tasks.map(t => t.text));
 
+// variety: practising one command isn't the same task with new names. Every skill of objectives 2.1-2.4 has at least
+// three differently shaped templates, a repeated skill rotates through them, and no task is asked twice in a set.
+for (const sk of D.skills.filter(s => s.obj[0] === "2")) assert.ok(sk.templates.length >= 3 || sk.id === "find-iname", sk.id + ": needs at least 3 templates, has " + sk.templates.length);
+for (const cmd of ["locate", "which", "du", "rmdir", "export", "alias", "cd"]) for (const seed of [1, 2, 3, 4, 5]) {
+  const one = C.buildCmdSession(D, index, C.freshState(), { count: 10, cmds: [cmd], seed });
+  for (const sk of D.skills.filter(s => s.cmd === cmd)) { const mine = one.tasks.filter(t => t.skill === sk.id);
+    assert.strictEqual(new Set(mine.map(t => t.tpl)).size, Math.min(mine.length, sk.templates.length), sk.id + ": a set uses every template of a skill before repeating one"); }
+  assert.strictEqual(new Set(one.tasks.map(t => t.text)).size, 10, cmd + ": no task is asked twice in one set");
+  assert.ok(one.tasks.every((t, i) => !i || t.skill !== one.tasks[i - 1].skill || t.tpl !== one.tasks[i - 1].tpl), cmd + ": the same template never comes twice in a row");
+}
+
 assert.ok(C.cmdTaskOk({ solved: true }) && !C.cmdTaskOk({ solved: true, hint: true }) && !C.cmdTaskOk({ solved: true, revealed: true }) && !C.cmdTaskOk({ solved: true, timeout: true }) && !C.cmdTaskOk({ solved: false }),
   "a drill counts as right only when solved without hints, the answer or running out of time");
 const day = C.dayNum(new Date(2026, 9, 20, 12)), at = d => new Date(2026, 9, 20 + d, 12).getTime();

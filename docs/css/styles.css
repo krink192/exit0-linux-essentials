@@ -1008,7 +1008,8 @@ svg.i.ext { width: 14px; height: 14px; margin-left: 4px; }
 .revcard { border: 0; border-radius: 0; box-shadow: none; }
 .revn b { font-weight: 700; }
 .quick { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
-.quick::after { content: ""; background: var(--surface); }
+/* Filler cell only when the tile count is odd, so an even grid (e.g. 10) does not leave an empty row. */
+.quick:has(> :last-child:nth-child(odd))::after { content: ""; background: var(--surface); }
 .qs, a.qs, .qs-split { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 2px 14px; align-items: start; align-content: start; justify-content: stretch;
   min-height: 76px; padding: 16px 18px; border: 0; border-radius: 0; background: var(--surface); }
 .qs svg.i { grid-row: 1 / span 3; margin: 2px 0 0; }
@@ -1017,7 +1018,7 @@ svg.i.ext { width: 14px; height: 14px; margin-left: 4px; }
 .qs-split:hover { background: var(--surface); }
 .qs[disabled] { opacity: 1; color: var(--muted); } .qs[disabled] svg.i, .qs[disabled] b { opacity: .5; }
 .qs:focus-visible { outline-offset: -2px; }
-@media (max-width: 640px) { .quick { grid-template-columns: 1fr; } .quick::after { display: none; } }
+@media (max-width: 640px) { .quick { grid-template-columns: 1fr; } .quick:has(> :last-child:nth-child(odd))::after { display: none; } }
 
 /* ---------- lab tasks: one list with dividers */
 .tasks > .taskpager { margin-bottom: 10px; }

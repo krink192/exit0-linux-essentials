@@ -317,7 +317,8 @@
     return newSession(bank, "test", label, shuffle(ids, rand), { timed: opts.timed !== false, study: !!opts.study, seed: opts.seed, now: opts.now, form: opts.form });
   }
 
-  /** Study mode filters. objs/levels empty = all. source: "mix" (everything), "unseen" or "missed". */
+  /** Study mode filters. objs/levels empty = all.
+   *  source: "mix" | "unseen" | "missed" | "marked" | "unsure". For "marked", pass f.marks (or f.ids). */
   function studyPool(bank, qstats, f) {
     f = f || {}; qstats = qstats || {};
     const objs = f.objs && f.objs.length ? f.objs : Object.keys(bank.objectives);
@@ -326,8 +327,15 @@
     if (f.ids) { const want = new Set(f.ids); ids = ids.filter(id => want.has(id)); }
     if (f.source === "missed") ids = ids.filter(id => qstats[id] && qstats[id].last === false);
     else if (f.source === "unseen") ids = ids.filter(id => !qstats[id] || !qstats[id].seen);
+    else if (f.source === "marked") {
+      const want = new Set(f.ids || markedIds(bank, { marks: f.marks || {} }));
+      ids = ids.filter(id => want.has(id));
+    } else if (f.source === "unsure") ids = ids.filter(id => qstats[id] && qstats[id].conf === 0);
     return ids;
   }
+  /** Question ids whose last Sure/Unsure rating was Unsure. */
+  const unsureIds = (bank, qstats) => Object.keys(qstats || {}).filter(id => bank.byId[id] && qstats[id].conf === 0)
+    .sort((a, b) => (qstats[b].at || 0) - (qstats[a].at || 0));
   /** Study session: answers, hints and explanations as you go. A set that mixes objectives follows the exam's
    *  weights (see apportion). Returns null when nothing matches. */
   function buildStudy(bank, qstats, f, opts) {
@@ -338,7 +346,7 @@
     const all = Object.keys(bank.objectives).length;
     const objs = f.objs && f.objs.length && f.objs.length < all ? f.objs : null;
     const what = !objs ? "All objectives" : objs.length === 1 ? objs[0] + " " + bank.objectives[objs[0]].name : objs.length + " objectives";
-    const src = { missed: "Missed last time", unseen: "New questions" }[f.source];
+    const src = { missed: "Missed last time", unseen: "New questions", marked: "Bookmarked", unsure: "Unsure" }[f.source];
     return newSession(bank, opts.mode || "study", opts.label || "Study · " + (f.label ? f.label : (src ? src + " · " : "") + what), shuffle(ids, rand),
       { study: true, seed: opts.seed, now: opts.now, timed: !!opts.seconds, seconds: opts.seconds, rung: opts.rung });
   }
@@ -1528,7 +1536,7 @@
     return o;
   }
   const STUDY = { objMode: oneOf(["all", "weak", "pick"], "all"), objs: idList, levels: v => intList(v).filter(x => x >= 1 && x <= 3),
-                  source: oneOf(["mix", "unseen", "missed"], "mix"), count: v => Math.min(400, count(v)) };
+                  source: oneOf(["mix", "unseen", "missed", "marked", "unsure"], "mix"), count: v => Math.min(400, count(v)) };
   const CMD = { source: oneOf(["recommended", "due", "new", "pick"], "recommended"), cmds: v => Array.isArray(v) ? v.filter(x => typeof x === "string" && x.length <= 40) : [],
                 count: v => Math.max(1, Math.min(50, count(v))), mode: oneOf(["guided", "recall", "timed"], "guided") };
   const SETTINGS = { theme: oneOf(["system", "light", "dark"], "system"), goal: v => clampGoal(v), review: v => clampReview(isObj(v) ? v : {}),
@@ -1609,7 +1617,7 @@
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
-           setMark, markOf, markedIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,

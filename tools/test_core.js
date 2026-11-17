@@ -255,6 +255,19 @@ t("Level Up: 8 of 10 moves up a step, steps get harder, progress comes from the 
   const l = C.ladder(st.tests); assert.strictEqual(l.done, 9); assert(l.finished);
   assert.strictEqual(C.ladder(C.migrate(JSON.parse(JSON.stringify(st))).tests).done, 9, "survives a reload");
 });
+t("Level Up: ladder treats passed rungs as a set, so date order cannot freeze progress", () => {
+  const pass = (rung, date) => ({ id: "lu-" + rung + "-" + date, date, mode: "study", rung, total: 10, pct: 80, score: 8, answered: 10, secs: 0 });
+  assert.strictEqual(C.ladder([pass(2, 200), pass(1, 100)]).done, 2, "rung 2 before rung 1 still counts");
+  assert.strictEqual(C.ladder([pass(3, 300), pass(1, 100), pass(2, 50)]).next, 4);
+  assert.strictEqual(C.ladder([pass(1, 100), { id: "fail", date: 150, rung: 2, total: 10, pct: 70, score: 7 }]).done, 1, "a failed step does not count");
+  // Sync merge sorts by date; clock skew can put a later rung earlier in the array.
+  const merged = C.mergeStates([C.cleanDoc({ tests: [pass(1, 200)] }), C.cleanDoc({ tests: [pass(2, 100)] })]);
+  assert.ok(merged.tests[0].rung === 2 && merged.tests[1].rung === 1, "merge sorted by date");
+  assert.strictEqual(C.ladder(merged.tests).done, 2, "date-sorted merge still unlocks step 3");
+  // An import whose tests are not sorted must not freeze Level Up either.
+  const imported = C.importState(C.freshState(), { app: "le010", tests: [pass(2, 50), pass(1, 200)] });
+  assert.strictEqual(C.ladder(imported.tests).done, 2);
+});
 t("bookmarks and notes: saved, merged across devices (latest change wins), removal travels too", () => {
   const a = C.freshState(), b = C.freshState();
   C.setMark(a, "1.1-01", { on: true }, 100); C.setMark(a, "1.1-02", { note: "RPM = Red Hat <b>" }, 110); C.setMark(b, "1.1-01", { on: true, note: "from b" }, 120); C.setMark(b, "9.9-99", { on: true }, 130);
@@ -369,6 +382,15 @@ t("study builder: Bookmarked and Unsure sources combine with objective and level
   assert.strictEqual(C.cleanDoc({ settings: { study: { source: "unsure", count: 10 } } }).settings.study.source, "unsure");
   assert.strictEqual(C.cleanDoc({ settings: { study: { source: "marked" } } }).settings.study.source, "marked");
   assert.strictEqual(C.cleanDoc({ settings: { study: { source: "nope" } } }).settings.study.source, "mix");
+});
+t("cleanDoc clamps right to seen", () => {
+  const q = C.cleanDoc({ qstats: { "1.1-01": { seen: 1, right: 5, last: true } } });
+  assert.strictEqual(q.qstats["1.1-01"].seen, 1);
+  assert.strictEqual(q.qstats["1.1-01"].right, 1);
+  const c = C.cleanDoc({ cards: { "card-1": { seen: 2, right: 9 } }, cmdstats: { ls: { seen: 0, right: 3 } } });
+  assert.strictEqual(c.cards["card-1"].right, 2);
+  assert.strictEqual(c.cmdstats.ls.seen, 0);
+  assert.strictEqual(c.cmdstats.ls.right, 0, "right cannot exceed seen when seen is zero");
 });
 t("every question has a hint that doesn't contain the answer", () => {
   for (const q of bank.questions) {
@@ -631,7 +653,15 @@ t("only cold answers count: repeats of a question you've seen the answer to are 
   const mixed = {}; ids.forEach(id => { mixed[id] = { seen: 3, right: 1, last: true }; });
   const m = C.passPrediction(bank, mixed); assert(m.chance < 0.01, "a third right on old progress gave " + m.chance); assert.strictEqual(m.repeats, 0);
   const hinted = {}; ids.forEach(id => { hinted[id] = { seen: 2, right: 2, last: true, ev: -1 }; });
-  const h = C.passPrediction(bank, hinted); assert.strictEqual(h.chance, null); assert.strictEqual(h.repeats, ids.length);
+  const h = C.passPrediction(bank, hinted); assert.strictEqual(h.chance, null); assert.strictEqual(h.repeats, C.factCount(bank), "one repeat count per fact, not per wording");
+});
+t("pass evidence counts one cold result per variant family", () => {
+  const v = bank.questions.find(q => q.variantOf), base = bank.byId[v.variantOf];
+  const cold = ev => ({ seen: 1, right: ev ? 1 : 0, last: !!ev, ev });
+  assert.strictEqual(C.passPrediction(bank, { [base.id]: cold(1), [v.id]: cold(1) }).seen, 1, "two wordings of one fact count once");
+  assert.strictEqual(C.passPrediction(bank, { [base.id]: cold(1) }).seen, 1);
+  assert.strictEqual(C.passPrediction(bank, { [v.id]: cold(0) }).seen, 1, "a variant alone still counts as the fact");
+  assert.strictEqual(C.passPrediction(bank, { [base.id]: cold(0), [v.id]: cold(1) }).seen, 1, "mixed cold results on one fact still count once");
 });
 t("recording: first attempts and answers after a long gap are cold evidence; hinted and quick repeats are not", () => {
   const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();

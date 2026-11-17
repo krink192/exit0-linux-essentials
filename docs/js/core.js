@@ -362,10 +362,13 @@
   // Level Up: a ladder of 10-question steps that get harder. 8 of 10 right moves you up one step.
   // Steps 1-2 are recall questions, 3-5 apply, 6-8 analyze, 9 mixes apply and analyze.
   const LADDER = [[1], [1], [2], [2], [2], [3], [3], [3], [2, 3]], LADDER_PASS = 80, LADDER_SIZE = 10;
-  /** Where the learner stands on the ladder, worked out from finished steps (so it syncs with the history). */
+  /** Where the learner stands on the ladder, worked out from finished steps (so it syncs with the history).
+   *  Passed rungs are a set: order in `tests` does not matter, so a sync merge that sorts by date cannot freeze Level Up. */
   function ladder(tests) {
+    const passed = new Set();
+    for (const t of tests || []) if (t.rung && t.total >= LADDER_SIZE && t.pct >= LADDER_PASS) passed.add(t.rung);
     let top = 0;
-    for (const t of tests || []) if (t.rung && t.total >= LADDER_SIZE && t.pct >= LADDER_PASS && t.rung === top + 1) top = t.rung;
+    while (passed.has(top + 1)) top++;
     return { done: top, next: Math.min(top + 1, LADDER.length), steps: LADDER.length, finished: top >= LADDER.length, pass: LADDER_PASS, size: LADDER_SIZE };
   }
   function buildLevelUp(bank, state, opts) {
@@ -1205,20 +1208,30 @@
     return typeof s.ev === "number" && s.ev >= 0 && s.ev <= 1 ? s.ev : -1;
   }
   /** Per-objective evidence: right/wrong counts from cold answers only. Repeats of a question you've seen the answer to
-   *  measure memory of that item, not readiness for new ones, so they are left out (counted in `repeats`). */
+   *  measure memory of that item, not readiness for new ones, so they are left out (counted in `repeats`).
+   *  One cold result per variant family (same fact rule as review and `factsSeen`); when several wordings have
+   *  cold evidence, the best outcome counts. */
   function passEvidence(bank, qstats) {
     const ev = {}, byTopic = {}; let n = 0, repeats = 0;
     for (const o of Object.keys(bank.objectives)) {
-      ev[o] = { right: 0, wrong: 0 }; const t = topicOf(o); byTopic[t] = byTopic[t] || 0;
-      for (const id of bank.byObj[o]) {
-        const s = qstats[id]; if (!s || !s.seen) continue;
-        const c = coldOutcome(s);
-        if (c < 0) { repeats++; continue; }
-        ev[o].right += c; ev[o].wrong += 1 - c;
-        byTopic[t]++;
-      }
-      n += ev[o].right + ev[o].wrong;
+      ev[o] = { right: 0, wrong: 0 }; byTopic[topicOf(o)] = byTopic[topicOf(o)] || 0;
     }
+    for (const lead in bank.family || {}) {
+      const fam = bank.family[lead], q = bank.byId[lead] || bank.byId[fam[0]]; if (!q || !ev[q.obj]) continue;
+      let best = -1, anySeen = false;
+      for (const id of fam) {
+        const s = qstats[id]; if (!s || !s.seen) continue;
+        anySeen = true;
+        const c = coldOutcome(s);
+        if (c > best) best = c;
+      }
+      if (!anySeen) continue;
+      if (best < 0) { repeats++; continue; }
+      const o = q.obj, t = topicOf(o);
+      ev[o].right += best; ev[o].wrong += 1 - best;
+      byTopic[t]++;
+    }
+    for (const o of Object.keys(ev)) n += ev[o].right + ev[o].wrong;
     return { ev, seen: n, repeats, byTopic };
   }
   function scoreDist(bank, ev) {
@@ -1536,7 +1549,12 @@
                     const days = v.filter(x => Number.isInteger(x) && x >= 0 && x < 100000);
                     return Array.from(new Set(days)).sort((a, b) => a - b).slice(-16);
                   } };
-  const cleanSched = s => isObj(s) ? shape(s, SCHED) : undefined;
+  const cleanSched = s => {
+    if (!isObj(s)) return undefined;
+    const o = shape(s, SCHED);
+    if (o.right > o.seen) o.right = o.seen;
+    return o;
+  };
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
   const confMap = v => mapOf(v, x => x === true || x === false ? x : undefined);

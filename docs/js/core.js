@@ -375,6 +375,17 @@
     const l = ladder(state.tests);
     return buildStudy(bank, state.qstats, { levels: LADDER[l.next - 1], count: LADDER_SIZE }, Object.assign({ label: "Level Up · step " + l.next + " of " + l.steps, rung: l.next }, opts));
   }
+  /** Plain-language Level Up result. Pass = unlocked the next step (or finished the ladder); fail = how many were needed. */
+  function levelUpMessage(rec) {
+    if (!rec || !rec.rung) return null;
+    const need = Math.ceil(LADDER_SIZE * LADDER_PASS / 100);
+    if (rec.pct >= LADDER_PASS) {
+      return rec.rung >= LADDER.length
+        ? "Step " + rec.rung + " complete · all " + LADDER.length + " steps climbed"
+        : "Step " + (rec.rung + 1) + " unlocked";
+    }
+    return "Need " + need + " of " + LADDER_SIZE + ": " + rec.score + " this time. Try step " + rec.rung + " again.";
+  }
   /** One question a day, the same on every device: picked from the whole bank by the day number. */
   function questionOfDay(bank, today) {
     today = today == null ? dayNum() : today;
@@ -1652,7 +1663,7 @@
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
-           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, questionOfDay, qotdDone, buildQotd,
+           priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, levelUpMessage, questionOfDay, qotdDone, buildQotd,
            setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,

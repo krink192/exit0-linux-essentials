@@ -75,7 +75,7 @@ F("2.1-17", "Type the name of the environment variable that holds the colon-sepa
   ["PATH", "$PATH"],
   "PATH lists directories such as /usr/local/bin:/usr/bin:/bin. The current directory is normally not included, which is why you run local scripts as `./script.sh`. Names are case-sensitive, so `path` is a different variable.")
 S("2.1-18", "Which expression expands to the same value as `$USER`?",
-  ["✔${USER}", "$(USER)", "%USER%", "$[USER]"],
+  ["✔`${USER}`", "`$(USER)`", "`%USER%`", "`$[USER]`"],
   "Braces are an alternate form of variable expansion, useful for things like `${USER}_backup`. `$(USER)` is command substitution and would try to run a command named USER. `%USER%` is Windows cmd.exe syntax.",
   run="USER=carol; echo ${USER}", expect="carol")
 

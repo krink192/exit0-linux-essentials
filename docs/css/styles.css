@@ -713,10 +713,11 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
   .readyhero { padding: 20px; gap: 20px; }
   .objcard .trow > summary { grid-template-columns: minmax(0, 1fr) 3.4em; }
   .objcard .trow > summary .track2 { display: none; }
-  /* Phone: the name gets its own line; chip, bar, % and Study share the second */
-  .orow2 { grid-template-columns: auto minmax(32px, 1fr) 3.4em auto; row-gap: 6px; }
+  /* Phone: the name gets its own line; chip on the left, % and Study on the right below it */
+  .orow2 { grid-template-columns: minmax(0, 1fr) 3.4em auto; row-gap: 6px; }
   .orow2 .oname { grid-column: 1 / -1; }
-  .orow2 .chip { justify-self: start; max-width: none; }
+  .orow2 .track2 { display: none; }
+  .orow2 .chip { justify-self: start; max-width: 100%; }
   .objcard .tbody { margin-left: 0; }
 }
 

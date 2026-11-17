@@ -1681,7 +1681,7 @@
   function renderSettings() {
     const s = st.settings;
     const linked = !!(SYNC && SYNC.linked);
-    const data = exportOpen ? JSON.stringify({ app: "le010", v: 3, tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, labs: st.labs, badges: st.badges, settings: st.settings }) : "";
+    const data = exportOpen ? JSON.stringify(C.exportDoc(st)) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
         <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
@@ -1711,7 +1711,10 @@
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
     wireGoalPicker(renderSettings);
     wireReviewPicker(renderSettings);
-    $("#exp").onclick = () => { exportOpen = !exportOpen; renderSettings(); };
+    $("#exp").onclick = () => {
+      exportOpen = !exportOpen; renderSettings();
+      if (exportOpen && $("#expData")) $("#expData").scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
     if ($("#installNow")) $("#installNow").onclick = promptInstall;
     if ($("#copy")) $("#copy").onclick = () => {
       const ta = $("#expData");

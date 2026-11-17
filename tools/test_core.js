@@ -663,6 +663,16 @@ t("pass evidence counts one cold result per variant family", () => {
   assert.strictEqual(C.passPrediction(bank, { [v.id]: cold(0) }).seen, 1, "a variant alone still counts as the fact");
   assert.strictEqual(C.passPrediction(bank, { [base.id]: cold(0), [v.id]: cold(1) }).seen, 1, "mixed cold results on one fact still count once");
 });
+t("pass evidence uses the most recent cold result when a fact has two wordings", () => {
+  const v = bank.questions.find(q => q.variantOf), base = bank.byId[v.variantOf], o = base.obj;
+  const cold = (ev, at) => ({ seen: 1, right: ev ? 1 : 0, last: !!ev, ev, at });
+  // cold wrong recently, cold right earlier → counts as wrong
+  let e = C.passEvidence(bank, { [base.id]: cold(1, 1000), [v.id]: cold(0, 2000) }).ev[o];
+  assert.strictEqual(e.right, 0); assert.strictEqual(e.wrong, 1);
+  // reverse: cold right recently, cold wrong earlier → counts as right
+  e = C.passEvidence(bank, { [base.id]: cold(0, 1000), [v.id]: cold(1, 2000) }).ev[o];
+  assert.strictEqual(e.right, 1); assert.strictEqual(e.wrong, 0);
+});
 t("recording: first attempts and answers after a long gap are cold evidence; hinted and quick repeats are not", () => {
   const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
   const st = C.freshState(), q = bank.questions.find(x => x.type === "single"), wrong = [q.answer[0] === 0 ? 1 : 0];

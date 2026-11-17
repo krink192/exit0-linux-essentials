@@ -1210,7 +1210,7 @@
   /** Per-objective evidence: right/wrong counts from cold answers only. Repeats of a question you've seen the answer to
    *  measure memory of that item, not readiness for new ones, so they are left out (counted in `repeats`).
    *  One cold result per variant family (same fact rule as review and `factsSeen`); when several wordings have
-   *  cold evidence, the best outcome counts. */
+   *  cold evidence, the most recent one counts (latest `at`), so a later cold miss is not hidden by an earlier hit. */
   function passEvidence(bank, qstats) {
     const ev = {}, byTopic = {}; let n = 0, repeats = 0;
     for (const o of Object.keys(bank.objectives)) {
@@ -1218,17 +1218,19 @@
     }
     for (const lead in bank.family || {}) {
       const fam = bank.family[lead], q = bank.byId[lead] || bank.byId[fam[0]]; if (!q || !ev[q.obj]) continue;
-      let best = -1, anySeen = false;
+      let picked = -1, pickedAt = -1, anySeen = false;
       for (const id of fam) {
         const s = qstats[id]; if (!s || !s.seen) continue;
         anySeen = true;
         const c = coldOutcome(s);
-        if (c > best) best = c;
+        if (c < 0) continue;
+        const at = s.at || 0;
+        if (at > pickedAt) { picked = c; pickedAt = at; }
       }
       if (!anySeen) continue;
-      if (best < 0) { repeats++; continue; }
+      if (picked < 0) { repeats++; continue; }
       const o = q.obj, t = topicOf(o);
-      ev[o].right += best; ev[o].wrong += 1 - best;
+      ev[o].right += picked; ev[o].wrong += 1 - picked;
       byTopic[t]++;
     }
     for (const o of Object.keys(ev)) n += ev[o].right + ev[o].wrong;
@@ -1655,7 +1657,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

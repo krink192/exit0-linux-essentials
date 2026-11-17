@@ -169,9 +169,10 @@ F("2.2-23", "Type the complete command that prints only the one-line man page de
 
 # ------------------------------------------------------------------------------------------ 2.3
 F("2.3-21", "Type the complete command that lists the current directory in long format with human-readable sizes such as 4.0K and 12M.",
-  ["ls -lh", "ls -hl", "ls -l -h", "ls -h -l", "ls -lh .", "ls -hl ."],
+  ["ls -lh", "ls -hl", "ls -l -h", "ls -h -l", "ls -lh .", "ls -hl .",
+   "ls -l --human-readable", "ls --human-readable -l", "ls -l --human-readable .", "ls --human-readable -l ."],
   "`-l` gives the long format and `-h` turns byte counts into units such as K, M and G. Short options can be combined "
-  "behind one dash in any order.",
+  "behind one dash in any order, and `--human-readable` is the long form of `-h`.",
   hint="Two one-letter options: long, and human-readable.", run="head -c 5000 /dev/zero > f; {A} | grep -c '4\\.9K'", expect="1", level=2, variant_of="2.3-09")
 
 S("2.3-22", "You are deep inside /usr/share/doc. Which command takes you to your home directory with the fewest keystrokes?",
@@ -222,7 +223,8 @@ S("2.4-23", "Which command removes the directory projects only when it is empty,
 
 # ------------------------------------------------------------------------------------------ 3.1
 F("3.1-21", "Type the complete command that lists the files inside backup.tar without extracting anything.",
-  ["tar -tf backup.tar", "tar tf backup.tar", "tar -tvf backup.tar", "tar tvf backup.tar"],
+  ["tar -tf backup.tar", "tar tf backup.tar", "tar -tvf backup.tar", "tar tvf backup.tar",
+   "tar --list --file backup.tar", "tar --list -f backup.tar"],
   "`-t` lists an archive's table of contents and `-f` names the archive file. Adding `-v` shows permissions, owners and sizes as well. "
   "`-x` would extract the files and `-c` would create a new archive.",
   hint="The tar option for a table of contents, then the one that names the file.",
@@ -267,7 +269,7 @@ S("3.2-32", "nums.txt contains the lines 10, 9 and 100. Which command prints the
   run="printf '10\\n9\\n100\\n' > nums.txt; sort -n nums.txt | tr '\\n' ' '", expect="9 10 100", level=2, variant_of="3.2-07")
 
 F("3.2-33", "Type the complete command that prints the last 5 lines of the file app.log in the current directory.",
-  ["tail -n 5 app.log", "tail -5 app.log", "tail -n5 app.log"],
+  ["tail -n 5 app.log", "tail -5 app.log", "tail -n5 app.log", "tail --lines 5 app.log", "tail --lines=5 app.log"],
   "tail prints the end of a file, 10 lines unless `-n` says otherwise. head does the same for the beginning.",
   hint="The counterpart of head, with -n and a number.",
   lab=lab({"files": [{"path": "~/app.log", "data": "".join("line %d\n" % i for i in range(1, 10))}]},
@@ -507,9 +509,10 @@ S("5.4-11", "Which standard directory normally has the sticky bit set, so that u
   level=1, variant_of="5.4-01")
 
 F("5.4-12", "Type the complete command that shows the permissions of the directory /etc itself in long format, instead of listing its contents.",
-  ["ls -ld /etc", "ls -dl /etc", "ls -ld /etc/", "ls -l -d /etc", "ls -d -l /etc"],
+  ["ls -ld /etc", "ls -dl /etc", "ls -ld /etc/", "ls -l -d /etc", "ls -d -l /etc",
+   "ls -l --directory /etc", "ls --directory -l /etc", "ls -l --directory /etc/"],
   "`-d` makes ls describe the directory itself instead of listing what is in it, and `-l` gives the long format with permissions, "
-  "owner and group.",
+  "owner and group. `--directory` is the long form of `-d`.",
   hint="Long format, plus the option that stands for directory.",
   lab=lab({}, {"type": "last", "regex": r"^drwxr-xr-x\s.*\s/etc/?\n?$"}, ["ls -l /etc", "ls -d /etc", "ls -la /etc"]),
   level=2, variant_of="5.4-04")

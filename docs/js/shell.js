@@ -2664,7 +2664,7 @@
       case "nogroup": return !groupByName(m, c.name);
       case "whoami": return userById(m, m.realUid != null ? m.realUid : m.uid).name === c.name;
       case "history": { const re = new RegExp(c.regex); return m.history.some(h => re.test(h)); }
-      case "last": return c.regex ? new RegExp(c.regex).test(m.lastOutput || "") : true;
+      case "last": return c.regex ? new RegExp(c.regex).test(m.lastOutput || "") : false;
       case "script": { const r = tryResolve(m, c.path); if (r.ino == null) return false; const copy = structuredClone(m); if (m.realUid != null) copy.uid = m.realUid; const out = api(copy).exec(c.path + (c.args ? " " + c.args : ""), { noHistory: true }).out; const r2 = api(copy).m.last; if (c.code != null && r2 !== c.code) return false; return c.output != null ? out === c.output : c.regex ? new RegExp(c.regex).test(out) : true; }
       case "proc": return m.procs.some(p => (c.cmd == null || p.cmd === c.cmd || p.comm === c.cmd) && (c.user == null || p.user === c.user) && (c.stat == null || p.stat[0] === c.stat));
       case "noproc": return !m.procs.some(p => p.cmd === c.cmd || p.comm === c.cmd);

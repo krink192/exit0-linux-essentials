@@ -24,12 +24,14 @@ HOME = "/home/student"
 DEFAULT_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 
-def T(text, hints, solution, check, explain, mistakes=None):
+def T(text, hints, solution, check, explain, mistakes=None, ways=None):
     if isinstance(hints, str):
         hints = [hints]
     t = {"text": text, "hints": hints, "solution": solution, "check": check, "explain": explain}
     if mistakes:
         t["mistakes"] = mistakes
+    if ways:
+        t["ways"] = [{"cmd": c, "note": n} for c, n in ways]
     return t
 
 
@@ -281,7 +283,7 @@ LESSONS.append(lesson("2.2.1", "Getting help: man, info, locate and find",
     "`man NAME` shows a command's manual. Pages live in numbered sections: 1 user commands, 5 file formats, 8 admin commands. On a real system press `q` to leave the pager.",
     [T("Open the manual page for `ls`.",
        ["man followed by the command name."],
-       "man ls", H(r"^\s*man\s+(1\s+)?ls\s*$"),
+       "man ls", H(r"^\s*man(?:\s+-\S+)*\s+(1\s+)?ls\s*$"),
        "Read NAME and SYNOPSIS first: `ls [OPTION]... [FILE]...` means options and files are optional and can repeat."),
      T("Find out which manual sections have a page called `passwd`.",
        ["whatis (or man -f) prints the one-line description from every section."],
@@ -305,7 +307,7 @@ LESSONS.append(lesson("2.2.1", "Getting help: man, info, locate and find",
     "GNU tools keep their longest documentation in **info** documents, and almost every command prints a short summary with `--help`.",
     [T("Open the info document for `ls`, find the menu entry about sorting, then list `/etc` sorted by modification time.",
        ["info ls, then look under 'Sorting the output'.", "The option is -t."],
-       "info ls\nls -t /etc", ALL(H(r"^\s*info\s+ls\s*$"), H(r"^\s*ls\s+-\w*t\w*\s+/etc/?\s*$")),
+       "info ls\nls -t /etc", ALL(H(r"^\s*info(?:\s+-\S+)*\s+ls\s*$"), H(r"^\s*ls\s+-\w*t\w*\s+/etc/?\s*$")),
        "In real info, Tab moves between links, Enter follows one, `u` goes up and `q` quits."),
      T("Show the short usage summary of `cp`.",
        ["Most commands accept a long option named after what you want."],
@@ -465,7 +467,7 @@ LESSONS.append(lesson("2.3.2", "Listing files: long format, sorting, hidden file
        "`.bashrc`, `.profile` and `.bash_logout` configure your shell. `-A` hides `.` and `..`."),
      T("Read `~/.bashrc` in a pager.",
        ["less lets you scroll; q quits."],
-       "less ~/.bashrc", H(r"^\s*less\s+(~|/home/student)/\.bashrc"), "In a real terminal, `/` searches inside less and `q` quits."),
+       "less ~/.bashrc", H(r"^\s*less(?:\s+-\S+)*\s+(~|/home/student)/\.bashrc"), "In a real terminal, `/` searches inside less and `q` quits."),
      T("Create an alias `lt` that runs `ls -lrt`.",
        ["alias NAME='command'"],
        "alias lt='ls -lrt'", {"type": "alias", "name": "lt", "value": "ls -lrt"},
@@ -915,7 +917,7 @@ LESSONS.append(lesson("3.3.2", "Shell scripts: exit status, loops and shift",
     "Every command ends with an exit status: 0 means success, anything else is an error code. `$?` holds the last one, and `&&` / `||` act on it.",
     [T("Run `ls` on a directory that doesn't exist, then print its exit status.",
        ["echo $? right after it."],
-       "ls /nope\necho $?", ALL(H(r"^\s*ls\s+/nope"), LAST(r"(^|\n)2\n$")), "ls uses 2 for 'serious trouble', such as a missing argument."),
+       "ls /nope\necho $?", ALL(H(r"^\s*ls(?:\s+-\S+)*\s+/nope"), LAST(r"(^|\n)2\n$")), "ls uses 2 for 'serious trouble', such as a missing argument."),
      T("Print the exit status of a grep that finds nothing.",
        ["grep zzz /etc/hosts; echo $?"],
        "grep zzz /etc/hosts; echo $?", LAST(r"^1\n$"), "grep returns 0 when it finds something, 1 when it doesn't and 2 on errors, which makes it perfect for `if`."),
@@ -971,7 +973,7 @@ LESSONS.insert(0, lesson("1.2.1", "Installing software: apt, dpkg, dnf, yum and 
     "This lab system is Ubuntu-like, so software comes in `.deb` packages from repositories. `apt` (and the older `apt-get` and `apt-cache`) download and install them; `dpkg` is the low-level tool underneath.",
     [T("Search the package lists for `figlet` with apt-cache.",
        ["apt-cache search WORD"],
-       "apt-cache search figlet", ALL(H(r"^\s*apt-cache\s+search\s+figlet"), LAST(r"^figlet - ")), "Searching never changes the system, so it doesn't need root."),
+       "apt-cache search figlet", ALL(H(r"^\s*apt-cache(?:\s+-\S+)*\s+search(?:\s+-\S+)*\s+figlet"), LAST(r"^figlet - ")), "Searching never changes the system, so it doesn't need root."),
      T("Search again with the newer `apt` command.",
        ["apt search WORD"],
        "apt search figlet", LAST(r"figlet/noble"), "`apt` shows the repository and version, and marks installed packages."),
@@ -987,10 +989,18 @@ LESSONS.insert(0, lesson("1.2.1", "Installing software: apt, dpkg, dnf, yum and 
        "dpkg -l figlet", LAST(r"\nii\s+figlet"), "`ii` means installed. `dpkg -L figlet` lists every file it installed."),
      T("Remove `figlet` again.",
        ["sudo apt remove NAME"],
-       "sudo apt remove figlet", ALL(AB("/usr/bin/figlet"), H(r"remove\s+figlet")), "`remove` keeps configuration files in case you reinstall."),
+       "sudo apt remove figlet", ALL(AB("/usr/bin/figlet"), H(r"\bremove(?:\s+-\S+)*\s+figlet\b")),
+       "`remove` keeps configuration files in case you reinstall.",
+       ways=[("sudo apt-get remove -y figlet", "`apt-get` is the older form; `-y` answers yes without a prompt."),
+             ("sudo apt-get --yes remove figlet", "Long form of `-y`, placed before the subcommand."),
+             ("sudo apt remove --assume-yes figlet", "`apt` also accepts `--assume-yes`.")]),
      T("Remove the printing system `cups` together with its configuration files.",
        ["purge removes configuration too."],
-       "sudo apt purge cups", ALL(AB("/etc/cups"), H(r"purge\s+cups")), "`purge` = remove + delete config. Check `ls /etc/cups` before and after."),
+       "sudo apt purge cups", ALL(AB("/etc/cups"), H(r"\bpurge(?:\s+-\S+)*\s+cups\b")),
+       "`purge` = remove + delete config. Check `ls /etc/cups` before and after.",
+       ways=[("sudo apt-get purge -y cups", "`apt-get` with `-y`."),
+             ("sudo apt-get --yes purge cups", "Long form of `-y` before the subcommand."),
+             ("sudo apt purge --assume-yes cups", "`apt` also accepts `--assume-yes`.")]),
     ], ["apt-cache", "apt", "apt-get", "sudo", "figlet", "dpkg"]),
 
   part("1.2.1-b", "Fedora and Red Hat: dnf, yum and rpm",
@@ -1013,7 +1023,11 @@ LESSONS.insert(0, lesson("1.2.1", "Installing software: apt, dpkg, dnf, yum and 
        "rpm -qa | grep cowsay", LAST(r"^cowsay-"), "`rpm -qi cowsay` shows details and `rpm -ql cowsay` its files."),
      T("Remove cowsay with yum.",
        ["sudo yum remove NAME"],
-       "sudo yum remove cowsay", ALL(AB("/usr/bin/cowsay"), H(r"yum\s+remove\s+cowsay")), "yum and dnf take the same commands."),
+       "sudo yum remove cowsay", ALL(AB("/usr/bin/cowsay"), H(r"\b(?:yum|dnf)(?:\s+-\S+)*\s+remove(?:\s+-\S+)*\s+cowsay\b")),
+       "yum and dnf take the same commands.",
+       ways=[("sudo yum remove -y cowsay", "`-y` answers yes without a prompt."),
+             ("sudo yum -y remove cowsay", "Same option before the subcommand."),
+             ("sudo dnf remove -y cowsay", "`dnf` is the modern name; yum is often a link to it.")]),
     ], ["apt", "yum", "dnf", "sudo", "cowsay", "rpm", "grep"], {"distro": "fedora"}),
 ]))
 
@@ -1049,7 +1063,7 @@ LESSONS.append(lesson("4.2.1", "Hardware: CPU, memory and storage devices", ["ls
        "lscpu", LAST(r"Model name"), "Look for the architecture, number of cores and the `vmx` or `svm` flag, which means hardware virtualization is supported."),
      T("Show memory use in megabytes.",
        ["free with the MiB option."],
-       "free -m", ALL(H(r"^\s*free\s+-m"), LAST(r"Mem:")), "`available` is the useful number: free memory plus cache the kernel can give back."),
+       "free -m", ALL(H(r"^\s*free\s+-\w*m"), LAST(r"Mem:")), "`available` is the useful number: free memory plus cache the kernel can give back."),
      T("List the block devices (disks and partitions).",
        ["lsblk"],
        "lsblk", LAST(r"mmcblk0p2"), "There's a hard disk (sda, two partitions), a DVD drive (sr0) and an SD card (mmcblk0)."),
@@ -1201,7 +1215,7 @@ LESSONS.append(lesson("4.4.1", "Your computer on the network",
        "sudo ip addr add 2001:db8:0:abcd::10/64 dev enp0s3", {"type": "addr", "dev": "enp0s3", "addr": "2001:db8:0:abcd::10/64"}, "`::` stands for a run of zero groups. 2001:db8::/32 is reserved for documentation."),
      T("Show every interface on one line each, with its addresses.",
        ["ip has a brief option, -br."],
-       "ip -br addr", ALL(H(r"^\s*ip\s+-br"), LAST(r"192\.168\.10\.10/24")), "Brief output is easy to read and to parse in scripts."),
+       "ip -br addr", ALL(H(r"^\s*ip\s+(-br|-brief)\b"), LAST(r"192\.168\.10\.10/24")), "Brief output is easy to read and to parse in scripts."),
     ], ["ip"]),
 
   part("4.4.1-b", "Routes and reachability",
@@ -1316,7 +1330,7 @@ LESSONS.append(lesson("5.1.1", "Users: who am I, who's logged in, and switching 
        "last", LAST(r"wtmp begins"), "last reads /var/log/wtmp: who, from where, and how long."),
      T("List only your own past logins.",
        ["last NAME"],
-       "last student", ALL(H(r"^\s*last\s+student"), NOT(LAST(r"reboot"))), "Give last a user name, tty or `reboot` to filter."),
+       "last student", ALL(H(r"^\s*last(?:\s+-\S+)*\s+student"), NOT(LAST(r"reboot"))), "Give last a user name, tty or `reboot` to filter."),
     ], ["who", "w", "last"]),
 
   part("5.1.1-c", "Switching users and changing your details",
@@ -1418,7 +1432,7 @@ LESSONS.append(lesson("5.2.1", "Creating and managing users and groups",
        "sudo passwd -l dave", {"type": "user", "name": "dave", "password": "locked-set"}, "Locking puts `!` in front of the hash; the old password still exists for when you unlock."),
      T("Unlock it again.",
        ["passwd -u"],
-       "sudo passwd -u dave", ALL({"type": "user", "name": "dave", "password": "set"}, H(r"passwd\s+-u\s+dave")), "Lock instead of delete when someone is on leave."),
+       "sudo passwd -u dave", ALL({"type": "user", "name": "dave", "password": "set"}, H(r"passwd\s+(?:-u|--unlock)\s+dave")), "Lock instead of delete when someone is on leave."),
      T("Force dave to choose a new password at his next login.",
        ["passwd -e expires the password."],
        "sudo passwd -e dave", HAS("/etc/shadow", regex=r"^dave:[^:]*:0:"), "A last-change date of 0 in /etc/shadow forces the change. Do this after setting a temporary password."),

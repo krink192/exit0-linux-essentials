@@ -202,7 +202,8 @@ S("2.4-20", "In a directory holding only the files a.txt, b.txt and c.txt, what 
 
 # ------------------------------------------------------------------------------------------ 3.1 (2)
 F("3.1-19", "Create a bzip2-compressed tar archive named logs.tar.bz2 that contains the directory logs. Type the full command.",
-  ["tar -cjf logs.tar.bz2 logs", "tar cjf logs.tar.bz2 logs", "tar -cjvf logs.tar.bz2 logs", "tar -cjf logs.tar.bz2 logs/"],
+  ["tar -cjf logs.tar.bz2 logs", "tar cjf logs.tar.bz2 logs", "tar -cjvf logs.tar.bz2 logs", "tar -cjf logs.tar.bz2 logs/",
+   "tar --create --bzip2 --file logs.tar.bz2 logs", "tar --create --bzip2 -f logs.tar.bz2 logs"],
   "`-c` creates, `-j` compresses with bzip2 and `-f` names the archive file, so `f` comes right before the name. "
   "`-z` would use gzip and `-J` xz.",
   hint="Create, bzip2, file: three short options for tar.",

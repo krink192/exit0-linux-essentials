@@ -340,6 +340,7 @@
     $$("[data-start=timed]", root).forEach(b => b.onclick = () => startBuilt(C.buildTimed(BANK, st.qstats, +b.dataset.min)));
     $$("[data-start=levelup]", root).forEach(b => b.onclick = () => startBuilt(C.buildLevelUp(BANK, st)));
     $$("[data-start=qotd]", root).forEach(b => b.onclick = () => startBuilt(C.buildQotd(BANK)));
+    $$("[data-start=placement]", root).forEach(b => b.onclick = () => startBuilt(C.buildPlacement(BANK, st.qstats)));
     $$("[data-start=marked]", root).forEach(b => b.onclick = startMarked);
     $$("[data-start=handson]", root).forEach(b => b.onclick = () => startHandson());
     $$("[data-form]", root).forEach(b => b.onclick = () => startForm(b.dataset.form));
@@ -351,12 +352,12 @@
   }
   function resumeBanner() {
     const cur = st.current; if (!cur) return "";
-    const nAns = cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id])).length;
-    const what = cur.mode === "test" ? "exam" : "study session";
+    const nAns = cur.qids.filter(id => C.answered(BANK.byId[id], cur.answers[id]) || C.isDontKnow(cur, id)).length;
+    const what = cur.mode === "test" ? "exam" : cur.mode === "placement" ? "placement test" : "study session";
     const actions = discardOpen
       ? `<div class="row card confirm spread"><span>Discard this ${what}? Your answers will be lost.</span><span class="row"><button id="dno">Cancel</button><button class="primary" id="dyes">Discard</button></span></div>`
       : `<div class="row"><button class="ghost" id="discard">Discard</button><button class="primary" id="resume">Resume</button></div>`;
-    return `<div class="card accent banner"><div><b>You have ${cur.mode === "test" ? "an exam" : "a study session"} in progress</b>
+    return `<div class="card accent banner"><div><b>You have ${cur.mode === "test" ? "an exam" : cur.mode === "placement" ? "a placement test" : "a study session"} in progress</b>
         <div class="small muted">${esc(cur.label)} · ${nAns} of ${cur.qids.length} answered${cur.deadline ? " · " + fmt((cur.deadline - Date.now()) / 1000) + " left" : ""}</div></div>
         ${actions}</div>`;
   }
@@ -385,6 +386,9 @@
     const dr = C.dailyReview(BANK, st), cardsDue = C.deckStats(CARDS, st.cards).due, cmdDue = cmdDueN();
     const lad = C.ladder(st.tests), lab = nextLabPart(), qod = BANK.byId[C.questionOfDay(BANK)];
     const steps = [];
+    // Brand-new learner: placement first. Once any question has been answered, the step goes away.
+    if (!Object.keys(st.qstats).length)
+      steps.push({ cmd: "placement", desc: "Placement test: 2 questions per objective, about 15 minutes", attr: 'data-start="placement"' });
     if (C.clampReview(st.settings.review).on) steps.push({ cmd: dr.left ? "review --due " + dr.left : "review", desc: dr.left ? "Daily review, split by exam weight" : "Daily review done. Open it for extra questions", done: !dr.left, doneHref: "#review", attr: 'data-start="review"' });
     if (cardsDue) steps.push({ cmd: "cards --due " + cardsDue, desc: plural(cardsDue, "flashcard") + " due today", attr: 'data-start="duecards"' });
     steps.push({ cmd: "qotd", desc: "Question of the day" + (qod ? ", objective " + qod.obj : ""), done: C.qotdDone(st.tests), attr: 'data-start="qotd"' });
@@ -611,6 +615,7 @@
     const byWeight = " Split like the real exam: heavier objectives get more questions.";
     const lad = C.ladder(st.tests), nMarked = C.markedIds(BANK, st).length, nUnsure = C.unsureIds(BANK, st.qstats).length;
     const hoStats = HANDSON.map(it => st.cmdstats[it.id]).filter(x => x && x.seen), hoTried = hoStats.length, hoRight = hoStats.filter(x => x.last).length;
+    const placeOk = !!C.buildPlacement(BANK, st.qstats);
     const objNote = sp.objMode === "all" ? "Questions from every objective." + byWeight
       : sp.objMode === "weak" ? `Your weakest: ${esc(weak.join(", "))}.` + (weak.length > 1 ? byWeight : "")
       : sel.size ? `${plural(sel.size, "objective")} selected.` + (sel.size > 1 ? byWeight : "") : "Tick the objectives you want below.";
@@ -619,6 +624,7 @@
       <div class="page-head"><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
       <div class="quick">
+        <button class="qs" data-start="placement" ${placeOk ? "" : "disabled"}>${icon("target")}<b>Placement test</b><span>${placeOk ? "2 questions per objective, about 15 minutes" : "No unseen questions left in any objective"}</span></button>
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
         <button class="qs" data-start="unsure" ${nUnsure ? "" : "disabled"}>${icon("help")}<b>Unsure</b><span>${nUnsure ? plural(nUnsure, "question") + " you marked Unsure" : "Press Sure or Unsure when you answer"}</span></button>
         <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " short of mastery" : "None yet. Answer on separate days to build mastery."}</span></button>
@@ -1768,14 +1774,16 @@
     // Resume after the deadline: finish at once (do not allow another second of answering).
     if (S.deadline && S.deadline <= Date.now()) { finish(); return; }
     const n = S.qids.length, id = S.qids[S.cur], q = BANK.byId[id], a = S.answers[id];
-    const done = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length;
+    const isPlace = S.mode === "placement";
+    const done = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i]) || (isPlace && C.isDontKnow(S, i))).length;
     const flagged = Object.values(S.flags).filter(Boolean).length;
     const revealed = S.study && S.checked[id];
-    const hintOn = S.study && S.hints && S.hints[id] && !revealed;
+    const hintOn = !isPlace && S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
-    S.conf = S.conf || {};
+    S.conf = S.conf || {}; S.dontKnow = S.dontKnow || {};
     (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
-    const rated = S.conf[id] === true || S.conf[id] === false;
+    const rated = !isPlace && (S.conf[id] === true || S.conf[id] === false);
+    const dontKnow = isPlace && C.isDontKnow(S, id);
     if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
     if (q.type === "fill") {
@@ -1794,12 +1802,13 @@
           <span class="key">${L[pos]}</span><span class="t">${rich(q.options[oi])}${revealed ? whyNote(q, oi) : ""}</span>${tag ? `<span class="tag">${icon(mark)}${tag}</span>` : ""}</label>`;
       }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
     }
-    const ok = revealed && C.isCorrect(q, a);
+    const ok = revealed && !dontKnow && C.isCorrect(q, a);
     const confWrong = revealed && rated && S.conf[id] === true && !ok;
-    const near = revealed && q.type === "fill" ? C.checkTyped(q, a).near : null;
-    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" : near === "sudo" ? "Right command, but drop sudo" : near ? "Almost" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+    const near = revealed && !dontKnow && q.type === "fill" ? C.checkTyped(q, a).near : null;
+    const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" : dontKnow ? "Don't know yet" : near === "sudo" ? "Right command, but drop sudo" : near ? "Almost" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
+        ${dontKnow ? `<p class="small muted">Counted as a miss so your study plan knows where to start.</p>` : ""}
         ${confWrong ? `<p class="conf-flag">${icon("flag")} You marked this <b>sure</b>, but it was wrong. Worth another look.</p>` : ""}
-        ${q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok ? multiNote(q, a) : ""}
+        ${!dontKnow && q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok && !dontKnow ? multiNote(q, a) : ""}
         ${explain(q)}${studyRef(q)}</div>` : "";
     const nav = C.navCounts(BANK, S), states = C.navStates(BANK, S);
     const shown = new Set(C.navFilter(BANK, S, navKind));
@@ -1816,17 +1825,19 @@
         <ul class="navlegend"><li><i class="nk ans"></i>Answered <b>${nav.answered}</b></li><li><i class="nk una"></i>Unanswered <b>${nav.unanswered}</b></li>
           <li><i class="nk uns"></i>Unseen <b>${nav.unseen}</b></li><li>${icon("flag", "nf")}Flagged <b>${nav.flagged}</b></li></ul></section>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
-    // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks.
+    // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks. Placement hides Sure/Unsure and Hint.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
     const primary = canCheck ? `<button class="primary" id="check">Check answer</button>`
       : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>`
       : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
-    const confPick = !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
+    const confPick = !isPlace && !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
       <span class="small muted">Optional:</span>
       <div class="seg" id="confSeg"><button type="button" data-c="1" class="${S.conf[id] === true ? "on" : ""}" id="sure">Sure</button>
         <button type="button" data-c="0" class="${S.conf[id] === false ? "on" : ""}" id="unsure">Unsure</button></div></div>` : "";
+    const dontKnowBtn = isPlace && canCheck ? `<button type="button" class="linkbtn dontknow" id="dontKnow">Don't know yet</button>` : "";
+    const qpos = isPlace ? `Placement: question ${S.cur + 1} of ${n}` : `Question ${S.cur + 1} of ${n}`;
     app.innerHTML = `<div class="exam-bar"><div class="in">
-        <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : "Study"} page.">${icon("x")}</button>
+        <button class="ghost close" id="exit" aria-label="Save and exit" title="Save and exit. Progress is kept: resume from the ${isTest ? "Exam" : isPlace ? "Study" : "Study"} page.">${icon("x")}</button>
         <div class="progress" id="prog" role="progressbar" aria-label="Questions answered" aria-valuemin="0" aria-valuemax="${n}" aria-valuenow="${done}"><i style="width:${100 * done / n}%"></i></div>
         <span class="count hide-sm" id="cnt">${done} of ${n} answered</span>
         ${S.deadline ? `<button type="button" class="timer${S.hideTimer ? " off" : ""}" id="timer" aria-pressed="${!S.hideTimer}" aria-label="${S.hideTimer ? "Show the timer" : "Hide the timer"}" title="${S.hideTimer ? "Show the timer" : "Hide the timer. It keeps running."}">${icon("clock")}<span id="timeVal"${S.hideTimer ? " hidden" : ""}>${fmt((S.deadline - Date.now()) / 1000)}</span></button>` : ""}
@@ -1834,31 +1845,34 @@
         <button id="submit">${isTest ? "Submit" : "Finish"}</button>` : ""}</div></div>
       <main class="page qpage">
         <h1 class="sr">${esc(S.label)}: question ${S.cur + 1} of ${n}</h1>
-        ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : "Finish this study session?"}</h3>
+        ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : isPlace ? "Finish this placement test?" : "Finish this study session?"}</h3>
           <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
           <div class="row u-wrap"><button id="keep">Keep working</button>${n - done ? `<button data-review="open">Review unanswered</button>` : ""}${flagged ? `<button data-review="flagged">Review flagged</button>` : ""}
             <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${navPanel}
-        <div class="qmeta"><span class="qpos">Question ${S.cur + 1} of ${n}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
+        <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${fb}${revealed ? noteBox(id) : ""}
+        ${body}${fb}${revealed && !isPlace ? noteBox(id) : ""}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
-          ${S.study ? markButton(id) : ""}
-          ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
+          ${S.study && !isPlace ? markButton(id) : ""}
+          ${!isPlace && S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${confPick}</div>
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
-          ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
+          ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${dontKnowBtn}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
-          <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study ? `<span><span class="kbd">H</span> hint</span>` : ""}
+          <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
           <span><span class="kbd">Enter</span> ${canCheck ? "check" : last ? "finish" : "next"}</span></p>
       </main>`;
     const move = i => { S.cur = Math.max(0, Math.min(n - 1, i)); save(); renderExam(); scrollTo(0, 0); };
     if ($("#prev")) $("#prev").onclick = () => move(S.cur - 1);
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
-    if ($("#check")) $("#check").onclick = () => { S.checked[id] = 1; save(); renderExam(); };
+    if ($("#check")) $("#check").onclick = () => { delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam(); };
+    if ($("#dontKnow")) $("#dontKnow").onclick = () => {
+      S.dontKnow[id] = 1; delete S.answers[id]; S.checked[id] = 1; save(); renderExam();
+    };
     if (revealed && announcedId !== S.start + "|" + id) {      // once per question, when its answer is first shown
       announcedId = S.start + "|" + id;
       const right = q.type === "fill" ? (q.accept || [])[0] || ""
@@ -1887,11 +1901,17 @@
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
       const inp = $("#fillin");
-      inp.oninput = () => { S.answers[id] = inp.value; save(); const c = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i])).length; $("#prog").setAttribute("aria-valuenow", c); $("#cnt").textContent = `${c} of ${n} answered`; $("#prog i").style.width = (100 * c / n) + "%"; };
-      inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (S.study && !S.checked[id]) { S.checked[id] = 1; save(); renderExam(); } else if (S.cur < n - 1) move(S.cur + 1); else { confirming = true; renderExam(); } } };
+      inp.oninput = () => {
+        if (isPlace) delete S.dontKnow[id];
+        S.answers[id] = inp.value; save();
+        const c = S.qids.filter(i => C.answered(BANK.byId[i], S.answers[i]) || (isPlace && C.isDontKnow(S, i))).length;
+        $("#prog").setAttribute("aria-valuenow", c); $("#cnt").textContent = `${c} of ${n} answered`; $("#prog i").style.width = (100 * c / n) + "%";
+      };
+      inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); if (S.study && !S.checked[id]) { if (isPlace) delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam(); } else if (S.cur < n - 1) move(S.cur + 1); else { confirming = true; renderExam(); } } };
       if (matchMedia("(pointer:fine)").matches) inp.focus({ preventScroll: true });
     } else if (!revealed) {
       $$(".opt input").forEach(inp => inp.onchange = () => {
+        if (isPlace) delete S.dontKnow[id];
         const oi = +inp.dataset.oi;
         if (q.type === "single") S.answers[id] = [oi];
         else { let cur = Array.isArray(S.answers[id]) ? S.answers[id].slice() : []; cur = inp.checked ? [...new Set(cur.concat(oi))] : cur.filter(x => x !== oi); S.answers[id] = cur; }
@@ -1909,7 +1929,7 @@
     const tl = $("#timer"); if (tl && S.deadline) tl.classList.toggle("low", (S.deadline - Date.now()) / 1000 <= 300);
   }
   function showHint(S, id) {
-    if (!S.study || S.checked[id] || !BANK.byId[id].hint) return;
+    if (!S.study || S.mode === "placement" || S.checked[id] || !BANK.byId[id].hint) return;
     S.hints = S.hints || {}; S.hints[id] = 1; save(); const y = scrollY; renderExam(); scrollTo(0, y);
   }
   // "Study this" links shown with every answer in Study mode and in result reviews
@@ -1988,8 +2008,9 @@
       return;
     }
     finishing = true;
-    if (S.mode !== "test") {          // study sessions are scored on the questions you actually answered
-      const done = S.qids.filter(id => C.answered(BANK.byId[id], S.answers[id]));
+    if (S.mode !== "test") {          // study/placement: score the questions you answered (Don't know counts)
+      const done = S.qids.filter(id => C.answered(BANK.byId[id], S.answers[id])
+        || (S.mode === "placement" && C.isDontKnow(S, id)));
       if (!done.length) {
         st.current = null; confirming = false; finishing = false; showGrid = false; save();
         toast("Nothing answered, so nothing was saved"); return go("study");
@@ -2006,7 +2027,35 @@
   }
 
   // ================================================================== RESULTS
+  function renderPlacementResults(rec) {
+    const sum = C.placementSummary(BANK, rec), pp = C.passPrediction(BANK, st.qstats);
+    const outIcon = w => w === "Knew both" ? "check" : w === "Knew 1 of 2" ? "dot" : "help";
+    const outClass = w => w === "Knew both" ? "v-good" : w === "Knew 1 of 2" ? "v-mid" : "v-bad";
+    const first = sum.startWith[0];
+    const estNote = pp.chance != null
+      ? "Your score estimate now uses these answers"
+      : estimateWait(pp);
+    const rows = Object.keys(TOP).map(t => {
+      const objs = Object.keys(OBJ).filter(o => C.topicOf(o) === t && sum.byObj[o] && sum.byObj[o].asked);
+      if (!objs.length) return "";
+      return `<div class="topic">${t}. ${esc(TOP[t])}</div>` + objs.map(o => {
+        const row = sum.byObj[o];
+        return `<div class="orow place-row"><span class="o">${o}</span><span>${esc(OBJ[o].name)}</span>
+          <span class="dverdict ${outClass(row.outcome)}">${icon(outIcon(row.outcome))}${esc(row.outcome)}</span></div>`;
+      }).join("");
+    }).join("");
+    shell(null, `<div class="page-head"><h1>Placement results</h1><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span>
+      <p class="lead">A short check across every objective — not an exam. Use it to decide where to study first.</p></div>
+      <div class="card stack place-start"><h2>Start with</h2>
+        <ol class="place-start-list">${sum.startWith.map(o => `<li><b>${o}</b> ${esc(OBJ[o].name)} <span class="small muted">· ${esc(sum.byObj[o].outcome)}</span></li>`).join("")}</ol>
+        <div class="row"><button class="primary" data-study="${first}">Study objective ${first}</button></div>
+        <p class="small muted">${esc(estNote)}</p></div>
+      <div class="card stack"><h2>By objective</h2><div class="olist">${rows}</div></div>
+      <div class="row"><button data-go="study">Back to Study</button><button data-go="today">Today</button><button class="ghost" data-go="progress">See progress</button></div>`);
+    wireStarts($("#page"));
+  }
   function renderResults(rec) {
+    if (rec.mode === "placement") return renderPlacementResults(rec);
     const perQ = {}, byObj = {}, byTopic = {}, byLevel = {};
     for (const id of rec.qids) {
       const q = BANK.byId[id]; if (!q) continue;

@@ -1269,4 +1269,108 @@ t("splitExplanation: first sentence, then the rest; short or single-sentence tex
   }
   assert(split > 200, "most explanations have a second tier");
 });
+
+t("placement: 2 unseen families per objective, Recall + higher when possible, seeded and shuffled", () => {
+  const s = C.buildPlacement(bank, {}, { seed: 7 });
+  assert(s); assert.strictEqual(s.mode, "placement"); assert.strictEqual(s.label, "Placement test");
+  assert.strictEqual(s.study, true); assert.strictEqual(s.timed, false); assert.strictEqual(s.deadline, null);
+  assert.strictEqual(s.qids.length, 38);
+  const c = C.objCounts(bank, s.qids);
+  for (const o of Object.keys(bank.objectives)) assert.strictEqual(c[o], 2, o + " gets two questions");
+  // One family each: no two wordings of the same fact.
+  const fam = id => bank.byId[id].variantOf || id;
+  assert.strictEqual(new Set(s.qids.map(fam)).size, 38);
+  // Prefer Recall + higher when the bank allows (every objective has both tiers).
+  for (const o of Object.keys(bank.objectives)) {
+    const lv = s.qids.filter(id => bank.byId[id].obj === o).map(id => bank.byId[id].level || 1);
+    assert(lv.some(x => x === 1), o + " has Recall");
+    assert(lv.some(x => x > 1), o + " has a higher tier");
+  }
+  // Objective order is shuffled (not 1.1, 1.2, …).
+  const firstObjs = [];
+  for (const id of s.qids) { const o = bank.byId[id].obj; if (firstObjs[firstObjs.length - 1] !== o) firstObjs.push(o); }
+  assert.strictEqual(firstObjs.length, 19);
+  assert(firstObjs.join(",") !== Object.keys(bank.objectives).join(","), "objectives are shuffled");
+  // Same seed → same picks; opts.rand is used when given.
+  assert.deepStrictEqual(C.buildPlacement(bank, {}, { seed: 7 }).qids, s.qids);
+  const r1 = C.rng(99), r2 = C.rng(99);
+  assert.deepStrictEqual(C.buildPlacement(bank, {}, { rand: r1 }).qids, C.buildPlacement(bank, {}, { rand: r2 }).qids);
+  // Seen families are skipped (a second run picks other facts).
+  const qs = {};
+  for (const id of s.qids) for (const f of C.familyOf(bank, id)) qs[f] = { seen: 1, right: 0, last: false, at: 1 };
+  const again = C.buildPlacement(bank, qs, { seed: 7 });
+  assert(again); assert.strictEqual(again.qids.length, 38);
+  assert(again.qids.every(id => !C.familyOf(bank, id).some(f => qs[f])), "no previously-seen family");
+  // One family left in an objective → only one pick there.
+  const oneLeft = {};
+  const o11 = bank.byObj["1.1"], keep = o11.find(id => !qs[id] && !(bank.byId[id].variantOf && qs[bank.byId[id].variantOf]));
+  for (const id of o11) {
+    if ((bank.byId[id].variantOf || id) === (bank.byId[keep].variantOf || keep)) continue;
+    for (const f of C.familyOf(bank, id)) oneLeft[f] = { seen: 1, right: 0, last: false, at: 1 };
+  }
+  Object.assign(oneLeft, qs);
+  const short = C.buildPlacement(bank, oneLeft, { seed: 7 });
+  assert(short); assert.strictEqual((short.qids.filter(id => bank.byId[id].obj === "1.1")).length, 1);
+  // Nothing unseen → null.
+  const all = {}; bank.questions.forEach(q => { all[q.id] = { seen: 1, right: 0, last: false, at: 1 }; });
+  assert.strictEqual(C.buildPlacement(bank, all, { seed: 1 }), null);
+});
+
+t("placement: Don't know is a cold miss; blanks stay blanks; exams/ladder/qotd ignore it", () => {
+  const st = C.freshState(), s = C.buildPlacement(bank, {}, { seed: 3 });
+  const a = s.qids[0], b = s.qids[1], c = s.qids[2], rest = s.qids.slice(3);
+  // a: Don't know (no answer), b: blank, c: cold correct, rest: cold wrong picks
+  s.dontKnow = { [a]: 1 };
+  const qC = bank.byId[c];
+  s.answers[c] = qC.type === "fill" ? qC.accept[0] : qC.answer.slice();
+  for (const id of rest) {
+    const q = bank.byId[id];
+    if (q.type === "fill") s.answers[id] = "nope";
+    else s.answers[id] = [q.options.map((_, i) => i).find(i => q.answer.indexOf(i) < 0)];
+  }
+  // Keep a (don't know), drop blank b, keep answered+dk — same filter the app uses on finish.
+  s.qids = s.qids.filter(id => id !== b);
+  const res = C.grade(bank, s), rec = C.recordResult(st, bank, s, res, 1.7e12);
+  assert.strictEqual(rec.mode, "placement");
+  assert(rec.dontKnow && rec.dontKnow.indexOf(a) >= 0);
+  assert.strictEqual(st.qstats[a].ev, 0, "Don't know is cold evidence of a miss");
+  assert.strictEqual(st.qstats[a].seen, 1); assert.strictEqual(st.qstats[a].right, 0); assert.strictEqual(st.qstats[a].last, false);
+  assert.strictEqual(st.qstats[b], undefined, "a real blank writes no history");
+  assert.strictEqual(st.qstats[c].ev, 1); assert.deepStrictEqual(C.coldDaysOf(st.qstats[c]), [C.dayNum(1.7e12)]);
+  const os = C.objectiveStats(bank, st.qstats);
+  assert.strictEqual(os[bank.byId[c].obj].level, "familiar", "a cold correct earns Familiar");
+  assert.strictEqual(C.isReadinessExam(rec), false);
+  assert.strictEqual(C.ladder(st.tests).done, 0);
+  assert.strictEqual(C.qotdDone(st.tests), false);
+  assert.strictEqual(st.tests.filter(t => t.mode === "test").length, 0, "Exams taken ignores placement");
+  // Mixed-exam demotion does not run on placement (mode is not test).
+  assert(!Object.keys(st.qstats).some(id => (st.qstats[id].cdrop || []).length));
+});
+
+t("placementSummary: outcome words and startWith ranking", () => {
+  const objs = Object.keys(bank.objectives);
+  const heavy = objs.slice().sort((a, b) => bank.objectives[b].weight - bank.objectives[a].weight || (a < b ? -1 : 1))[0];
+  const light = objs.filter(o => o !== heavy).sort((a, b) => bank.objectives[a].weight - bank.objectives[b].weight || (a < b ? -1 : 1))[0];
+  const mid = objs.find(o => o !== heavy && o !== light);
+  const pick = (o, n) => (bank.byObj[o] || []).slice(0, n);
+  const ids = pick(heavy, 2).concat(pick(light, 2), pick(mid, 2));
+  const rightAns = id => { const q = bank.byId[id]; return q.type === "fill" ? q.accept[0] : q.answer.slice(); };
+  const wrongAns = id => { const q = bank.byId[id]; return q.type === "fill" ? "nope" : [q.options.map((_, i) => i).find(i => q.answer.indexOf(i) < 0)]; };
+  const answers = {};
+  // heavy: 0 right, light: 1 right, mid: 2 right
+  answers[ids[0]] = wrongAns(ids[0]); answers[ids[1]] = wrongAns(ids[1]);
+  answers[ids[2]] = rightAns(ids[2]); answers[ids[3]] = wrongAns(ids[3]);
+  answers[ids[4]] = rightAns(ids[4]); answers[ids[5]] = rightAns(ids[5]);
+  const sum = C.placementSummary(bank, { qids: ids, answers });
+  assert.strictEqual(sum.byObj[heavy].right, 0); assert.strictEqual(sum.byObj[heavy].asked, 2); assert.strictEqual(sum.byObj[heavy].outcome, "New to you");
+  assert.strictEqual(sum.byObj[light].right, 1); assert.strictEqual(sum.byObj[light].outcome, "Knew 1 of 2");
+  assert.strictEqual(sum.byObj[mid].right, 2); assert.strictEqual(sum.byObj[mid].outcome, "Knew both");
+  // Fewest right first, then heavier weight, then objective id order.
+  assert.strictEqual(sum.startWith[0], heavy, "0 right + heavier weight ranks first");
+  assert.strictEqual(sum.startWith.length, 3);
+  // Don't know counts as asked but not right.
+  const dk = C.placementSummary(bank, { qids: pick(heavy, 2), answers: {}, dontKnow: pick(heavy, 2) });
+  assert.strictEqual(dk.byObj[heavy].asked, 2); assert.strictEqual(dk.byObj[heavy].right, 0); assert.strictEqual(dk.byObj[heavy].outcome, "New to you");
+});
+
 console.log(`\n${n} tests passed`);

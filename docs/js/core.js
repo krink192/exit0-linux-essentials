@@ -245,7 +245,7 @@
       if (q.type !== "fill") optOrder[id] = shuffle(q.options.map((_, i) => i), rand);
     }
     const now = opts.now || Date.now();
-    const s = { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, conf: {}, cur: 0, study: !!opts.study,
+    const s = { mode, label, qids, optOrder, answers: {}, flags: {}, checked: {}, hints: {}, conf: {}, dontKnow: {}, cur: 0, study: !!opts.study,
                 timed: !!opts.timed, start: now, deadline: opts.timed ? now + (opts.seconds || EXAM_SECONDS) * 1000 : null };
     if (opts.form) s.form = opts.form;      // a fixed practice exam (A-J)
     if (opts.rung) s.rung = opts.rung;      // a Level Up step
@@ -267,7 +267,7 @@
     if (qids.length !== s.qids.length) {
       const trim = m => { if (!m || typeof m !== "object") return {}; const out = {}; for (const id of qids) if (m[id] !== undefined) out[id] = m[id]; return out; };
       s.optOrder = trim(s.optOrder); s.answers = trim(s.answers); s.flags = trim(s.flags);
-      s.checked = trim(s.checked); s.hints = trim(s.hints); s.conf = trim(s.conf);
+      s.checked = trim(s.checked); s.hints = trim(s.hints); s.conf = trim(s.conf); s.dontKnow = trim(s.dontKnow);
       s.cur = Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0));
       s.qids = qids;
     }
@@ -395,6 +395,66 @@
   function buildQotd(bank, opts) {
     opts = opts || {};
     return newSession(bank, "qotd", "Question of the day", [questionOfDay(bank, opts.today)], { study: true, seed: opts.seed, now: opts.now });
+  }
+
+  // Placement test: 2 unseen facts per objective (one Recall and one higher tier when the bank allows), shuffled
+  // objective order. Seeds mastery and the score estimate; never an exam. Returns null when nothing unseen remains.
+  function buildPlacement(bank, qstats, opts) {
+    opts = opts || {}; qstats = qstats || {};
+    const rand = typeof opts.rand === "function" ? opts.rand : rng(opts.seed);
+    const famKey = id => { const q = bank.byId[id]; return q ? (q.variantOf || q.id) : id; };
+    const ids = [];
+    for (const o of shuffle(Object.keys(bank.objectives), rand)) {
+      // One wording per unseen family (never seen in any wording).
+      const seenFam = {}, cands = [];
+      for (const id of shuffle(bank.byObj[o] || [], rand)) {
+        if (familyOf(bank, id).some(f => wasSeen(qstats, f))) continue;
+        const fk = famKey(id); if (seenFam[fk]) continue;
+        seenFam[fk] = 1; cands.push(id);
+      }
+      if (!cands.length) continue;
+      const recall = shuffle(cands.filter(id => (bank.byId[id].level || 1) === 1), rand);
+      const higher = shuffle(cands.filter(id => (bank.byId[id].level || 1) > 1), rand);
+      const pick = [];
+      if (recall.length) pick.push(recall[0]);
+      if (higher.length) pick.push(higher[0]);
+      if (pick.length < 2) {
+        const used = {}; for (const id of pick) used[famKey(id)] = 1;
+        for (const id of shuffle(cands, rand)) {
+          if (used[famKey(id)]) continue;
+          pick.push(id); used[famKey(id)] = 1;
+          if (pick.length >= 2) break;
+        }
+      }
+      ids.push(...shuffle(pick.slice(0, 2), rand));
+    }
+    if (!ids.length) return null;
+    return newSession(bank, "placement", "Placement test", ids, { study: true, timed: false, seed: opts.seed, now: opts.now });
+  }
+  /** Whether a placement record (array) or in-progress session (map) marks `id` as "Don't know yet". */
+  function isDontKnow(rec, id) {
+    if (!rec || !rec.dontKnow) return false;
+    if (Array.isArray(rec.dontKnow)) return rec.dontKnow.indexOf(id) >= 0;
+    return !!rec.dontKnow[id];
+  }
+  /** Per-objective placement outcomes and the three objectives to study first. */
+  function placementSummary(bank, rec) {
+    const byObj = {};
+    for (const o of Object.keys(bank.objectives)) byObj[o] = { right: 0, asked: 0, outcome: "New to you" };
+    for (const id of (rec && rec.qids) || []) {
+      const q = bank.byId[id]; if (!q || !byObj[q.obj]) continue;
+      const row = byObj[q.obj]; row.asked++;
+      if (!isDontKnow(rec, id) && isCorrect(q, rec.answers && rec.answers[id])) row.right++;
+    }
+    for (const o of Object.keys(byObj)) {
+      const r = byObj[o].right;
+      byObj[o].outcome = r >= 2 ? "Knew both" : r === 1 ? "Knew 1 of 2" : "New to you";
+    }
+    const startWith = Object.keys(bank.objectives).slice().sort((a, b) =>
+      byObj[a].right - byObj[b].right
+      || (bank.objectives[b].weight || 0) - (bank.objectives[a].weight || 0)
+      || (a < b ? -1 : a > b ? 1 : 0)).slice(0, 3);
+    return { byObj, startWith };
   }
 
   // ------------------------------------------------------------- hands-on questions (matching and ordering)
@@ -536,7 +596,8 @@
   function navStates(bank, s) {
     const seen = s.seen || {};
     return s.qids.map((id, i) => ({ i, id, flagged: !!(s.flags && s.flags[id]),
-      state: answered(bank.byId[id], s.answers[id]) ? "answered" : seen[id] || i === s.cur ? "unanswered" : "unseen" }));
+      state: answered(bank.byId[id], s.answers[id]) || (s.mode === "placement" && isDontKnow(s, id)) ? "answered"
+        : seen[id] || i === s.cur ? "unanswered" : "unseen" }));
   }
   /** { answered, unanswered, unseen, flagged, open }: open = no answer yet, seen or not. */
   function navCounts(bank, s) {
@@ -587,7 +648,9 @@
     }
     const total = s.qids.length; now = now || Date.now();
     const secs = Math.round(Math.min(s.deadline ? EXAM_SECONDS : Infinity, (now - s.start) / 1000));
-    const answeredN = s.qids.filter(id => answered(bank.byId[id], s.answers[id])).length;
+    // Placement "Don't know yet" counts as answered (a cold miss), not a blank — placement only.
+    const answeredN = s.qids.filter(id => answered(bank.byId[id], s.answers[id])
+      || (s.mode === "placement" && isDontKnow(s, id))).length;
     return { score, total, pct: total ? Math.round(100 * score / total) : 0, secs, perQ, byObj, byTopic, byLevel, answered: answeredN };
   }
 
@@ -607,28 +670,31 @@
     const untimed = s.mode === "test" && !s.study && s.timed === false;
     const mixed = s.mode === "test" && !s.study && !untimed && (s.qids || []).length === 40;
     for (const id of s.qids) {
+      // Placement "Don't know yet" is a cold miss (ev = 0), not a blank: the learner said they don't know it.
+      const dontKnow = s.mode === "placement" && !!(s.dontKnow && s.dontKnow[id]);
       // Blanks count wrong in the exam score (grade) but are not evidence of not knowing the question.
-      if (!answered(bank.byId[id], s.answers[id])) continue;
+      if (!dontKnow && !answered(bank.byId[id], s.answers[id])) continue;
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
+      const ok = dontKnow ? false : !!res.perQ[id];
       // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
       const cold = isCold(bank, state.qstats, id, now);
       const lead = familyLead(bank, state.qstats, id);   // another wording answered more recently: carry on from its review step
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
       const hinted = !!(s.hints && s.hints[id]);
       if (!untimed) {
-        if (cold && !hinted) st.ev = res.perQ[id] ? 1 : 0;
+        if (cold && !hinted) st.ev = ok ? 1 : 0;
         else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       } else if (st.ev == null) {
         // Block legacy coldFromHistory from treating this practice answer as readiness evidence.
         st.ev = -1;
       }
-      st.seen++; if (res.perQ[id]) st.right++; st.last = res.perQ[id]; st.at = now;
+      st.seen++; if (ok) st.right++; st.last = ok; st.at = now;
       if (s.conf && (s.conf[id] === true || s.conf[id] === false)) {
         st.conf = s.conf[id] ? 1 : 0;                 // last rating: for "low confidence" filters later
-        if (s.conf[id] && !res.perQ[id]) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
+        if (s.conf[id] && !ok) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
       }
-      if (!untimed && res.perQ[id] && cold && !hinted) noteColdDay(st, bank.byId[id], today);
-      scheduleQuestion(st, res.perQ[id], today, exDay);
+      if (!untimed && ok && cold && !hinted) noteColdDay(st, bank.byId[id], today);
+      scheduleQuestion(st, ok, today, exDay);
       state.qstats[id] = st;
     }
     // A miss in a mixed timed exam demotes the whole objective: drop the latest day in the objective-wide union.
@@ -663,6 +729,10 @@
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
                   secs: res.secs, timed: s.timed, study: !!s.study, qids: s.qids, answers: s.answers, optOrder: s.optOrder,
                   flags: Object.keys(s.flags).filter(k => s.flags[k]), hints: Object.keys(s.hints || {}).filter(k => s.hints[k]), conf };
+    if (s.mode === "placement" && s.dontKnow) {
+      const dk = Object.keys(s.dontKnow).filter(k => s.dontKnow[k] && s.qids.indexOf(k) >= 0);
+      if (dk.length) rec.dontKnow = dk;
+    }
     if (s.form) rec.form = s.form; if (s.rung) rec.rung = s.rung;
     state.tests.push(rec);
     // keep full detail for the 30 most recent records
@@ -1573,7 +1643,7 @@
   const confMap = v => mapOf(v, x => x === true || x === false ? x : undefined);
   const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
                  label: text(200), score: count, total: count, pct: v => Math.min(100, count(v)), answered: count, secs: count, timed: flag, study: flag, form: v => typeof v === "string" && /^[A-Z]$/.test(v) ? v : undefined,
-                 qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList, conf: confMap };
+                 qids: idList, answers: v => mapOf(v, answerOf), optOrder: v => mapOf(v, x => Array.isArray(x) ? intList(x) : undefined), flags: idList, hints: idList, conf: confMap, dontKnow: idList };
   function cleanTest(t) {
     if (!isObj(t)) return undefined;
     const o = shape(t, TEST); if (!o.id) return undefined;
@@ -1605,13 +1675,13 @@
   }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
   const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap, seen: marks,
-                    hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
+                    dontKnow: marks, hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
     const o = shape(s, SESSION);
     if (!o.qids || !o.qids.length || o.start == null) return null;
-    for (const k of ["optOrder", "answers", "flags", "checked", "hints", "conf"]) o[k] = o[k] || {};
+    for (const k of ["optOrder", "answers", "flags", "checked", "hints", "conf", "dontKnow"]) o[k] = o[k] || {};
     o.cur = Math.min(o.qids.length - 1, o.cur || 0); o.label = o.label || ""; o.mode = o.mode || "study"; if (o.deadline === undefined) o.deadline = null;
     return o;
   }
@@ -1664,6 +1734,7 @@
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, levelUpMessage, questionOfDay, qotdDone, buildQotd,
+           buildPlacement, placementSummary, isDontKnow,
            setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,

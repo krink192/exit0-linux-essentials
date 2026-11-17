@@ -2054,7 +2054,7 @@
   [["gzip", "gzip"], ["gunzip", "gzip"], ["zcat", "gzip"], ["bzip2", "bzip2"], ["bunzip2", "bzip2"], ["bzcat", "bzip2"], ["xz", "xz"], ["unxz", "xz"], ["xzcat", "xz"]]
     .forEach(([prog, kind]) => { CMDS[prog] = compressor(kind, prog); });
   CMDS.zip = (m, args, io) => {
-    const { flags: f, rest } = parseOpts(args, { name: "zip", digitFlags: true, flags: "rq0123456789um", long: { recurse: "r", quiet: "q" } });
+    const { flags: f, rest } = parseOpts(args, { name: "zip", digitFlags: true, flags: "rq0123456789um", long: { "recurse-paths": "r", recurse: "r", quiet: "q" } });
     if (rest.length < 2) throw new ShellError("zip error: Nothing to do! (" + (rest[0] || "") + ")", 12);
     let file = rest[0]; if (!/\.zip$/.test(file)) file += ".zip";
     const entries = [];
@@ -2664,7 +2664,7 @@
       case "nogroup": return !groupByName(m, c.name);
       case "whoami": return userById(m, m.realUid != null ? m.realUid : m.uid).name === c.name;
       case "history": { const re = new RegExp(c.regex); return m.history.some(h => re.test(h)); }
-      case "last": return c.regex ? new RegExp(c.regex).test(m.lastOutput || "") : true;
+      case "last": return c.regex ? new RegExp(c.regex).test(m.lastOutput || "") : false;
       case "script": { const r = tryResolve(m, c.path); if (r.ino == null) return false; const copy = structuredClone(m); if (m.realUid != null) copy.uid = m.realUid; const out = api(copy).exec(c.path + (c.args ? " " + c.args : ""), { noHistory: true }).out; const r2 = api(copy).m.last; if (c.code != null && r2 !== c.code) return false; return c.output != null ? out === c.output : c.regex ? new RegExp(c.regex).test(out) : true; }
       case "proc": return m.procs.some(p => (c.cmd == null || p.cmd === c.cmd || p.comm === c.cmd) && (c.user == null || p.user === c.user) && (c.stat == null || p.stat[0] === c.stat));
       case "noproc": return !m.procs.some(p => p.cmd === c.cmd || p.comm === c.cmd);

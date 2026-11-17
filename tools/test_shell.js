@@ -153,6 +153,12 @@ u("editor saves through permissions; checks", () => {
   assert.strictEqual(sh.check({ type: "script", path: "./hello.sh", args: "Ada", output: "Hello, Ada\n" }), true);
   assert.strictEqual(sh.check({ type: "perms", path: "hello.sh", perms: "-rwxr--r--" }), true);
 });
+u("last check without regex fails closed", () => {
+  const sh = S.createMachine();
+  sh.exec("echo hi");
+  assert.strictEqual(sh.check({ type: "last", regex: "^hi\\n$" }), true);
+  assert.strictEqual(sh.check({ type: "last" }), false, "a last check with no regex must not pass");
+});
 u("PATH lookup: a broken PATH breaks ls, scripts in PATH run by name", () => {
   const sh = S.createMachine();
   assert.match(sh.exec("which passwd").out, /^\/usr\/bin\/passwd$/m);

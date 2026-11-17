@@ -2349,7 +2349,9 @@
     "rm -r old_logs/",
     "rm -rf old_logs/",
     "rm -Rf old_logs",
-    "rm --recursive old_logs"
+    "rm --recursive old_logs",
+    "rm --recursive --force old_logs",
+    "rm -r --force old_logs"
    ],
    "lab": {
     "setup": {
@@ -2720,7 +2722,9 @@
     "zip -r site www",
     "zip -r site www/",
     "zip -rq site.zip www",
-    "zip -r -q site.zip www"
+    "zip -r -q site.zip www",
+    "zip --recurse-paths site.zip www",
+    "zip --recurse-paths site.zip www/"
    ],
    "lab": {
     "setup": {
@@ -9551,7 +9555,9 @@
     "tar -cjf logs.tar.bz2 logs",
     "tar cjf logs.tar.bz2 logs",
     "tar -cjvf logs.tar.bz2 logs",
-    "tar -cjf logs.tar.bz2 logs/"
+    "tar -cjf logs.tar.bz2 logs/",
+    "tar --create --bzip2 --file logs.tar.bz2 logs",
+    "tar --create --bzip2 -f logs.tar.bz2 logs"
    ],
    "lab": {
     "setup": {
@@ -10652,7 +10658,7 @@
    "obj": "2.3",
    "variantOf": "2.3-09",
    "q": "Type the complete command that lists the current directory in long format with human-readable sizes such as 4.0K and 12M.",
-   "explanation": "`-l` gives the long format and `-h` turns byte counts into units such as K, M and G. Short options can be combined behind one dash in any order.",
+   "explanation": "`-l` gives the long format and `-h` turns byte counts into units such as K, M and G. Short options can be combined behind one dash in any order, and `--human-readable` is the long form of `-h`.",
    "type": "fill",
    "accept": [
     "ls -lh",
@@ -10660,7 +10666,11 @@
     "ls -l -h",
     "ls -h -l",
     "ls -lh .",
-    "ls -hl ."
+    "ls -hl .",
+    "ls -l --human-readable",
+    "ls --human-readable -l",
+    "ls -l --human-readable .",
+    "ls --human-readable -l ."
    ],
    "level": 2,
    "hint": "Two one-letter options: long, and human-readable.",
@@ -10827,7 +10837,9 @@
     "tar -tf backup.tar",
     "tar tf backup.tar",
     "tar -tvf backup.tar",
-    "tar tvf backup.tar"
+    "tar tvf backup.tar",
+    "tar --list --file backup.tar",
+    "tar --list -f backup.tar"
    ],
    "lab": {
     "setup": {
@@ -10967,7 +10979,9 @@
    "accept": [
     "tail -n 5 app.log",
     "tail -5 app.log",
-    "tail -n5 app.log"
+    "tail -n5 app.log",
+    "tail --lines 5 app.log",
+    "tail --lines=5 app.log"
    ],
    "lab": {
     "setup": {
@@ -11614,14 +11628,17 @@
    "obj": "5.4",
    "variantOf": "5.4-04",
    "q": "Type the complete command that shows the permissions of the directory /etc itself in long format, instead of listing its contents.",
-   "explanation": "`-d` makes ls describe the directory itself instead of listing what is in it, and `-l` gives the long format with permissions, owner and group.",
+   "explanation": "`-d` makes ls describe the directory itself instead of listing what is in it, and `-l` gives the long format with permissions, owner and group. `--directory` is the long form of `-d`.",
    "type": "fill",
    "accept": [
     "ls -ld /etc",
     "ls -dl /etc",
     "ls -ld /etc/",
     "ls -l -d /etc",
-    "ls -d -l /etc"
+    "ls -d -l /etc",
+    "ls -l --directory /etc",
+    "ls --directory -l /etc",
+    "ls -l --directory /etc/"
    ],
    "lab": {
     "setup": {},

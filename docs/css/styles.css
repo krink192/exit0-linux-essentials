@@ -82,12 +82,19 @@ h3 { font-size: var(--fs-row); font-weight: 600; }
 p { margin: 0; }
 a { color: var(--accent-text); text-underline-offset: 3px; }
 code, .mono { font-family: var(--mono); font-size: .9em; }
-p code, li code, .qtext code, .ex code, td code, .back code, .opt .t code, .rev .ropt .rt code {
+p code, li code, .qtext code, .ex code, td code, .back code {
   background: var(--sunk); border: 1px solid var(--line); padding: .1em .45em; border-radius: var(--r-xs);
 }
-/* Option code chips stay one piece: keep spaces, never break mid-chip. */
+/* Option code: lighter inline chips — mono, no border, faint sunk, baseline, one piece. */
 .opt .t code, .rev .ropt .rt code {
   display: inline-block;
+  font-size: .92em;
+  color: var(--ink);
+  background: var(--sunk);
+  border: 0;
+  padding: 0 .15em;
+  border-radius: var(--r-xs);
+  line-height: inherit;
   white-space: pre;
   max-width: 100%;
   vertical-align: baseline;

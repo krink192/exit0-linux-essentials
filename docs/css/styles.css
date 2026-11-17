@@ -288,11 +288,19 @@ pre.code { margin: 0; font: 400 var(--fs-body)/1.6 var(--mono); background: var(
 .fill input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: 400 var(--fs-row) var(--mono); padding: 15px 16px 15px 4px; }
 .fill input:focus { outline: none; }
 .fill.locked { border-color: var(--line-2); }
-/* Secondary tools (flag, bookmark, hint) sit above the action row; the action row holds Previous and the one primary button */
+/* Secondary tools (flag, Don't know, bookmark, hint) sit above the action row; the action row holds Previous / Skip / Check */
 .qtools { display: flex; gap: 4px; flex-wrap: wrap; margin-left: -10px; }
 .qtools button { padding-left: 10px; padding-right: 12px; }
+.qtools .dontknow { min-height: var(--tap); padding: 0 8px; color: var(--muted); font-weight: 500; }
+.qtools .dontknow:hover { color: var(--ink); text-decoration: underline; }
 .qactions { display: flex; gap: 10px; align-items: center; }
-.qactions .primary { min-width: 180px; margin-left: auto; }
+.qactions .primary { min-width: 180px; margin-left: auto; white-space: nowrap; }
+.place-start-list { margin: 0; padding-left: 1.25rem; display: grid; gap: 6px; }
+.place-start-list li { font-size: var(--fs-row); }
+.place-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+/* Placement outcomes: green only for "Knew all"; partial and new stay neutral (words + icons, not colour). */
+.v-place-mid { background: var(--sunk); color: var(--ink-2); }
+.v-place-new { background: transparent; color: var(--ink); padding-left: 0; padding-right: 0; }
 .qkeys { display: flex; gap: 6px 14px; flex-wrap: wrap; align-items: center; }
 .qkeys span { display: inline-flex; gap: 5px; align-items: center; }
 .feedback { display: flex; flex-direction: column; gap: 10px; }
@@ -418,6 +426,10 @@ textarea { width: 100%; min-height: 140px; font: 400 var(--fs-sm)/1.5 var(--mono
   .orow .hide-sm { display: none; }
   .exam-bar .hide-sm { display: none; }
   .flash { min-height: 340px; }
+  /* Placement results: outcome under the name so the name gets the full width */
+  .place-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .place-row .dverdict { grid-column: 2; justify-self: start; margin-top: 2px; font-size: var(--fs-xs); padding: 2px 0; }
+  .place-row .dverdict.v-place-mid { padding: 3px 8px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 #ctopic { width: min(300px, 100%); }

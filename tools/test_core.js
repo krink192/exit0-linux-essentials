@@ -122,6 +122,7 @@ t("answer keys grade correctly; wrong answers fail; fill-in trims spaces, keeps 
 t("next test prefers unseen questions", () => {
   const st = C.freshState();
   const s1 = C.buildTest(bank, st.qstats, { seed: 7 });
+  s1.qids.forEach(id => { const q = bank.byId[id]; s1.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
   C.recordResult(st, bank, s1, C.grade(bank, s1));
   const s2 = C.buildTest(bank, st.qstats, { seed: 8 });
   assert.strictEqual(s1.qids.filter(id => s2.qids.includes(id)).length, 0);
@@ -135,7 +136,12 @@ t("perfect test scores 100, history and activity recorded", () => {
 });
 t("weak objectives are found from missed answers", () => {
   const st = C.freshState(); const s = C.buildTest(bank, {}, { seed: 4 });
-  C.recordResult(st, bank, s, C.grade(bank, s));           // nothing answered: all missed
+  // Answer every question wrong (blanks no longer write history — see blank-exam test).
+  s.qids.forEach(id => {
+    const q = bank.byId[id];
+    s.answers[id] = q.type === "fill" ? "nope" : [q.answer[0] === 0 ? 1 : 0];
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s));
   assert(C.weakObjectives(bank, st.qstats).length > 0);
   assert.strictEqual(C.missedIds(bank, st.qstats).length, 40);
 });
@@ -397,7 +403,12 @@ t("daily review: misses return tomorrow, right answers space out", () => {
   C.scheduleQuestion(s, true, day + 2); assert.strictEqual(s.due, day + 4);
   for (let i = 0; i < 6; i++) C.scheduleQuestion(s, true, day); assert.strictEqual(s.box, 5); assert.strictEqual(s.due, day + 16);
   const st = C.freshState(); const ex = C.buildTest(bank, {}, { seed: 21 });
-  const right = ex.qids.slice(0, 30); right.forEach(id => { const q = bank.byId[id]; ex.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+  // 30 right, 10 wrong (blanks no longer write a schedule entry).
+  ex.qids.forEach((id, i) => {
+    const q = bank.byId[id];
+    ex.answers[id] = i < 30 ? (q.type === "fill" ? q.accept[0] : q.answer)
+      : (q.type === "fill" ? "nope" : [q.answer[0] === 0 ? 1 : 0]);
+  });
   const now = new Date(2026, 9, 10, 12).getTime(), today = C.dayNum(now);
   C.recordResult(st, bank, ex, C.grade(bank, ex, now), now);
   assert.strictEqual(C.dueIds(bank, st.qstats, today).length, 0, "nothing due the same day");
@@ -984,6 +995,100 @@ t("exam: an untimed run has no deadline, is labelled, and stays out of the exam 
   const full = { mode: "test", total: 40, study: false };
   assert.strictEqual(C.readiness([Object.assign({ pct: 90, timed: true }, full), Object.assign({ pct: 10, timed: false }, full)]), 90);
   assert.strictEqual(C.readiness([Object.assign({ pct: 60 }, full)]), 60, "records saved before the timed field count as timed");
+  assert(C.isReadinessExam(Object.assign({ pct: 90, timed: true }, full)));
+  assert(!C.isReadinessExam(Object.assign({ pct: 10, timed: false }, full)));
+  assert(C.isReadinessExam(Object.assign({ pct: 60 }, full)), "missing timed field still counts");
+});
+t("exam: blanks score wrong but leave per-question history untouched", () => {
+  const st = C.freshState(), s = C.buildTest(bank, {}, { seed: 11 });
+  assert.strictEqual(s.qids.length, 40);
+  const answered = s.qids.slice(0, 2);
+  answered.forEach(id => {
+    const q = bank.byId[id];
+    s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer;
+  });
+  const res = C.grade(bank, s);
+  assert.strictEqual(res.total, 40);
+  assert.strictEqual(res.score, 2, "two right answers");
+  assert.strictEqual(res.answered, 2);
+  assert.strictEqual(res.pct, 5);
+  // 38 blanks count wrong in the score
+  s.qids.slice(2).forEach(id => assert.strictEqual(res.perQ[id], false, id));
+  C.recordResult(st, bank, s, res);
+  const touched = Object.keys(st.qstats);
+  assert.strictEqual(touched.length, 2, "only the two answered questions get qstats");
+  answered.forEach(id => {
+    assert.strictEqual(st.qstats[id].seen, 1);
+    assert.strictEqual(st.qstats[id].right, 1);
+    assert.strictEqual(st.qstats[id].ev, 1);
+  });
+  s.qids.slice(2).forEach(id => assert.strictEqual(st.qstats[id], undefined, "blank " + id + " stays unseen"));
+  assert.strictEqual(C.missedIds(bank, st.qstats).length, 0, "blanks are not misses");
+});
+t("exam: blank miss does not demote mastery", () => {
+  const now = new Date(2026, 9, 10, 12).getTime(), d0 = C.dayNum(now);
+  const st = C.freshState(), id = bank.byObj["1.1"][0], q = bank.byId[id];
+  st.qstats[id] = { seen: 3, right: 3, last: true, ev: 1, at: now, cdays: [d0 - 2, d0 - 1, d0], box: 3, due: d0 + 4 };
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].level, "mastered");
+  const s = C.buildTest(bank, {}, { seed: 9 });
+  if (!s.qids.includes(id)) s.qids[0] = id;
+  // Leave the mastered question blank; answer everything else right.
+  s.qids.forEach(qid => {
+    if (qid === id) return;
+    const qq = bank.byId[qid];
+    s.answers[qid] = qq.type === "fill" ? qq.accept[0] : qq.answer;
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s), now);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].coldDays, 3);
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].level, "mastered");
+  assert.deepStrictEqual(C.coldDaysOf(st.qstats[id]), [d0 - 2, d0 - 1, d0]);
+});
+t("exam: untimed run updates practice history but not readiness evidence or mastery days", () => {
+  const now = new Date(2026, 9, 12, 12).getTime();
+  const st = C.freshState();
+  // A prior timed exam so readiness and pass chance have a baseline.
+  const prior = C.buildTest(bank, {}, { seed: 2 });
+  prior.qids.forEach(id => {
+    const q = bank.byId[id];
+    prior.answers[id] = q.type === "fill" ? q.accept[0] : q.answer;
+  });
+  C.recordResult(st, bank, prior, C.grade(bank, prior), now - 7 * 864e5);
+  const readyBefore = C.readiness(st.tests);
+  const passBefore = C.passPrediction(bank, st.qstats);
+  const snap = id => {
+    const qs = st.qstats[id];
+    return qs ? [C.coldDaysOf(qs), qs.ev] : null;
+  };
+  const priorIds = Object.keys(st.qstats);
+  const daysBefore = JSON.stringify(priorIds.sort().map(id => [id, snap(id)]));
+  assert.strictEqual(readyBefore, 100);
+
+  const s = C.buildTest(bank, {}, { seed: 5, timed: false });
+  assert.strictEqual(s.timed, false);
+  // Answer all wrong so any leaked cold evidence would move pass chance and mastery.
+  s.qids.forEach(id => {
+    const q = bank.byId[id];
+    s.answers[id] = q.type === "fill" ? "nope" : [q.answer[0] === 0 ? 1 : 0];
+  });
+  C.recordResult(st, bank, s, C.grade(bank, s), now);
+  assert.strictEqual(C.readiness(st.tests), readyBefore, "untimed stays out of readiness");
+  const passAfter = C.passPrediction(bank, st.qstats);
+  assert.strictEqual(passAfter.chance, passBefore.chance, "pass chance unchanged");
+  assert.strictEqual(passAfter.seen, passBefore.seen, "cold evidence count unchanged");
+  const daysAfter = JSON.stringify(priorIds.sort().map(id => [id, snap(id)]));
+  assert.strictEqual(daysAfter, daysBefore, "prior ev and mastery days unchanged");
+  // New questions touched only by the untimed run carry no cold evidence and no mastery days.
+  s.qids.filter(id => !priorIds.includes(id)).forEach(id => {
+    assert.strictEqual(st.qstats[id].ev, -1, id);
+    assert.deepStrictEqual(C.coldDaysOf(st.qstats[id]), [], id);
+  });
+  // Practice history and schedule still move for the answered questions.
+  s.qids.forEach(id => {
+    assert.ok(st.qstats[id].seen >= 1, id);
+    assert.strictEqual(st.qstats[id].last, false, id);
+    assert.strictEqual(st.qstats[id].box, 0, id);
+  });
+  assert(!C.isReadinessExam(st.tests[st.tests.length - 1]));
 });
 t("checkTyped: listed spellings, spacing, blanks and strict case", () => {
   const q = { type: "fill", accept: ["ls -lh", "ls -hl"] };

@@ -764,7 +764,7 @@
       .map(([f, l]) => `<li><span class="om-sw ${f}" aria-hidden="true"></span>${l}</li>`).join("");
     const pips = [[0, "none"], [1, "1 day"], [2, "2 days"], [3, "mastered"]].map(([n, l]) => `<li>${omPips(n)}${l}</li>`).join("");
     return `<div class="omap"><div class="om-strip">${Object.keys(TOP).map((t, i) => (i === 3 ? `<i class="om-br" aria-hidden="true"></i>` : "") + grp(t)).join("")}</div>
-      <div class="om-keys"><ul class="om-key om-lv" aria-label="Map key: levels">${fills}</ul><ul class="om-key" aria-label="Map key: mastery days">${pips}</ul></div></div>`;
+      <div class="om-keys"><ul class="om-key om-lv" aria-label="Map key: levels">${fills}</ul><ul class="om-key om-days" aria-label="Map key: mastery days">${pips}</ul></div></div>`;
   }
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;

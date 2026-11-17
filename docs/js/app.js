@@ -749,22 +749,22 @@
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
   const ocol = col;
-  // One square per objective, a row per topic. Width grows lightly with exam weight (weight 4 is twice weight 1),
-  // on one column grid so the same weight is the same width in every row. Pips show mastery days; the legend names the shades.
-  const omSpan = o => Math.min(4, Math.max(1, OBJ[o].weight || 1)) + 2;
+  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), green outline (attempted),
+  // tint (familiar, proficient), solid (mastered). Pips show mastery days; the legend names both.
+  const omFill = lv => lv === "mastered" ? "om-f2" : lv === "familiar" || lv === "proficient" ? "om-f1" : lv === "attempted" ? "om-fa" : "om-f0";
   const omPips = n => `<span class="om-pips" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
   function objectiveMap(os) {
     const need = C.MASTERY_DAYS || 3;
     const objsOf = t => Object.keys(OBJ).filter(o => C.topicOf(o) === t);
-    const cols = Math.max(...Object.keys(TOP).map(t => objsOf(t).reduce((n, o) => n + omSpan(o), 0)));
     const sq = o => { const s = os[o], days = Math.min(s.coldDays || 0, need);
-      return `<button class="om-sq om-w${omSpan(o) - 2}" data-study="${o}" title="${o} ${esc(OBJ[o].name)}"
-        aria-label="${o} ${esc(OBJ[o].name)}: ${LV[s.level]}, ${days} of ${need} days. Study."><span class="om-face lv-${s.level}"><span class="om-o">${o}</span>${omPips(days)}</span></button>`; };
-    const key = [["new", 0], ["attempted", 0], ["familiar", 1], ["proficient", 2], ["mastered", 3]]
-      .map(([lv, n]) => `<li><span class="om-face om-swatch lv-${lv}" aria-hidden="true">${omPips(n)}</span>${LV[lv]}</li>`).join("");
-    return `<div class="omap" style="--om-cols:${cols}">${Object.keys(TOP).map(t => `<div class="om-row" role="group" aria-label="Topic ${t}. ${esc(TOP[t])}">
-        <span class="om-t" aria-hidden="true">${t}</span>${objsOf(t).map(sq).join("")}</div>`).join("")}
-      <ul class="om-key" aria-label="Map key">${key}</ul></div>`;
+      return `<button class="om-sq" data-study="${o}" title="${o} ${esc(OBJ[o].name)}"
+        aria-label="${o} ${esc(OBJ[o].name)}: ${LV[s.level]}, ${days} of ${need} days. Study."><span class="om-face ${omFill(s.level)}">${omPips(days)}</span><span class="om-o" aria-hidden="true">${o}</span></button>`; };
+    const grp = t => `<div class="om-grp" role="group" aria-label="Topic ${t}. ${esc(TOP[t])}">${objsOf(t).map(sq).join("")}</div>`;
+    const fills = [["om-f0", "Not started"], ["om-fa", "Attempted"], ["om-f1", "Familiar, Proficient"], ["om-f2", "Mastered"]]
+      .map(([f, l]) => `<li><span class="om-sw ${f}" aria-hidden="true"></span>${l}</li>`).join("");
+    const pips = [[0, "none"], [1, "1 day"], [2, "2 days"], [3, "mastered"]].map(([n, l]) => `<li>${omPips(n)}${l}</li>`).join("");
+    return `<div class="omap"><div class="om-strip">${Object.keys(TOP).map((t, i) => (i === 3 ? `<i class="om-br" aria-hidden="true"></i>` : "") + grp(t)).join("")}</div>
+      <div class="om-keys"><ul class="om-key om-lv" aria-label="Map key: levels">${fills}</ul><ul class="om-key" aria-label="Map key: mastery days">${pips}</ul></div></div>`;
   }
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;

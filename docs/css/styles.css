@@ -19,7 +19,7 @@
 :root {
   --bg: #F6F7F5; --side: #EEF1EE; --surface: #FFFFFF; --sunk: #F0F2EF; --hover: #E9EDE8;
   --ink: #17201B; --ink-2: #2F3A34; --muted: #56615A; --line: #DDE1DC; --line-2: #B9C1BA; --track: #E3E7E2; --bar-low: #8A948D; --field-line: #7F8A83;
-  --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A;
+  --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A; --om-tint: #E6F2EA;
   --warm: #96500D; --warm-soft: #FCEBDA;
   --good: #14633A; --good-soft: #E6F2EA; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
@@ -42,7 +42,7 @@
   :root:not([data-theme="light"]) {
     --bg: #101412; --side: #141917; --surface: #181D1A; --sunk: #1F2522; --hover: #262D29;
     --ink: #E7ECE8; --ink-2: #CBD3CE; --muted: #A3AEA7; --line: #2C3430; --line-2: #47524C; --track: #2A322E; --bar-low: #6F7B74; --field-line: #6F7B74;
-    --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0;
+    --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0; --om-tint: #244535;
     --warm: #F0A45C; --warm-soft: #3A2716;
     --good: #6AD3A0; --good-soft: #16301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
     --on-solid: #06200F;
@@ -56,7 +56,7 @@
 :root[data-theme="dark"] {
   --bg: #101412; --side: #141917; --surface: #181D1A; --sunk: #1F2522; --hover: #262D29;
   --ink: #E7ECE8; --ink-2: #CBD3CE; --muted: #A3AEA7; --line: #2C3430; --line-2: #47524C; --track: #2A322E; --bar-low: #6F7B74; --field-line: #6F7B74;
-  --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0;
+  --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0; --om-tint: #244535;
   --warm: #F0A45C; --warm-soft: #3A2716;
   --good: #6AD3A0; --good-soft: #16301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
   --on-solid: #06200F;
@@ -516,7 +516,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
   :root, :root[data-theme="dark"], :root[data-theme="light"], :root:not([data-theme="light"]) {
     --bg: #F6F7F5; --side: #EEF1EE; --surface: #FFFFFF; --sunk: #F0F2EF; --hover: #E9EDE8;
     --ink: #17201B; --ink-2: #2F3A34; --muted: #56615A; --line: #DDE1DC; --line-2: #B9C1BA; --track: #E3E7E2; --bar-low: #8A948D; --field-line: #7F8A83;
-    --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A;
+    --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A; --om-tint: #E6F2EA;
     --warm: #96500D; --warm-soft: #FCEBDA;
     --good: #14633A; --good-soft: #E6F2EA; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
@@ -679,26 +679,36 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .orow2 .chip { justify-self: end; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 .orow2 button { padding: .4rem .7rem; }
 .okmark svg.i { width: 15px; height: 15px; color: var(--good); vertical-align: -2px; }
-/* Objective map: a row per topic on one shared column grid (--om-cols from app.js), squares span 3-6 columns by weight */
-.omap { --om-gap: 6px; --om-lab: 1.25rem; display: flex; flex-direction: column; gap: var(--om-gap); }
-.om-row { display: grid; grid-template-columns: var(--om-lab) repeat(var(--om-cols, 17), minmax(0, 1fr)); gap: var(--om-gap); }
-.om-t { align-self: center; text-align: center; font: 600 var(--fs-sm)/1 var(--ui); color: var(--muted); }
-.om-w1 { grid-column: span 3; } .om-w2 { grid-column: span 4; } .om-w3 { grid-column: span 5; } .om-w4 { grid-column: span 6; }
-.om-sq { display: block; height: 52px; min-width: var(--tap); min-height: var(--tap); padding: 0; border: 0; background: transparent; border-radius: var(--r-sm); }
+/* Objective map: a slim strip of 19 cells in objective order, each a 44px hit area around a smaller cell.
+   Lines break only between topics: one line when all 19 fit, topics 1-3 then 4-5 when 11 fit, one topic per line below that. */
+.omap { --om-tgap: 12px; container-type: inline-size; display: flex; flex-direction: column; gap: 8px; }
+.om-strip { display: flex; flex-wrap: wrap; gap: 4px var(--om-tgap); }
+.om-grp { display: flex; }
+.om-br { flex-basis: 100%; height: 0; }
+/* 884px = 19 hit areas + 4 topic gaps; 508px = 11 hit areas + 2 topic gaps. */
+@container (min-width: 884px) { .om-br { display: none; } }
+@container (max-width: 507px) { .om-strip { flex-direction: column; } .om-br { display: none; } }
+.om-sq { flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: var(--tap); min-height: var(--tap);
+  padding: 0; border: 0; background: transparent; border-radius: 4px; }
 .om-sq:hover { background: transparent; }
-.om-face { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 100%;
-  border: 1px solid transparent; border-radius: var(--r-sm); font: 600 var(--fs-sm)/1 var(--ui); }
-.om-face.lv-new { box-shadow: none; border: 1px dashed var(--line-2); }
+.om-face { display: flex; align-items: center; justify-content: center; width: 40px; height: 24px; border-radius: 4px; }
+.om-o { font: 500 var(--fs-xs)/1 var(--ui); color: var(--muted); }
+.om-f0 { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.om-fa { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--accent); }
+.om-f1 { background: var(--om-tint); color: var(--accent-text); }
+.om-f2 { background: var(--accent); color: var(--on-solid); }
 .om-sq:hover .om-face { box-shadow: inset 0 0 0 2px var(--line-2); }
-.om-pips { display: inline-flex; gap: 3px; }
-.om-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; }
+.om-pips { display: inline-flex; gap: 2px; }
+.om-pips i { width: 5px; height: 5px; border-radius: 50%; border: 1.25px solid currentColor; }
 .om-pips i.on { background: currentColor; }
-.om-key { list-style: none; margin: 2px 0 0; padding: 0 0 0 calc(var(--om-lab) + var(--om-gap)); display: flex; flex-wrap: wrap; gap: 6px 16px;
-  font-size: var(--fs-sm); color: var(--muted); }
-.om-key li { display: inline-flex; align-items: center; gap: 7px; }
-.om-swatch { width: 34px; height: 20px; flex: none; border-radius: var(--r-xs); }
+.om-keys { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.om-key { list-style: none; margin: 0; padding: 0; display: flex; white-space: nowrap; font-size: var(--fs-xs); color: var(--muted); }
+.om-key li { display: inline-flex; align-items: center; gap: 5px; }
+.om-key li + li::before { content: "·"; padding: 0 1px 0 5px; }
+.om-lv { flex-wrap: wrap; gap: 4px 10px; min-width: 0; }
+.om-lv li + li::before { content: none; }
+.om-sw { width: 12px; height: 12px; flex: none; border-radius: 3px; }
 .om-sort { justify-content: flex-end; }
-@media (max-width: 560px) { .omap { --om-gap: 4px; --om-lab: 1rem; } }
 .nextbadges { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
 .nb { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: var(--r-sm); background: var(--sunk); }
 .allbadges > summary, .histcard > summary { cursor: pointer; color: var(--accent-text); font-weight: 600; }

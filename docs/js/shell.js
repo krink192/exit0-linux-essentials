@@ -2054,7 +2054,7 @@
   [["gzip", "gzip"], ["gunzip", "gzip"], ["zcat", "gzip"], ["bzip2", "bzip2"], ["bunzip2", "bzip2"], ["bzcat", "bzip2"], ["xz", "xz"], ["unxz", "xz"], ["xzcat", "xz"]]
     .forEach(([prog, kind]) => { CMDS[prog] = compressor(kind, prog); });
   CMDS.zip = (m, args, io) => {
-    const { flags: f, rest } = parseOpts(args, { name: "zip", digitFlags: true, flags: "rq0123456789um", long: { recurse: "r", quiet: "q" } });
+    const { flags: f, rest } = parseOpts(args, { name: "zip", digitFlags: true, flags: "rq0123456789um", long: { "recurse-paths": "r", recurse: "r", quiet: "q" } });
     if (rest.length < 2) throw new ShellError("zip error: Nothing to do! (" + (rest[0] || "") + ")", 12);
     let file = rest[0]; if (!/\.zip$/.test(file)) file += ".zip";
     const entries = [];

@@ -2723,8 +2723,8 @@
     "zip -r site www/",
     "zip -rq site.zip www",
     "zip -r -q site.zip www",
-    "zip --recurse site.zip www",
-    "zip --recurse site.zip www/"
+    "zip --recurse-paths site.zip www",
+    "zip --recurse-paths site.zip www/"
    ],
    "lab": {
     "setup": {

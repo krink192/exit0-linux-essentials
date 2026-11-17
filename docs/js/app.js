@@ -749,6 +749,23 @@
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
   const ocol = col;
+  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), green outline (attempted),
+  // tint (familiar, proficient), solid (mastered). Pips show mastery days; the legend names both.
+  const omFill = lv => lv === "mastered" ? "om-f2" : lv === "familiar" || lv === "proficient" ? "om-f1" : lv === "attempted" ? "om-fa" : "om-f0";
+  const omPips = n => `<span class="om-pips" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
+  function objectiveMap(os) {
+    const need = C.MASTERY_DAYS || 3;
+    const objsOf = t => Object.keys(OBJ).filter(o => C.topicOf(o) === t);
+    const sq = o => { const s = os[o], days = Math.min(s.coldDays || 0, need);
+      return `<button class="om-sq" data-study="${o}" title="${o} ${esc(OBJ[o].name)}"
+        aria-label="${o} ${esc(OBJ[o].name)}: ${LV[s.level]}, ${days} of ${need} days. Study."><span class="om-face ${omFill(s.level)}">${omPips(days)}</span><span class="om-o" aria-hidden="true">${o}</span></button>`; };
+    const grp = t => `<div class="om-grp" role="group" aria-label="Topic ${t}. ${esc(TOP[t])}">${objsOf(t).map(sq).join("")}</div>`;
+    const fills = [["om-f0", "Not started"], ["om-fa", "Attempted"], ["om-f1", "Familiar, Proficient"], ["om-f2", "Mastered"]]
+      .map(([f, l]) => `<li><span class="om-sw ${f}" aria-hidden="true"></span>${l}</li>`).join("");
+    const pips = [[0, "none"], [1, "1 day"], [2, "2 days"], [3, "mastered"]].map(([n, l]) => `<li>${omPips(n)}${l}</li>`).join("");
+    return `<div class="omap"><div class="om-strip">${Object.keys(TOP).map((t, i) => (i === 3 ? `<i class="om-br" aria-hidden="true"></i>` : "") + grp(t)).join("")}</div>
+      <div class="om-keys"><ul class="om-key om-lv" aria-label="Map key: levels">${fills}</ul><ul class="om-key om-days" aria-label="Map key: mastery days">${pips}</ul></div></div>`;
+  }
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;
     const row = o => { const s = os[o];
@@ -766,8 +783,11 @@
           return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${t}. ${esc(TOP[t])}</span>${bar(p, "var(--muted)")}<span class="pct">${p == null ? "—" : p + "%"}</span></summary>
             <div class="tbody">${objsOf(t).map(row).join("")}</div></details>`; }).join("");
     const ds = C.deckStats(CARDS, st.cards), cm = Object.values(C.commandMastery(CMDX, st, { labUse: labUse() }));
+    const mc = C.objectiveMapCounts(os);
     return `<section class="card stack objcard"><div class="row spread"><h2>Objectives</h2>
-        <div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
+        <span class="small muted"><b class="om-count">${mc.proficientPlus}</b> of ${mc.total} objectives Proficient or better</span></div>
+      ${objectiveMap(os)}
+      <div class="row om-sort"><div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
       <div>${body}</div>
       <p class="small muted">An objective is mastered after correct first attempts on ${C.MASTERY_DAYS || 3} different days (not the same sitting). ${ds.mastered}/${ds.total} flashcards mastered · <a href="#commands">${cm.filter(c => c.level === "mastered").length}/${cm.length} commands mastered</a></p></section>`;
   }

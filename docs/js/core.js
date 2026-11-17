@@ -590,6 +590,18 @@
     }
     return out;
   }
+  /** How many objectives sit on each mastery level, for the objective map headline (os = objectiveStats output).
+   *  An unknown level counts as new, so the five counts always add up to total. */
+  function objectiveMapCounts(os) {
+    const byLevel = { new: 0, attempted: 0, familiar: 0, proficient: 0, mastered: 0 };
+    let total = 0;
+    for (const o of Object.keys(os || {})) {
+      const lv = os[o] && os[o].level;
+      byLevel[Object.prototype.hasOwnProperty.call(byLevel, lv) ? lv : "new"]++;
+      total++;
+    }
+    return { total, byLevel, proficientPlus: byLevel.proficient + byLevel.mastered };
+  }
 
   function weakObjectives(bank, qstats, limit) {
     const st = objectiveStats(bank, qstats);
@@ -1751,7 +1763,7 @@
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, levelUpMessage, questionOfDay, qotdDone, buildQotd,
            buildPlacement, placementSummary, isDontKnow,
-           setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, weakObjectives, missedIds, grade,
+           setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, objectiveMapCounts, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,

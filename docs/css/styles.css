@@ -85,12 +85,11 @@ code, .mono { font-family: var(--mono); font-size: .9em; }
 p code, li code, .qtext code, .ex code, td code, .back code, .opt .t code, .rev .ropt .rt code {
   background: var(--sunk); border: 1px solid var(--line); padding: .1em .45em; border-radius: var(--r-xs);
 }
-/* Option code chips stay one piece: keep spaces, never break mid-chip. Scroll only if wider than the column. */
+/* Option code chips stay one piece: keep spaces, never break mid-chip. */
 .opt .t code, .rev .ropt .rt code {
   display: inline-block;
   white-space: pre;
   max-width: 100%;
-  overflow-x: auto;
   vertical-align: baseline;
 }
 .muted { color: var(--muted); }

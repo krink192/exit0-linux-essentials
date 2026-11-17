@@ -82,7 +82,23 @@ h3 { font-size: var(--fs-row); font-weight: 600; }
 p { margin: 0; }
 a { color: var(--accent-text); text-underline-offset: 3px; }
 code, .mono { font-family: var(--mono); font-size: .9em; }
-p code, li code, .qtext code, .ex code, td code, .back code { background: var(--sunk); border: 1px solid var(--line); padding: .05em .35em; border-radius: var(--r-xs); }
+p code, li code, .qtext code, .ex code, td code, .back code {
+  background: var(--sunk); border: 1px solid var(--line); padding: .1em .45em; border-radius: var(--r-xs);
+}
+/* Option code: lighter inline chips — mono, no border, faint sunk, baseline, one piece. */
+.opt .t code, .rev .ropt .rt code {
+  display: inline-block;
+  font-size: .92em;
+  color: var(--ink);
+  background: var(--sunk);
+  border: 0;
+  padding: 0 .15em;
+  border-radius: var(--r-xs);
+  line-height: inherit;
+  white-space: pre;
+  max-width: 100%;
+  vertical-align: baseline;
+}
 .muted { color: var(--muted); }
 .small { font-size: var(--fs-sm); }
 .eyebrow { font: 500 var(--fs-sm)/1.3 var(--ui); color: var(--muted); }
@@ -484,15 +500,26 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 @media (max-width: 900px) { .sheet-grid { grid-template-columns: 1fr; } }
 @media (max-width: 560px) { .sheet-sec dl { grid-template-columns: 1fr; gap: 2px; } .sheet-sec dd { margin-bottom: 6px; } }
 @media print {
-  :root { --bg: #fff; --surface: #fff; --sunk: #f3f3f3; --ink: #000; --ink-2: #222; --muted: #555; --line: #ccc; --accent: #0b5d4e; }
-  body { background: #fff; font-size: 11px; }
-  .side, .top, .sheet-tools, .page-head, .toast { display: none !important; }
+  /* Always print with the light tokens, even when Settings is Dark or the system prefers dark. */
+  :root, :root[data-theme="dark"], :root[data-theme="light"], :root:not([data-theme="light"]) {
+    --bg: #F6F7F5; --side: #EEF1EE; --surface: #FFFFFF; --sunk: #F0F2EF; --hover: #E9EDE8;
+    --ink: #17201B; --ink-2: #2F3A34; --muted: #56615A; --line: #DDE1DC; --line-2: #B9C1BA; --track: #E3E7E2; --bar-low: #8A948D; --field-line: #7F8A83;
+    --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A;
+    --warm: #96500D; --warm-soft: #FCEBDA;
+    --good: #14633A; --good-soft: #E6F2EA; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
+    --on-solid: #FFFFFF; --knob: #FFFFFF;
+    --shadow: none; --shadow-pop: none;
+    color-scheme: light;
+  }
+  body { background: #fff; color: #17201B; font-size: 11px; }
+  .side, .top, .sheet-tools, .page-head, .toast, .bottomnav, .tabs { display: none !important; }
   .shell { display: block; } .main, .page { padding: 0 !important; max-width: none; }
-  .sheet { break-after: page; gap: 8px; } .sheet:last-child { break-after: auto; }
+  .sheet { break-after: page; gap: 8px; color: var(--ink); } .sheet:last-child { break-after: auto; }
+  .sheet-head h2, .sheet-sec h3, .sheet-sec dt, .sheet-sec dd { color: var(--ink); }
   .sheet-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .sheet-sec { padding: 10px 12px; border-radius: 6px; } .sheet-sec h3 { font-size: 13px; }
+  .sheet-sec { padding: 10px 12px; border-radius: 6px; background: var(--surface); border-color: var(--line); } .sheet-sec h3 { font-size: 13px; }
   .sheet-sec dl { font-size: 11px; gap: 3px 10px; grid-template-columns: minmax(70px, max-content) minmax(0, 1fr); }
-  .sheet-sec code { font-size: 10.5px; padding: 0 2px; }
+  .sheet-sec code { font-size: 10.5px; padding: 0 2px; color: var(--ink); background: var(--sunk); border-color: var(--line); }
 }
 
 /* ---------- Labs */
@@ -995,6 +1022,7 @@ input::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
 .scorenum b { font-size: var(--fs-num); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
 .scorenum .scorebar { margin-top: 2px; }
 span.dverdict { margin-top: 0; display: inline-flex; gap: 6px; padding: 5px 10px; border-radius: 999px; font: 600 var(--fs-sm) var(--ui); white-space: nowrap; }
+span.dverdict.lu { white-space: normal; max-width: 22rem; line-height: 1.35; border-radius: var(--r-sm); }
 span.dverdict svg.i { width: 14px; height: 14px; stroke-width: 2.5; }
 .rev .ropt .why svg.i { width: 14px; height: 14px; stroke-width: 2.5; }
  .hmark svg.i { stroke-width: 2.5; }

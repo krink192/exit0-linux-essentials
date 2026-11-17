@@ -9,8 +9,11 @@ docs/                 The web app (published by GitHub Pages)
   js/sync.js          optional sync with an exit0-sync server (merge rules are in core.js)
   data/bank.js, data/cards.js   generated, do not edit by hand
   data/labindex.js    generated: lab titles/progress info and question-to-lab links (loaded with every page)
-  data/labs.js        generated: the full labs, loaded with js/shell.js and js/man.js only when Labs opens
-  data/drills.js      generated: command practice drills and the sandbox, loaded when Commands or Sandbox opens
+  data/labs.js        generated: the full labs. Script tags for labs.js, js/shell.js and js/man.js run only when
+                      Labs (or Commands / Sandbox) opens — not when Today paints. The service worker still
+                      precaches them on install so Labs work offline without a prior visit (that download can
+                      show up in the network log on first load).
+  data/drills.js      generated: command practice drills and the sandbox; script runs when Commands or Sandbox opens
 desktop/              Windows wrapper (pywebview), Linux launcher + .deb/.rpm config (desktop/linux), app icon
 .github/workflows/    tests.yml (every push), release.yml (desktop builds), pages.yml (website + package repo),
                       docker.yml (container image)
@@ -29,6 +32,9 @@ tools/                Questions t1.py–t8.py (t8 = variants), hints.py, whys.py
   fill-in answer. The output must match the answer key.
 - The build checks blueprint counts, duplicates, that every question has a hint and every wrong option has a note,
   and whether the correct answer tends to be the longest option (target: well below the 25% expected by chance).
+- **Option text that is a command or literal** (paths, `$VAR`, `$(…)`, spaced echo output, and so on) goes in
+  backticks in the question sources (`tools/t*.py`). The app renders those spans in JetBrains Mono with
+  `white-space: pre-wrap`, so `a   b` and `a b`, or `${USER}` and `$(USER)`, stay easy to tell apart.
 - `node tools/test_shell.js` runs command sequences in both the lab terminal and real Bash and requires identical
   output, types every lab solution line by line to prove each task can be completed, checks that each coaching tip
   fires on its example mistake, and checks that every command a lesson lists is used.

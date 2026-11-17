@@ -1566,10 +1566,10 @@
    "q": "Which expression expands to the same value as `$USER`?",
    "explanation": "Braces are an alternate form of variable expansion, useful for things like `${USER}_backup`. `$(USER)` is command substitution and would try to run a command named USER. `%USER%` is Windows cmd.exe syntax.",
    "options": [
-    "${USER}",
-    "$(USER)",
-    "%USER%",
-    "$[USER]"
+    "`${USER}`",
+    "`$(USER)`",
+    "`%USER%`",
+    "`$[USER]`"
    ],
    "answer": [
     0

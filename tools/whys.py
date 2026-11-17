@@ -172,9 +172,9 @@ WHY.update({
   "2.1-16": {"Permanently changes the system's time zone to UTC": "It only affects that one date process; system settings stay the same.",
              "Sets TZ in the current shell for all later commands": "That would be TZ=UTC on its own line, or export TZ=UTC.",
              "Fails, because a variable cannot precede a command": "NAME=value before a command is valid and sets it just for that command."},
-  "2.1-18": {"$(USER)": "$( ) runs a command named USER and substitutes its output.",
-             "%USER%": "%NAME% is Windows cmd syntax.",
-             "$[USER]": "$[ ] is old Bash arithmetic syntax, not variable expansion."},
+  "2.1-18": {"`$(USER)`": "$( ) runs a command named USER and substitutes its output.",
+             "`%USER%`": "%NAME% is Windows cmd syntax.",
+             "`$[USER]`": "$[ ] is old Bash arithmetic syntax, not variable expansion."},
 })
 
 # ---------------- 2.2 Using the Command Line to Get Help

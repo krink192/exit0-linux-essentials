@@ -6,7 +6,7 @@
   const BANK = C.indexBank(window.LE_BANK);
   const CARDS = window.LE_CARDS;
   const OBJ = BANK.objectives, TOP = BANK.topics;
-  // Lab titles and progress info load with the page; the full labs, the shell and its man pages load when Labs opens.
+  // Lab titles and progress info load with the page; labs.js, shell.js and man.js load only when Labs, Commands or Sandbox opens (not on Today).
   const LABX = window.LE_LABINDEX || { parts: [], lessons: [], q: {} };
   const LABS = LABX.parts, LESSONS = LABX.lessons;
   const TROUBLE = "troubleshoot";       // the troubleshooting track: scenario labs listed after the per-lesson labs
@@ -63,7 +63,8 @@
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  // `code` and **bold** (bold only outside code spans)
+  // `code` and **bold** (bold only outside code spans). Options that are commands or literals use backticks in the
+  // question sources so they render in JetBrains Mono with whitespace kept (see .opt .t code).
   const rich = s => esc(s).split(/(`[^`]+`)/).map(p => p.length > 1 && p[0] === "`" && p.endsWith("`") ? "<code>" + p.slice(1, -1) + "</code>" : p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")).join("");
   const LPI_PDF = "https://learning.lpi.org/pdfstore/LPI-Learning-Material-010-160-en.pdf";     // the whole 010-160 book, CC BY-NC-ND (link only)
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
@@ -187,10 +188,15 @@
     window.addEventListener("online", () => scheduleSync(0));
     setInterval(() => { if (document.visibilityState === "visible") scheduleSync(0); }, 60000);
   }
-  // When the app is served by an exit0-sync server, offer that server as the sync address.
+  // When this origin is already the configured sync server (or we're not on a static Pages host), offer it as the sync address.
+  // Never probe /v1/health on github.io with an empty config: that 404s on every load.
   let originServer = null;
   if (SYNC && /^https?:$/.test(location.protocol) && !DESKTOP()) {
-    SYNC.probe(location.origin).then(h => { originServer = { url: location.origin, signup: h.signup }; if ((location.hash || "").slice(1) === "settings") rerenderIfIdle(); }, () => {});
+    const origin = location.origin, configured = (SYNC.info.url || "").replace(/\/+$/, "");
+    const onPages = /\.github\.io$/i.test(location.hostname);
+    if (configured === origin || (!configured && !onPages)) {
+      SYNC.probe(origin).then(h => { originServer = { url: origin, signup: h.signup }; if ((location.hash || "").slice(1) === "settings") rerenderIfIdle(); }, () => {});
+    }
   }
   st.labs = st.labs || {};
   const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
@@ -392,10 +398,13 @@
   function pipelineHTML(steps) {
     const next = steps.findIndex(s => !s.done);
     return `<ol class="pipe" aria-label="Today's plan">${steps.map((s, i) => {
+      const state = s.done ? "Done" : i === next ? "Run" : "waiting";
+      const name = s.cmd + ": " + s.desc + (s.done ? ", done" : i === next ? ", run now" : ", waiting");
       const inner = `<span class="pipe-cmd" aria-hidden="true"><span class="op">${i ? "|" : "$"}</span>${esc(s.cmd)}</span><span class="pipe-desc">${esc(s.desc)}</span>
-        <span class="pipe-state">${s.done ? icon("check") + "Done" : i === next ? "Run" : "waiting"}</span>`;
+        <span class="pipe-state" aria-hidden="true">${s.done ? icon("check") + state : state}</span>`;
       const cls = "pipe-row " + (s.done ? "done" : i === next ? "next" : "wait");
-      return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}">${inner}</a>` : `<div class="${cls}">${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}">${inner}</a>` : `<button class="${cls}" ${s.attr}>${inner}</button>`}</li>`;
+      const label = `aria-label="${esc(name)}"`;
+      return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}" ${label}>${inner}</a>` : `<div class="${cls}" ${label}>${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}" ${label}>${inner}</a>` : `<button class="${cls}" ${s.attr} ${label}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
   // The score estimate counts first attempts (and answers after a long gap) only, so it can't be pushed up by repeating questions.
@@ -1833,13 +1842,14 @@
         <div class="qmeta"><span class="qpos">Question ${S.cur + 1} of ${n}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}${fb}${revealed ? noteBox(id) : ""}
+        ${body}${fb}${revealed ? noteBox(id) : ""}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
           ${S.study ? markButton(id) : ""}
           ${S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${confPick}</div>
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
+        ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
           <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study ? `<span><span class="kbd">H</span> hint</span>` : ""}
           <span><span class="kbd">Enter</span> ${canCheck ? "check" : last ? "finish" : "next"}</span></p>
@@ -2009,7 +2019,10 @@
     const conf = rec.conf || {}, cal = C.calibration(rec, BANK);
     const order = (q, o) => Array.isArray(o) && o.length === q.options.length && o.every(i => q.options[i] != null) ? o : q.options.map((_, i) => i);
     const pct = rec.pct, isTest = rec.mode === "test";
-    const verdict = pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing";
+    // Ready range is for exams only. Level Up says the rung outcome; other study modes keep a plain verdict.
+    const lu = C.levelUpMessage(rec);
+    const verdict = lu || (isTest ? (pct >= 80 ? "Ready range" : pct >= 65 ? "Close: review your misses" : "Keep practicing")
+      : (pct >= 80 ? "Nice work" : pct >= 65 ? "Close: review your misses" : "Keep practicing"));
     const wrongN = rec.qids.filter(id => !perQ[id]).length;
     const focusSet = new Set(cal.focus);
     const list = rec.qids.map((id, i) => ({ id, i })).filter(({ id }) => BANK.byId[id]).filter(({ id }) =>
@@ -2039,7 +2052,7 @@
     const weakRows = Object.keys(byObj).sort().filter(o => byObj[o][0] < byObj[o][1]);
     shell(null, `<div class="page-head"><h1>${isTest ? "Exam results" : rec.mode === "review" ? "Review results" : "Study results"}</h1><span class="eyebrow">${esc(rec.label)} · ${fmtDate(rec.date)}</span></div>
       <div class="card score"><div class="scorenum"><b>${pct}%</b><div class="scorebar" role="img" aria-label="Score ${pct} percent. The target is 80 percent."><i style="width:${pct}%"></i><span class="mark" style="left:80%"></span></div><span class="small muted">80% target</span></div>
-        <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}">${verdict}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
+        <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}${lu ? " lu" : ""}">${esc(verdict)}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
           <p class="u-fs-l"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
             : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>

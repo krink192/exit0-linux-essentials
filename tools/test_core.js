@@ -255,6 +255,12 @@ t("Level Up: 8 of 10 moves up a step, steps get harder, progress comes from the 
   const l = C.ladder(st.tests); assert.strictEqual(l.done, 9); assert(l.finished);
   assert.strictEqual(C.ladder(C.migrate(JSON.parse(JSON.stringify(st))).tests).done, 9, "survives a reload");
 });
+t("Level Up: results say the outcome in words", () => {
+  assert.strictEqual(C.levelUpMessage({ rung: 2, pct: 100, score: 10, total: 10 }), "Step 3 unlocked");
+  assert.strictEqual(C.levelUpMessage({ rung: 2, pct: 70, score: 7, total: 10 }), "Need 8 of 10: 7 this time. Try step 2 again.");
+  assert.strictEqual(C.levelUpMessage({ rung: 9, pct: 80, score: 8, total: 10 }), "Step 9 complete · all 9 steps climbed");
+  assert.strictEqual(C.levelUpMessage({ pct: 100, score: 10, total: 10 }), null, "ordinary study has no Level Up line");
+});
 t("Level Up: ladder treats passed rungs as a set, so date order cannot freeze progress", () => {
   const pass = (rung, date) => ({ id: "lu-" + rung + "-" + date, date, mode: "study", rung, total: 10, pct: 80, score: 8, answered: 10, secs: 0 });
   assert.strictEqual(C.ladder([pass(2, 200), pass(1, 100)]).done, 2, "rung 2 before rung 1 still counts");

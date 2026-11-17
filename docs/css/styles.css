@@ -679,6 +679,26 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .orow2 .chip { justify-self: end; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 .orow2 button { padding: .4rem .7rem; }
 .okmark svg.i { width: 15px; height: 15px; color: var(--good); vertical-align: -2px; }
+/* Objective map: a row per topic on one shared column grid (--om-cols from app.js), squares span 3-6 columns by weight */
+.omap { --om-gap: 6px; --om-lab: 1.25rem; display: flex; flex-direction: column; gap: var(--om-gap); }
+.om-row { display: grid; grid-template-columns: var(--om-lab) repeat(var(--om-cols, 17), minmax(0, 1fr)); gap: var(--om-gap); }
+.om-t { align-self: center; text-align: center; font: 600 var(--fs-sm)/1 var(--ui); color: var(--muted); }
+.om-w1 { grid-column: span 3; } .om-w2 { grid-column: span 4; } .om-w3 { grid-column: span 5; } .om-w4 { grid-column: span 6; }
+.om-sq { display: block; height: 52px; min-width: var(--tap); min-height: var(--tap); padding: 0; border: 0; background: transparent; border-radius: var(--r-sm); }
+.om-sq:hover { background: transparent; }
+.om-face { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; width: 100%; height: 100%;
+  border: 1px solid transparent; border-radius: var(--r-sm); font: 600 var(--fs-sm)/1 var(--ui); }
+.om-face.lv-new { box-shadow: none; border: 1px dashed var(--line-2); }
+.om-sq:hover .om-face { box-shadow: inset 0 0 0 2px var(--line-2); }
+.om-pips { display: inline-flex; gap: 3px; }
+.om-pips i { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; }
+.om-pips i.on { background: currentColor; }
+.om-key { list-style: none; margin: 2px 0 0; padding: 0 0 0 calc(var(--om-lab) + var(--om-gap)); display: flex; flex-wrap: wrap; gap: 6px 16px;
+  font-size: var(--fs-sm); color: var(--muted); }
+.om-key li { display: inline-flex; align-items: center; gap: 7px; }
+.om-swatch { width: 34px; height: 20px; flex: none; border-radius: var(--r-xs); }
+.om-sort { justify-content: flex-end; }
+@media (max-width: 560px) { .omap { --om-gap: 4px; --om-lab: 1rem; } }
 .nextbadges { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
 .nb { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: var(--r-sm); background: var(--sunk); }
 .allbadges > summary, .histcard > summary { cursor: pointer; color: var(--accent-text); font-weight: 600; }

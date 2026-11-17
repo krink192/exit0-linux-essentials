@@ -749,6 +749,23 @@
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
   const ocol = col;
+  // One square per objective, a row per topic. Width grows lightly with exam weight (weight 4 is twice weight 1),
+  // on one column grid so the same weight is the same width in every row. Pips show mastery days; the legend names the shades.
+  const omSpan = o => Math.min(4, Math.max(1, OBJ[o].weight || 1)) + 2;
+  const omPips = n => `<span class="om-pips" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
+  function objectiveMap(os) {
+    const need = C.MASTERY_DAYS || 3;
+    const objsOf = t => Object.keys(OBJ).filter(o => C.topicOf(o) === t);
+    const cols = Math.max(...Object.keys(TOP).map(t => objsOf(t).reduce((n, o) => n + omSpan(o), 0)));
+    const sq = o => { const s = os[o], days = Math.min(s.coldDays || 0, need);
+      return `<button class="om-sq om-w${omSpan(o) - 2}" data-study="${o}" title="${o} ${esc(OBJ[o].name)}"
+        aria-label="${o} ${esc(OBJ[o].name)}: ${LV[s.level]}, ${days} of ${need} days. Study."><span class="om-face lv-${s.level}"><span class="om-o">${o}</span>${omPips(days)}</span></button>`; };
+    const key = [["new", 0], ["attempted", 0], ["familiar", 1], ["proficient", 2], ["mastered", 3]]
+      .map(([lv, n]) => `<li><span class="om-face om-swatch lv-${lv}" aria-hidden="true">${omPips(n)}</span>${LV[lv]}</li>`).join("");
+    return `<div class="omap" style="--om-cols:${cols}">${Object.keys(TOP).map(t => `<div class="om-row" role="group" aria-label="Topic ${t}. ${esc(TOP[t])}">
+        <span class="om-t" aria-hidden="true">${t}</span>${objsOf(t).map(sq).join("")}</div>`).join("")}
+      <ul class="om-key" aria-label="Map key">${key}</ul></div>`;
+  }
   function objectivesCard(os) {
     const bar = (p, color) => `<div class="track2 slim" aria-hidden="true"><i style="width:${p || 0}%;background:${color}"></i></div>`;
     const row = o => { const s = os[o];
@@ -766,8 +783,11 @@
           return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${t}. ${esc(TOP[t])}</span>${bar(p, "var(--muted)")}<span class="pct">${p == null ? "—" : p + "%"}</span></summary>
             <div class="tbody">${objsOf(t).map(row).join("")}</div></details>`; }).join("");
     const ds = C.deckStats(CARDS, st.cards), cm = Object.values(C.commandMastery(CMDX, st, { labUse: labUse() }));
+    const mc = C.objectiveMapCounts(os);
     return `<section class="card stack objcard"><div class="row spread"><h2>Objectives</h2>
-        <div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
+        <span class="small muted"><b class="om-count">${mc.proficientPlus}</b> of ${mc.total} objectives Proficient or better</span></div>
+      ${objectiveMap(os)}
+      <div class="row om-sort"><div class="seg" id="objView" role="group" aria-label="Sort objectives"><button data-v="topic" class="${objView === "topic" ? "on" : ""}">By topic</button><button data-v="weak" class="${objView === "weak" ? "on" : ""}">Weakest first</button></div></div>
       <div>${body}</div>
       <p class="small muted">An objective is mastered after correct first attempts on ${C.MASTERY_DAYS || 3} different days (not the same sitting). ${ds.mastered}/${ds.total} flashcards mastered · <a href="#commands">${cm.filter(c => c.level === "mastered").length}/${cm.length} commands mastered</a></p></section>`;
   }

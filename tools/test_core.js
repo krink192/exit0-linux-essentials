@@ -796,6 +796,25 @@ t("mastery: a miss in a mixed exam drops one cold day for that objective", () =>
   assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].coldDays, 2);
   assert.strictEqual(C.objectiveStats(bank, st.qstats)[q.obj].level, "proficient");
 });
+t("objectiveMapCounts: objectives per mastery level and the Proficient-or-better count", () => {
+  const empty = C.objectiveMapCounts(C.objectiveStats(bank, {}));
+  const all = Object.keys(bank.objectives).length;
+  assert.strictEqual(empty.total, all);
+  assert.deepStrictEqual(empty.byLevel, { new: all, attempted: 0, familiar: 0, proficient: 0, mastered: 0 });
+  assert.strictEqual(empty.proficientPlus, 0);
+  // One objective per level, built from real cold days so the counts follow objectiveStats.
+  const now = new Date(2026, 9, 10, 12).getTime(), d0 = C.dayNum(now), qs = {};
+  const give = (obj, days) => { qs[bank.byObj[obj][0]] = { seen: 3, right: days.length ? 3 : 0, last: !!days.length, at: now, cdays: days }; };
+  give("1.1", []); give("1.2", [d0]); give("1.3", [d0 - 1, d0]); give("2.1", [d0 - 2, d0 - 1, d0]); give("2.2", [d0 - 4, d0 - 3, d0 - 2, d0]);
+  const c = C.objectiveMapCounts(C.objectiveStats(bank, qs));
+  assert.strictEqual(c.total, all);
+  assert.deepStrictEqual(c.byLevel, { new: all - 5, attempted: 1, familiar: 1, proficient: 1, mastered: 2 });
+  assert.strictEqual(c.proficientPlus, 3, "proficient and mastered both count");
+  // Missing or odd levels count as new and never add keys; no input gives zeros.
+  const odd = C.objectiveMapCounts({ a: { level: "proficient" }, b: { level: "__proto__" }, c: null, d: {} });
+  assert.deepStrictEqual(odd, { total: 4, byLevel: { new: 3, attempted: 0, familiar: 0, proficient: 1, mastered: 0 }, proficientPlus: 1 });
+  assert.deepStrictEqual(C.objectiveMapCounts(undefined), { total: 0, byLevel: { new: 0, attempted: 0, familiar: 0, proficient: 0, mastered: 0 }, proficientPlus: 0 });
+});
 t("review gaps are capped by days left before the exam date", () => {
   const today = 20000;
   const s = { box: 0 }; C.scheduleQuestion(s, true, today); assert.strictEqual(s.due, today + 1); assert.strictEqual(s.box, 1);

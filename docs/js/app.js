@@ -112,6 +112,7 @@
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     bookmark: '<path d="M6 3h12v18l-6-4.5L6 21z"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1.1-1.3 2.2V14"/><circle cx="12" cy="17" r="1"/>',
+    half: '<path d="M12 3a9 9 0 1 0 0 18z"/>',
     left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
     right: '<path d="M5 12h14M13 6l6 6-6 6"/>',
     up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
@@ -388,7 +389,7 @@
     const steps = [];
     // Brand-new learner: placement first. Once any question has been answered, the step goes away.
     if (!Object.keys(st.qstats).length)
-      steps.push({ cmd: "placement", desc: "Placement test: 2 questions per objective, about 15 minutes", attr: 'data-start="placement"' });
+      steps.push({ cmd: "placement", desc: "Placement test: 2 or 3 questions per objective, about 15 minutes", attr: 'data-start="placement"' });
     if (C.clampReview(st.settings.review).on) steps.push({ cmd: dr.left ? "review --due " + dr.left : "review", desc: dr.left ? "Daily review, split by exam weight" : "Daily review done. Open it for extra questions", done: !dr.left, doneHref: "#review", attr: 'data-start="review"' });
     if (cardsDue) steps.push({ cmd: "cards --due " + cardsDue, desc: plural(cardsDue, "flashcard") + " due today", attr: 'data-start="duecards"' });
     steps.push({ cmd: "qotd", desc: "Question of the day" + (qod ? ", objective " + qod.obj : ""), done: C.qotdDone(st.tests), attr: 'data-start="qotd"' });
@@ -624,7 +625,7 @@
       <div class="page-head"><h1>Study</h1>
         <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
       <div class="quick">
-        <button class="qs" data-start="placement" ${placeOk ? "" : "disabled"}>${icon("target")}<b>Placement test</b><span>${placeOk ? "2 questions per objective, about 15 minutes" : "No unseen questions left in any objective"}</span></button>
+        <button class="qs" data-start="placement" ${placeOk ? "" : "disabled"}>${icon("target")}<b>Placement test</b><span>${placeOk ? "2 or 3 questions per objective, about 15 minutes" : "No unseen questions left in any objective"}</span></button>
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
         <button class="qs" data-start="unsure" ${nUnsure ? "" : "disabled"}>${icon("help")}<b>Unsure</b><span>${nUnsure ? plural(nUnsure, "question") + " you marked Unsure" : "Press Sure or Unsure when you answer"}</span></button>
         <button class="qs" data-start="weak" ${weak.length ? "" : "disabled"}>${icon("progress")}<b>Weak objectives</b><span>${weak.length ? esc(weak.slice(0, 4).join(", ")) + (weak.length > 4 ? "…" : "") + " short of mastery" : "None yet. Answer on separate days to build mastery."}</span></button>
@@ -1855,11 +1856,12 @@
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
         ${body}${fb}${revealed && !isPlace ? noteBox(id) : ""}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
+          ${dontKnowBtn}
           ${S.study && !isPlace ? markButton(id) : ""}
           ${!isPlace && S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${confPick}</div>
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
-          ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${dontKnowBtn}${primary}</div>
+          ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
           <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
@@ -2029,8 +2031,8 @@
   // ================================================================== RESULTS
   function renderPlacementResults(rec) {
     const sum = C.placementSummary(BANK, rec), pp = C.passPrediction(BANK, st.qstats);
-    const outIcon = w => w === "Knew both" ? "check" : w === "Knew 1 of 2" ? "dot" : "help";
-    const outClass = w => w === "Knew both" ? "v-good" : w === "Knew 1 of 2" ? "v-mid" : "v-bad";
+    const outIcon = w => w === "Knew all" ? "check" : /^Knew /.test(w) ? "half" : "help";
+    const outClass = w => w === "Knew all" ? "v-good" : /^Knew /.test(w) ? "v-place-mid" : "v-place-new";
     const first = sum.startWith[0];
     const estNote = pp.chance != null
       ? "Your score estimate now uses these answers"

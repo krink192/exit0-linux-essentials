@@ -397,14 +397,15 @@
     return newSession(bank, "qotd", "Question of the day", [questionOfDay(bank, opts.today)], { study: true, seed: opts.seed, now: opts.now });
   }
 
-  // Placement test: 2 unseen facts per objective (one Recall and one higher tier when the bank allows), shuffled
-  // objective order. Seeds mastery and the score estimate; never an exam. Returns null when nothing unseen remains.
+  // Placement test: 2 unseen facts per objective (one Recall and one higher tier when the bank allows), plus 2
+  // extras on the heaviest objectives (weight desc, then objective id), shuffled objective order. Seeds mastery
+  // and the score estimate; never an exam. Returns null when nothing unseen remains.
   function buildPlacement(bank, qstats, opts) {
     opts = opts || {}; qstats = qstats || {};
     const rand = typeof opts.rand === "function" ? opts.rand : rng(opts.seed);
     const famKey = id => { const q = bank.byId[id]; return q ? (q.variantOf || q.id) : id; };
-    const ids = [];
-    for (const o of shuffle(Object.keys(bank.objectives), rand)) {
+    const picks = {}, leftover = {};
+    for (const o of Object.keys(bank.objectives)) {
       // One wording per unseen family (never seen in any wording).
       const seenFam = {}, cands = [];
       for (const id of shuffle(bank.byObj[o] || [], rand)) {
@@ -426,8 +427,23 @@
           if (pick.length >= 2) break;
         }
       }
-      ids.push(...shuffle(pick.slice(0, 2), rand));
+      const used = {}; for (const id of pick.slice(0, 2)) used[famKey(id)] = 1;
+      picks[o] = pick.slice(0, 2);
+      leftover[o] = shuffle(cands.filter(id => !used[famKey(id)]), rand);
     }
+    // Two extras: heaviest objectives first (weight desc, then objective id). One extra each when a family remains.
+    const heavy = Object.keys(picks).slice().sort((a, b) =>
+      (bank.objectives[b].weight || 0) - (bank.objectives[a].weight || 0)
+      || (a < b ? -1 : a > b ? 1 : 0));
+    let extras = 0;
+    for (const o of heavy) {
+      if (extras >= 2) break;
+      if (!(leftover[o] && leftover[o].length)) continue;
+      picks[o].push(leftover[o][0]);
+      extras++;
+    }
+    const ids = [];
+    for (const o of shuffle(Object.keys(picks), rand)) ids.push(...shuffle(picks[o], rand));
     if (!ids.length) return null;
     return newSession(bank, "placement", "Placement test", ids, { study: true, timed: false, seed: opts.seed, now: opts.now });
   }
@@ -447,8 +463,8 @@
       if (!isDontKnow(rec, id) && isCorrect(q, rec.answers && rec.answers[id])) row.right++;
     }
     for (const o of Object.keys(byObj)) {
-      const r = byObj[o].right;
-      byObj[o].outcome = r >= 2 ? "Knew both" : r === 1 ? "Knew 1 of 2" : "New to you";
+      const r = byObj[o].right, n = byObj[o].asked;
+      byObj[o].outcome = n && r >= n ? "Knew all" : r > 0 ? "Knew " + r + " of " + n : "New to you";
     }
     const startWith = Object.keys(bank.objectives).slice().sort((a, b) =>
       byObj[a].right - byObj[b].right

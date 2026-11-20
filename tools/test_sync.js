@@ -323,6 +323,7 @@ const T0 = Date.UTC(2026, 9, 1, 18);
       assert.deepStrictEqual([d.st.qstats[fresh].ev, d.st.qstats[fresh].evAt], [1, at + 1]);
     }
     assert.strictEqual(evOf(laptop.st), evOf(phone.st)); assert.strictEqual(progressOf(laptop.st), progressOf(phone.st));
+  });
 
   await t("estimate weeks merge by week and the newer stamp wins", async () => {
     const week = { "2026-11-02": { mean: 60, at: 10 }, "2026-11-09": { mean: 70, at: 10 } };

@@ -1572,7 +1572,9 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
   .score-fit:has(.hero-fig) .hero-fig .small,
   .score-fit:has(.hero-fig) .hero-fig .score-pct { white-space: nowrap; }
 }
-/* Monospace score bar. 50 cells (2% each) when the row is wide enough, otherwise 25 (4% each). Each cell is one character wide so the line never wraps. */
+/* Monospace score bar. 50 cells (2% each) when the row is wide enough, otherwise 25 (4% each).
+   Cells are painted blocks, not glyphs: a glyph leaves a seam and a hatched empty cell.
+   The gap is transparent, so the page or the card shows through. Widths are whole device pixels, set in app.js. */
 .termbar { min-width: 0; font: 500 var(--fs-body)/1 var(--mono); font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 .term-size { width: max-content; max-width: 100%; }
 .term-50 { display: none; }
@@ -1580,15 +1582,23 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
   .term-25 { display: none; }
   .term-50 { display: block; }
 }
-.term-line { display: flex; align-items: stretch; white-space: nowrap; }
-.term-line .cells { display: flex; }
-.term-line .br, .term-line .cells span { width: 1ch; height: 1em; flex: none; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.term-line .on { color: var(--accent); }
-.term-line .off, .term-line .br { color: var(--muted); }
-.term-line .mk { color: var(--ink); }
-.term-under { position: relative; height: 1.2em; margin-top: 3px; }
-.passspot { position: absolute; top: 0; left: calc((var(--i) + 0.5) * 1ch); transform: translateX(-50%); line-height: 1; }
-.passlab { font-size: var(--fs-xs); font-weight: 500; color: var(--muted); white-space: nowrap; }
+.score-block .term-line { display: flex; align-items: flex-start; white-space: nowrap; background: transparent; }
+.score-block .term-line .br { flex: none; line-height: 1; color: var(--muted); }
+.score-block .term-line .cells { display: flex; align-items: stretch; height: var(--cell-h, 1em); background: transparent; }
+.score-block .cell {
+  flex: none; box-sizing: border-box; width: var(--cell-w, 0.62ch); height: 100%; margin: 0 var(--gap, 2px) 0 0;
+  padding: 0; border: 0; border-radius: 0; box-shadow: none; outline: none; background: var(--line-2);
+}
+.score-block .cell:last-child { margin-right: 0; }
+.score-block .cell.on { background: var(--accent); }
+.score-block .cell.mk { position: relative; background: transparent; }
+.score-block .mark {
+  position: absolute; top: 0; bottom: 0; left: var(--mark-x, 0px); width: var(--mark-w, 2px);
+  background: var(--ink); border-radius: 0;
+}
+.score-block .term-under { position: relative; height: 1.2em; margin-top: 3px; }
+.score-block .passspot { position: absolute; top: 0; left: 0; transform: translateX(-50%); line-height: 1; }
+.score-block .passlab { font-size: var(--fs-xs); font-weight: 500; color: var(--muted); white-space: nowrap; }
 .scorebar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin-top: 12px; }
 .scorebar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .scorebar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }

@@ -571,7 +571,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
   display: flex; flex-direction: column; position: sticky; top: 16px; border: 1px solid var(--term-line); }
 .term-out { white-space: pre-wrap; overflow-wrap: anywhere; }
 .term-line { display: flex; align-items: baseline; gap: 0; }
-.term-prompt { white-space: pre; } .term-prompt .pu { color: var(--term-user); font-weight: 600; } .term-prompt .pp { color: var(--term-path); font-weight: 600; }
+.term-prompt { white-space: pre; } .term .pu { color: var(--term-user); font-weight: 600; } .term .pp { color: var(--term-path); font-weight: 600; }
 .term-line input { flex: 1; min-width: 40px; background: transparent; border: 0; outline: 0; color: inherit; font: inherit; padding: 0; caret-color: var(--term-user); }
 .done-banner { background: var(--good-soft); border-color: transparent; } .done-banner svg.i { color: var(--good); }
 .pager { display: flex; flex-direction: column; gap: 8px; overflow: hidden; outline: none; }

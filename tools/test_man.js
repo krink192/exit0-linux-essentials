@@ -97,7 +97,7 @@ for (const [key, pg] of Object.entries(P)) for (const ref of pg.see || []) {
 
 // ---- 5: the concept pages the help pages point to exist
 for (const [cmd, re] of [["man bash", /PIPELINES[\s\S]*REDIRECTION[\s\S]*QUOTING[\s\S]*EXPANSION[\s\S]*COMPOUND COMMANDS/], ["man 7 glob", /GLOB\(7\)/], ["man 7 regex", /REGEX\(7\)/], ["man test", /TEST\(1\)/],
-  ["man man", /READING A PAGE[\s\S]*FINDING HELP/], ["help if", /^if: if COMMANDS/], ["help for", /^for: /], ["help while", /^while: /], ["zcat --help", /Examples:/], ["apropos compress", /gzip \(1\)/]]) {
+  ["man man", /READING A PAGE[\s\S]*FINDING HELP/], ["help if", /^if: if COMMANDS/], ["help for", /^for: /], ["help while", /^while: /], ["zcat --help", /Examples:/], ["find --help", /find ~\/scratch -name budget\.csv[\s\S]*find \/var\/log -name/], ["apropos compress", /gzip \(1\)/]]) {
   const r = fresh().exec(cmd, { tty: false }); if (!re.test(r.out)) fail(`'${cmd}' output doesn't match ${re}`);
 }
 

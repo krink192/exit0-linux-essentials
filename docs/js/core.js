@@ -160,6 +160,39 @@
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
   }
+  /** Choose TWO/THREE: how many options it asks for, and how many are picked.
+   *  ready is true only at exactly that count. Null for single-choice and typed questions. */
+  function multiPick(q, a) {
+    if (!q || q.type !== "multi" || !Array.isArray(q.answer)) return null;
+    const need = q.answer.length, have = Array.isArray(a) ? a.length : 0;
+    return { need, have, ready: need > 0 && have === need };
+  }
+  /** The line under the options. In Study and Daily review a wrong count is why Check stays off
+   *  ("Pick 1 more to check"). An exam keeps the count, because moving on with too few picks is allowed. */
+  function multiStatus(q, a, study) {
+    const p = multiPick(q, a);
+    if (!p) return "";
+    if (study && p.have < p.need) return "Pick " + (p.need - p.have) + " more to check";
+    if (study && p.have > p.need) return "Unpick " + (p.have - p.need) + " to check";
+    return "Select " + p.need + ". " + p.have + " selected.";
+  }
+  /** 0-based indexes of multi-answer questions with fewer picks than they ask for.
+   *  Too many picks is a finished answer and is not listed. */
+  function shortPicks(bank, s) {
+    if (!bank || !s || !Array.isArray(s.qids)) return [];
+    const out = [];
+    s.qids.forEach((id, i) => {
+      const p = multiPick(bank.byId[id], s.answers && s.answers[id]);
+      if (p && p.have < p.need) out.push(i);
+    });
+    return out;
+  }
+  /** "2 questions have fewer picks than asked: 12, 31". Indexes are 0-based. Empty when none. */
+  function shortPickLine(indexes) {
+    if (!indexes || !indexes.length) return "";
+    const n = indexes.length;
+    return n + " " + (n === 1 ? "question has" : "questions have") + " fewer picks than asked: " + indexes.map(i => i + 1).join(", ");
+  }
 
   // ------------------------------------------------------------- selection
   // lower = picked first: unseen, then missed last time, then by accuracy
@@ -1757,7 +1790,7 @@
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
   }
 
-  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
+  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, multiPick, multiStatus, shortPicks, shortPickLine, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,

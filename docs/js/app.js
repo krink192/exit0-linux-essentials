@@ -1808,6 +1808,8 @@
     const revealed = S.study && S.checked[id];
     const hintOn = !isPlace && S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
+    const short = isTest ? C.shortPicks(BANK, S) : [];
+    const shortLine = C.shortPickLine(short);
     S.conf = S.conf || {}; S.dontKnow = S.dontKnow || {};
     (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
     const rated = !isPlace && (S.conf[id] === true || S.conf[id] === false);
@@ -1828,7 +1830,7 @@
           tag = k ? (sel ? "Correct, your pick" : multi && C.answered(q, a) ? "Correct, you missed this" : "Correct") : sel ? "Wrong, your pick" : ""; }
         return `<label class="opt ${cls}" for="o${pos}"><input type="${multi ? "checkbox" : "radio"}" name="opt" id="o${pos}" data-oi="${oi}" ${sel ? "checked" : ""} ${revealed ? "disabled" : ""}>
           <span class="key">${L[pos]}</span><span class="t">${rich(q.options[oi])}${revealed ? whyNote(q, oi) : ""}</span>${tag ? `<span class="tag">${icon(mark)}${tag}</span>` : ""}</label>`;
-      }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
+      }).join("")}</div>${multi && !revealed ? `<p class="small muted" id="multiLine">${esc(C.multiStatus(q, a, !!S.study))}</p>` : ""}`;
     }
     const ok = revealed && !dontKnow && C.isCorrect(q, a);
     const confWrong = revealed && rated && S.conf[id] === true && !ok;
@@ -1854,8 +1856,10 @@
           <li><i class="nk uns"></i>Unseen <b>${nav.unseen}</b></li><li>${icon("flag", "nf")}Flagged <b>${nav.flagged}</b></li></ul></section>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
     // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks. Placement hides Sure/Unsure and Hint.
+    // Choose TWO/THREE in Study, Daily review and Placement: Check stays off until the pick count matches.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
-    const primary = canCheck ? `<button class="primary" id="check">Check answer</button>`
+    const multiReady = q.type !== "multi" || !!(C.multiPick(q, a) || {}).ready;
+    const primary = canCheck ? `<button class="primary" id="check"${multiReady ? "" : " disabled aria-describedby=\"multiLine\""}>Check answer</button>`
       : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>`
       : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
     const confPick = !isPlace && !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
@@ -1874,8 +1878,9 @@
       <main class="page qpage">
         <h1 class="sr">${esc(S.label)}: question ${S.cur + 1} of ${n}</h1>
         ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : isPlace ? "Finish this placement test?" : "Finish this study session?"}</h3>
-          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
+          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${shortLine ? esc(shortLine) + ". " : ""}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
           <div class="row u-wrap"><button id="keep">Keep working</button>${n - done ? `<button data-review="open">Review unanswered</button>` : ""}${flagged ? `<button data-review="flagged">Review flagged</button>` : ""}
+            ${short.length ? `<button type="button" id="goShort">Go to question ${short[0] + 1}</button>` : ""}
             <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${navPanel}
         <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
@@ -1891,14 +1896,17 @@
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
-          <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
+          <span><span class="kbd">1</span>–<span class="kbd">5</span> or <span class="kbd">A</span>–<span class="kbd">E</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
           <span><span class="kbd">Enter</span> ${canCheck ? "check" : last ? "finish" : "next"}</span></p>
       </main>`;
     const move = i => { S.cur = Math.max(0, Math.min(n - 1, i)); save(); renderExam(); scrollTo(0, 0); };
     if ($("#prev")) $("#prev").onclick = () => move(S.cur - 1);
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
-    if ($("#check")) $("#check").onclick = () => { delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam(); };
+    if ($("#check")) $("#check").onclick = () => {
+      if (q.type === "multi" && !(C.multiPick(q, S.answers[id]) || {}).ready) return;
+      delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam();
+    };
     if ($("#dontKnow")) $("#dontKnow").onclick = () => {
       S.dontKnow[id] = 1; delete S.answers[id]; S.checked[id] = 1; save(); renderExam();
     };
@@ -1927,6 +1935,7 @@
     $$("[data-cards-obj]").forEach(b => b.onclick = e => { e.preventDefault(); save(); startObjCards(b.dataset.cardsObj); });
     $$("[data-labgo]").forEach(b => b.onclick = () => save());
     if (confirming) { $("#keep").onclick = () => { confirming = false; renderExam(); }; $("#doSubmit").onclick = () => finish(); }
+    if ($("#goShort")) $("#goShort").onclick = () => { confirming = false; move(short[0]); };
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
       const inp = $("#fillin");
@@ -2249,10 +2258,10 @@
       // preventDefault: the arrow moves the question only, so its default sideways scroll can't land on the next question's code block
       if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { e.preventDefault(); S.cur++; save(); renderExam(); }
       else if (e.key === "ArrowLeft" && S.cur > 0) { e.preventDefault(); S.cur--; save(); renderExam(); }
-      else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
+      else if (/^[1-5]$/.test(e.key) || /^[a-e]$/i.test(e.key)) pickByNumber(/^[1-5]$/.test(e.key) ? +e.key - 1 : e.key.toLowerCase().charCodeAt(0) - 97);
       else if (e.key.toLowerCase() === "f" && S.qids.length > 1) { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
       else if (e.key.toLowerCase() === "h") showHint(S, S.qids[S.cur]);
-      else if (e.key === "Enter" && !confirming && !(e.target.closest && e.target.closest("button, a, summary, textarea"))) { const b = $(".qactions .primary"); if (b) { e.preventDefault(); b.click(); } }
+      else if (e.key === "Enter" && !confirming && !(e.target.closest && e.target.closest("button, a, summary, textarea"))) { const b = $(".qactions .primary"); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
     } else if (h === "cards" && cs && cs.i < cs.queue.length && !typing) {
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); cs.flipped = !cs.flipped; renderCardSession(); }
       else if (cs.flipped && e.key === "1") gradeCard(false);

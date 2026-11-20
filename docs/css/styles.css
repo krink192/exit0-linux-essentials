@@ -240,6 +240,26 @@ label.orow input { width: 18px; height: 18px; accent-color: var(--accent); margi
 /* chart */
 .chart svg { width: 100%; height: auto; display: block; overflow: visible; }
 .chart text { fill: var(--muted); font: 500 var(--fs-xs) var(--ui); }
+.chart .axis { stroke: var(--line); }
+.chart .target { stroke: var(--good); stroke-dasharray: 5 5; }
+.chart .mean { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart .exam { fill: var(--accent); }
+.chart .est { fill: var(--surface); stroke: var(--accent); stroke-width: 1.75; }
+.chart-key { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; margin: 8px 0 0; font-size: var(--fs-sm); color: var(--ink-2); }
+.chart-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.chart-key .fill { background: var(--accent); }
+.chart-key .hole { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.heat-months, .heat { display: grid; gap: 3px; align-items: center; justify-content: start; }
+.heat-months { margin-bottom: 3px; font: 500 var(--fs-xs) var(--ui); color: var(--muted); min-height: 1.1em; }
+.heat { grid-template-rows: repeat(7, auto); }
+.heat span, .heat-months span { min-width: 0; }
+.heat span.dow, .heat-months span.dow { width: 1.75rem; font: 500 var(--fs-xs) var(--ui); color: var(--muted); }
+.heat span:not(.dow) { display: block; width: 100%; aspect-ratio: 1; border-radius: 2px; background: var(--sunk); }
+.heat span.lv1 { background: color-mix(in srgb, var(--accent) 28%, var(--sunk)); }
+.heat span.lv2 { background: color-mix(in srgb, var(--accent) 62%, var(--sunk)); }
+.heat span.lv3 { background: var(--accent); }
+.heat span.today { box-shadow: inset 0 0 0 2px var(--ink); }
+.heat span.future { background: transparent; }
 
 /* ---------- exam */
 .exam-bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px);
@@ -434,6 +454,7 @@ textarea { width: 100%; min-height: 140px; font: 400 var(--fs-sm)/1.5 var(--mono
     border-bottom: 1px solid var(--line); }
   .top .brand { padding: 0; font-size: var(--fs-body); }
   .top .streakmini { margin-left: auto; display: flex; gap: 6px; align-items: center; font-weight: 700; font-size: var(--fs-body); }
+  .top .streakmini.quiet { max-width: 11rem; font-weight: 600; font-size: var(--fs-xs); color: var(--muted); text-align: right; line-height: 1.25; }
   .page { padding: 24px 20px 64px; gap: 24px; }
   .exam-bar .in { padding: 6px 20px; }
   .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

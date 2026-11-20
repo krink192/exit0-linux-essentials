@@ -38,6 +38,14 @@
     d = d ? new Date(d) : new Date();
     return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
   }
+  /** Monday of the local week containing `d` (a Date, or a ms timestamp). */
+  function weekStart(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  function weekKey(d) { return dayKey(weekStart(d)); }
 
   // ------------------------------------------------------------- bank index
   function indexBank(bank) {
@@ -918,6 +926,7 @@
     // keep full detail for the 30 most recent records
     state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; delete t.conf; } });
     addActivity(state, res.answered, now);
+    noteEstimate(state, passPrediction(bank, state.qstats), now);
     return rec;
   }
 
@@ -1408,9 +1417,18 @@
     return { xp: total, level: lv + 1, name: LEVEL_NAMES[lv], floor: LEVEL_XP[lv], next: lv + 1 < LEVEL_XP.length ? LEVEL_XP[lv + 1] : null };
   }
   function longestStreak(days, goal) {
+    goal = goal > 0 ? goal : 1;          // a goal of 0 used to treat every day as met
     const nums = Object.keys(days).filter(k => days[k] >= goal).map(k => { const [y, m, d] = k.split("-").map(Number); return dayNum(new Date(y, m - 1, d)); }).sort((a, b) => a - b);
-    let best = 0, run = 0;
-    nums.forEach((n, i) => { run = i && n === nums[i - 1] + 1 ? run + 1 : 1; best = Math.max(best, run); });
+    let best = 0, run = 0, prev = null, lastGrace = null;
+    for (const n of nums) {
+      if (prev == null || n === prev + 1) { run++; prev = n; best = Math.max(best, run); continue; }
+      const gapDay = prev + 1;
+      // One missed day between two goal days, and no other rest day in the 7 days before it.
+      if (n === prev + 2 && (lastGrace == null || gapDay - lastGrace >= 7)) {
+        lastGrace = gapDay; prev = n; run++; best = Math.max(best, run); continue;
+      }
+      run = 1; prev = n; lastGrace = null; best = Math.max(best, run);
+    }
     return best;
   }
   const BADGES = [
@@ -1820,12 +1838,148 @@
     const k = dayKey(now); state.days[k] = (state.days[k] || 0) + n;
   }
   function streak(days, goal, now) {
-    const d = now ? new Date(now) : new Date();
-    let count = 0;
-    const metToday = (days[dayKey(d)] || 0) >= goal;
-    if (!metToday) d.setDate(d.getDate() - 1);
-    while ((days[dayKey(d)] || 0) >= goal) { count++; d.setDate(d.getDate() - 1); }
-    return { count, metToday, today: days[dayKey(now)] || 0 };
+    goal = goal > 0 ? goal : 1;          // a goal of 0 used to walk backwards forever
+    const today = now ? new Date(now) : new Date();
+    const met = d => (days[dayKey(d)] || 0) >= goal;
+    const metToday = met(today);
+    const cursor = new Date(today);
+    if (!metToday) cursor.setDate(cursor.getDate() - 1);   // today not finished yet does not break a streak
+    let count = 0, lastGrace = null, earliest = null;
+    for (const k of Object.keys(days)) { const p = parseDate(k); if (!p) continue; const n = dayNum(p); if (earliest == null || n < earliest) earliest = n; }
+    const graceKeys = [];
+    for (let steps = 0; steps < 20000 && (earliest == null || dayNum(cursor) >= earliest - 1); steps++) {
+      if (met(cursor)) { count++; cursor.setDate(cursor.getDate() - 1); continue; }
+      const prev = new Date(cursor); prev.setDate(prev.getDate() - 1);
+      const next = new Date(cursor); next.setDate(next.getDate() + 1);
+      const n = dayNum(cursor);
+      // A rest day needs the goal on both sides, and at most one such day in any 7.
+      if (count > 0 && met(prev) && met(next) && (lastGrace == null || lastGrace - n >= 7)) {
+        lastGrace = n; graceKeys.push(dayKey(cursor)); cursor.setDate(cursor.getDate() - 1); continue;
+      }
+      break;
+    }
+    const thisWeek = weekKey(today);
+    const graceUsed = graceKeys.some(k => weekKey(parseDate(k)) === thisWeek) ? 1 : 0;
+    return { count, metToday, today: days[dayKey(today)] || 0, graceUsed };
+  }
+  const DAY_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON_NAME = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  /** Last `weeks` calendar weeks (Mon–Sun columns) ending this week. Future days are marked, not counted. */
+  function studyDays(days, goal, now, weeks) {
+    weeks = Math.max(1, Math.min(52, weeks || 12));
+    goal = goal > 0 ? goal : 1;
+    days = days || {};
+    const today = now ? new Date(now) : new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayKey = dayKey(today), todayNum = dayNum(today);
+    const start = weekStart(today);
+    start.setDate(start.getDate() - 7 * (weeks - 1));
+    let studied = 0, met = 0, total = 0;
+    const cols = [];
+    for (let w = 0; w < weeks; w++) {
+      const mon = new Date(start);
+      mon.setDate(start.getDate() + 7 * w);
+      const col = [];
+      for (let i = 0; i < 7; i++) {
+        const dt = new Date(mon);
+        dt.setDate(mon.getDate() + i);
+        const key = dayKey(dt), future = dayNum(dt) > todayNum;
+        const n = future ? 0 : (days[key] || 0);
+        let level = -1;
+        if (!future) {
+          total++;
+          if (n <= 0) level = 0;
+          else if (n < goal) { level = 1; studied++; }
+          else if (n < goal * 2) { level = 2; studied++; met++; }
+          else { level = 3; studied++; met++; }
+        }
+        const when = DAY_NAME[dt.getDay()] + " " + dt.getDate() + " " + MON_NAME[dt.getMonth()];
+        const label = future ? when : !n ? when + ": nothing studied"
+          : level < 2 ? when + ": " + n + " done, under the goal" : when + ": " + n + " done, goal met";
+        col.push({ key, n, level, future, today: key === todayKey, label });
+      }
+      cols.push({ monday: dayKey(mon), days: col });
+    }
+    return { weeks: cols, studied, met, total, goal };
+  }
+  /**
+   * Weekly score chart. Full exams are one dot each; estimates are one hollow dot per week from `estWeeks`
+   * (the latest pass-prediction percent recorded that week). Empty weeks between the first and last point
+   * stay in the list so a line through weekly exam means is not drawn across a gap. At most the last 12
+   * weeks that contain a point. Nothing is invented for weeks before recording started.
+   */
+  function scoreHistory(tests, estWeeks, now) {
+    const today = now == null ? new Date() : new Date(now);
+    const endNum = dayNum(weekStart(today));
+    const byWeek = {};
+    const slot = key => byWeek[key] || (byWeek[key] = { exams: [], estimate: null, estAt: -1 });
+    const all = [];
+    for (const t of tests || []) {
+      if (!isReadinessExam(t) || typeof t.date !== "number" || !isFinite(t.date)) continue;
+      const wk = weekStart(t.date);
+      if (dayNum(wk) > endNum) continue;
+      const pct = Math.max(0, Math.min(100, Math.round(t.pct || 0)));
+      all.push({ pct, date: t.date });
+      slot(dayKey(wk)).exams.push({ pct, date: t.date });
+    }
+    for (const k in estWeeks || {}) {
+      if (!Object.prototype.hasOwnProperty.call(estWeeks, k)) continue;
+      const parsed = parseDate(k);
+      if (!parsed) continue;
+      const wk = weekStart(parsed);
+      if (dayNum(wk) > endNum) continue;
+      const w = estWeeks[k];
+      if (!w || typeof w.mean !== "number" || !isFinite(w.mean)) continue;
+      const box = slot(dayKey(wk)), at = typeof w.at === "number" && isFinite(w.at) ? w.at : 0;
+      if (box.estimate == null || at >= box.estAt) {
+        box.estimate = Math.max(0, Math.min(100, Math.round(w.mean)));
+        box.estAt = at;
+      }
+    }
+    const keys = Object.keys(byWeek).sort();
+    const empty = { weeks: [], examPoints: [], estimatePoints: [], segments: [], examCount: all.length, latestExam: null, estimateNow: null };
+    if (!keys.length) return empty;
+    all.sort((a, b) => a.date - b.date);
+    const last = weekStart(parseDate(keys[keys.length - 1]));
+    const firstData = weekStart(parseDate(keys[0]));
+    const windowStart = new Date(last);
+    windowStart.setDate(windowStart.getDate() - 7 * 11);
+    const start = dayNum(windowStart) < dayNum(firstData) ? firstData : windowStart;
+    const weeks = [];
+    for (let d = new Date(start); dayNum(d) <= dayNum(last); d.setDate(d.getDate() + 7)) {
+      const key = dayKey(d), box = byWeek[key] || { exams: [], estimate: null };
+      const exams = box.exams.slice().sort((a, b) => a.date - b.date);
+      const examMean = exams.length ? exams.reduce((s, e) => s + e.pct, 0) / exams.length : null;
+      weeks.push({ key, exams, examMean, estimate: box.estimate == null ? null : box.estimate });
+    }
+    const examPoints = [], estimatePoints = [], segments = [];
+    let run = [];
+    weeks.forEach((w, i) => {
+      w.exams.forEach((e, j) => examPoints.push({ week: i, pct: e.pct, date: e.date, index: j, n: w.exams.length }));
+      if (w.estimate != null) estimatePoints.push({ week: i, mean: w.estimate });
+      if (w.examMean == null) { if (run.length) segments.push(run); run = []; return; }
+      run.push({ week: i, mean: w.examMean });
+    });
+    if (run.length) segments.push(run);
+    const nowSlot = byWeek[dayKey(weekStart(today))];
+    return {
+      weeks, examPoints, estimatePoints, segments, examCount: all.length,
+      latestExam: all.length ? all[all.length - 1].pct : null,
+      estimateNow: nowSlot && nowSlot.estimate != null ? nowSlot.estimate : null
+    };
+  }
+  /** Remember this week's pass-prediction percent (0–100). Same percent again does not move the stamp. */
+  function noteEstimate(state, prediction, now) {
+    if (!state || !prediction || prediction.chance == null || !prediction.total) return false;
+    if (typeof prediction.mean !== "number" || !isFinite(prediction.mean)) return false;
+    now = now || Date.now();
+    const mean = Math.max(0, Math.min(100, Math.round(100 * prediction.mean / prediction.total)));
+    const key = weekKey(now);
+    state.estWeeks = state.estWeeks || {};
+    const cur = state.estWeeks[key];
+    if (cur && (cur.mean === mean || (cur.at || 0) > now)) return false;
+    state.estWeeks[key] = { mean, at: now };
+    return true;
   }
 
   // ------------------------------------------------------------- sync (merging progress from several devices)
@@ -1877,7 +2031,7 @@
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
   function mergeStates(docs) {
-    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: {}, settingsTs: {} };
+    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, estWeeks: {}, settings: {}, settingsTs: {} };
     const tests = {};
     for (const d of docs || []) {
       if (!d) continue;
@@ -1885,6 +2039,11 @@
       for (const id in d.cards || {}) mergeSched(out.cards, id, d.cards[id]);
       for (const id in d.cmdstats || {}) mergeSched(out.cmdstats, id, d.cmdstats[id]);
       for (const k in d.days || {}) out.days[k] = (out.days[k] || 0) + (d.days[k] || 0);
+      for (const k in d.estWeeks || {}) {          // one percent per week: the newer stamp wins, a tie takes the higher percent
+        const w = d.estWeeks[k]; if (!w || typeof w.mean !== "number") continue;
+        const o = out.estWeeks[k], at = w.at || 0;
+        if (!o || at > (o.at || 0) || (at === (o.at || 0) && w.mean > o.mean)) out.estWeeks[k] = { mean: w.mean, at };
+      }
       for (const id in d.badges || {}) { const t = d.badges[id]; if (t && (!out.badges[id] || t < out.badges[id])) out.badges[id] = t; }
       for (const id in d.labs || {}) {
         const a = d.labs[id] || {}, o = out.labs[id] || (out.labs[id] = { done: [] });
@@ -1917,7 +2076,7 @@
    */
   function ownPart(view, others, settingsTs) {
     others = others || mergeStates([]);
-    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, estWeeks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
     for (const key of ["qstats", "cards", "cmdstats"]) {
       for (const id in view[key] || {}) {
         const s = view[key][id], o = (others[key] || {})[id];
@@ -1928,6 +2087,11 @@
       }
     }
     for (const k in view.days || {}) { const n = (view.days[k] || 0) - (others.days[k] || 0); if (n > 0) own.days[k] = n; }
+    for (const k in view.estWeeks || {}) {
+      const w = view.estWeeks[k], o = (others.estWeeks || {})[k];
+      if (!w || typeof w.mean !== "number") continue;
+      if (!o || (w.at || 0) !== (o.at || 0) || w.mean !== o.mean) own.estWeeks[k] = { mean: w.mean, at: w.at || 0 };
+    }
     for (const id in view.marks || {}) { const o = (others.marks || {})[id]; if (!o || JSON.stringify(o) !== JSON.stringify(view.marks[id])) own.marks[id] = clone(view.marks[id]); }
     const theirs = {}; for (const t of others.tests) theirs[t.id] = t;
     own.tests = (view.tests || []).filter(t => !theirs[t.id] || (t.qids && !theirs[t.id].qids));
@@ -1944,7 +2108,7 @@
   function applyMerged(state, view) {
     view = Object.assign(mergeStates([]), cleanDoc(view));     // whatever a server sent, the app only ever holds well-formed progress
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
-    state.badges = view.badges; state.labs = view.labs; state.marks = view.marks || {};
+    state.badges = view.badges; state.labs = view.labs; state.marks = view.marks || {}; state.estWeeks = view.estWeeks || {};
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
     return state;
   }
@@ -2012,6 +2176,22 @@
     return o;
   };
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
+  /** Weekly estimate snapshots: Monday key, percent 0–100, and the time it was recorded. Newest 104 weeks only. */
+  function cleanEstWeeks(v) {
+    if (!isObj(v)) return {};
+    const out = {};
+    for (const k in v) {
+      if (!has(v, k)) continue;
+      const day = parseDate(k), raw = v[k];
+      if (!day || !isObj(raw) || !isNum(raw.mean) || !isNum(raw.at) || raw.at <= 0) continue;
+      const key = weekKey(day), mean = Math.max(0, Math.min(100, Math.round(raw.mean))), at = raw.at;
+      const prev = out[key];
+      if (!prev || at > prev.at || (at === prev.at && mean > prev.mean)) out[key] = { mean, at };
+    }
+    const keys = Object.keys(out).sort();
+    if (keys.length <= 104) return out;
+    const keep = {}; for (const k of keys.slice(-104)) keep[k] = out[k]; return keep;
+  }
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
   const confMap = v => mapOf(v, x => x === true || x === false ? x : undefined);
   const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
@@ -2035,7 +2215,7 @@
   const cleanSettings = s => isObj(s) ? shape(s, SETTINGS) : {};
   const DOC = { tests: v => Array.isArray(v) ? v.map(cleanTest).filter(Boolean) : [], qstats: v => mapOf(v, cleanSched), cards: v => mapOf(v, cleanSched),
                 cmdstats: v => mapOf(v, cleanSched), days: v => mapOf(v, x => isNum(x) && x > 0 ? Math.floor(x) : undefined, k => DAY_RE.test(k)),
-                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), settings: cleanSettings,
+                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), estWeeks: cleanEstWeeks, settings: cleanSettings,
                 settingsTs: v => mapOf(v, numOr(undefined)),
                 marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
@@ -2068,7 +2248,8 @@
     const p = cleanDoc(d);
     // evRule is cleared so the imported progress gets its cold evidence rebuilt (rebuildEvidence).
     return migrate(Object.assign({}, state, { evRule: undefined, tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
-      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
+      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, estWeeks: p.estWeeks || {},
+      settings: Object.assign({}, state.settings, p.settings) }));
   }
 
   // ------------------------------------------------------------- state
@@ -2078,7 +2259,7 @@
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
-             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, current: null };
+             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, estWeeks: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -2101,7 +2282,7 @@
       }
     }
     // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")
-    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, marks: st.marks });
+    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, marks: st.marks, estWeeks: st.estWeeks });
     const fresh = freshState().settings, s = cleanSettings(st.settings);
     s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
@@ -2117,7 +2298,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN, missTyped, missChoice, closestAccepted,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, studyDays, scoreHistory, noteEstimate, weekKey, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

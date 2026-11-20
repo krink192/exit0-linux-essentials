@@ -259,7 +259,7 @@
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
-          <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
+          <div><div class="t1">${sk.count ? icon("flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
             <div class="t2">${sk.metToday ? `Today's goal of ${st.settings.goal} done` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
             <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
@@ -280,7 +280,7 @@
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
-        <div class="streakmini">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count}</div></header>
+        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame") + sk.count : "Pick up where you left off"}</div></header>
       <main class="page${opts && opts.wide ? " wide" : ""}${opts && opts.cls ? " " + opts.cls : ""}" id="page">${tabs}${body}</main>
       <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
         return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;
@@ -680,25 +680,73 @@
   }
 
   // ================================================================== PROGRESS
-  function trendChart(tests, W, H) {
-    W = W || 640; H = H || 190;
-    const pts = tests.slice(-15), pl = 36, pr = 14, pt = 12, pb = 26;
-    const x = i => pl + (pts.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (pts.length - 1));
+  function historyFacts(h) {
+    const bits = [];
+    if (h.examCount) bits.push("Full exams: " + h.examCount + ", latest " + h.latestExam + "%.");
+    if (h.estimateNow != null) bits.push("Estimate this week " + h.estimateNow + "%.");
+    else if (h.estimatePoints.length) bits.push("Latest weekly estimate " + h.estimatePoints[h.estimatePoints.length - 1].mean + "%.");
+    return bits.join(" ");
+  }
+  function scoreChart(h, W, H) {
+    W = W || 640; H = H || 210;
+    const weeks = h.weeks, n = weeks.length, pl = 36, pr = 14, pt = 16, pb = 28;
+    const plot = W - pl - pr;
+    const xAt = i => pl + (n === 1 ? plot / 2 : (i + 0.5) * plot / n);
     const y = v => pt + (100 - v) * (H - pt - pb) / 100;
-    const line = pts.map((t, i) => `${x(i).toFixed(1)},${y(t.pct).toFixed(1)}`).join(" ");
-    const area = `${x(0)},${y(0)} ${line} ${x(pts.length - 1)},${y(0)}`;
-    const grid = [0, 50, 100].map(v => `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)"/>
+    const examX = (i, j, count, hasEst) => {
+      const c = xAt(i), slot = n === 1 ? plot * 0.4 : plot / n, room = Math.min(slot * 0.5, 26);
+      if (count <= 1) return hasEst ? c - Math.min(11, room * 0.45) : c;
+      const left = c - room / 2, span = hasEst ? room * 0.55 : room;
+      return left + j * span / (count - 1);
+    };
+    const grid = [0, 50, 100].map(v => `<line class="axis" x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${pl - 8}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join("");
-    const last = pts.length - 1;
-    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Practice test scores over time">
-      ${grid}<line x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}" style="stroke:var(--good);stroke-dasharray:5 5"/>
+    const lines = h.segments.filter(run => run.length >= 2).map(run =>
+      `<polyline class="mean" points="${run.map(p => xAt(p.week).toFixed(1) + "," + y(p.mean).toFixed(1)).join(" ")}"/>`).join("");
+    const exams = h.examPoints.map(e => {
+      const hasEst = weeks[e.week].estimate != null;
+      return `<circle class="exam" cx="${examX(e.week, e.index, e.n, hasEst).toFixed(1)}" cy="${y(e.pct).toFixed(1)}" r="4"><title>${esc(fmtDate(e.date))}: ${e.pct}%</title></circle>`;
+    }).join("");
+    const estimates = h.estimatePoints.map(e =>
+      `<circle class="est" cx="${xAt(e.week).toFixed(1)}" cy="${y(e.mean).toFixed(1)}" r="4"><title>Week of ${esc(fmtDate(C.parseDate(weeks[e.week].key).getTime()).split(",")[0])}: estimate ${e.mean}%</title></circle>`).join("");
+    const labels = weeks.map((w, i) => {
+      const d = C.parseDate(w.key), show = i === 0 || i === n - 1 || (n <= 6 && i % 2 === 0) || (n > 6 && d.getDate() <= 7);
+      return show ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${d.toLocaleDateString([], { month: "short", day: "numeric" })}</text>` : "";
+    }).join("");
+    const facts = historyFacts(h);
+    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(facts)}">
+      ${grid}<line class="target" x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}"/>
       <text x="${pl + 6}" y="${y(80) - 6}" style="fill:var(--good)">80% target</text>
-      <polygon points="${area}" style="fill:var(--accent);opacity:.1"/>
-      <polyline points="${line}" style="fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round"/>
-      ${pts.map((t, i) => `<circle cx="${x(i)}" cy="${y(t.pct)}" r="${i === last ? 5 : 3}" style="fill:${i === last ? "var(--accent)" : "var(--surface)"};stroke:var(--accent);stroke-width:2"><title>${fmtDate(t.date)}: ${t.pct}%</title></circle>`).join("")}
-      <text x="${x(last)}" y="${y(pts[last].pct) - 10}" text-anchor="middle" style="fill:var(--ink);font-weight:700">${pts[last].pct}%</text>
-      <text x="${pl}" y="${H - 6}">${fmtDate(pts[0].date).split(",")[0]}</text>
-      <text x="${W - pr}" y="${H - 6}" text-anchor="end">${fmtDate(pts[last].date).split(",")[0]}</text></svg></div>`;
+      ${lines}${estimates}${exams}${labels}</svg>
+      <p class="chart-key"><span><i class="fill" aria-hidden="true"></i>full exam</span><span class="sep" aria-hidden="true">·</span><span><i class="hole" aria-hidden="true"></i>weekly estimate</span></p>
+      <p class="small muted">${esc(facts)}</p></div>`;
+  }
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function studyCard(sk) {
+    const weeks = window.matchMedia("(min-width: 901px)").matches ? 16 : 12;
+    const g = C.studyDays(st.days || {}, st.settings.goal, Date.now(), weeks);
+    const cols = `auto repeat(${g.weeks.length}, minmax(0, 14px))`;
+    let prev = "";
+    const months = g.weeks.map(w => {
+      const name = MONTHS[C.parseDate(w.monday).getMonth()];
+      const show = name !== prev; prev = name;
+      return `<span>${show ? name : ""}</span>`;
+    }).join("");
+    const dow = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
+    let cells = "";
+    for (let i = 0; i < 7; i++) {
+      cells += `<span class="dow" aria-hidden="true">${dow[i]}</span>`;
+      for (const w of g.weeks) {
+        const c = w.days[i];
+        cells += c.future ? `<span class="future" aria-hidden="true"></span>`
+          : `<span class="lv${c.level}${c.today ? " today" : ""}" title="${esc(c.label)}" aria-label="${esc(c.label)}"></span>`;
+      }
+    }
+    const rest = sk.graceUsed ? " 1 rest day used this week." : "";
+    return `<section class="card stack studycard"><h2>Study days</h2>
+      <p class="small">Studied on ${g.studied} of the last ${g.total} days. Goal met on ${g.met}.${rest}</p>
+      <div class="heat-months" style="grid-template-columns:${cols}" aria-hidden="true"><span class="dow"></span>${months}</div>
+      <div class="heat" style="grid-template-columns:${cols}">${cells}</div></section>`;
   }
   function objList(os, opts) {
     opts = opts || {};
@@ -865,10 +913,9 @@
   }
 
   function renderProgress() {
-    const tests = st.tests.filter(t => t.mode === "test");
     const plan = C.examPlan(st, BANK), sk = C.streak(st.days, st.settings.goal), x = C.xpInfo(st);
     const pills = [plan && plan.phase !== "past" ? `<a class="pill" href="#today"><b>${plan.phase === "today" ? "Exam day" : plural(plan.days, "day")}</b>${plan.phase === "today" ? "" : " to exam"}</a>` : `<a class="pill" href="#today">Set an exam date</a>`,
-      sk.count ? `<span class="pill"><b>${sk.count}-day</b> streak</span>` : "", `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
+      `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
     const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
       shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your estimated score, exam average, pass chance and weak objectives show up here.</p>
@@ -876,12 +923,16 @@
       return wireStarts($("#page"));
     }
     const os = C.objectiveStats(BANK, st.qstats);
+    const exams = st.tests.filter(C.isReadinessExam);
+    const hist = C.scoreHistory(st.tests, st.estWeeks, Date.now());
+    const points = hist.examPoints.length + hist.estimatePoints.length;
     shell("progress", `${head}
       ${heroCard()}
       ${objectivesCard(os)}
+      ${studyCard(sk)}
       <div class="grid2">
-        <section class="card stack"><div class="row spread"><h2>Exam scores</h2><span class="small muted">${tests.length ? "best " + Math.max(...tests.map(t => t.pct)) + "% · " + plural(tests.length, "exam") : "no exams yet"}</span></div>
-          ${tests.length >= 2 ? trendChart(tests, 360, 200) : `<p class="small muted">Take ${tests.length ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
+        <section class="card stack"><div class="row spread"><h2>Score history</h2><span class="small muted">${exams.length ? "best " + Math.max(...exams.map(t => t.pct)) + "% · " + plural(exams.length, "exam") : "no exams yet"}</span></div>
+          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take ${points ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
         <section class="card stack"><div class="row spread"><h2>By difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
           <p class="small muted">The real exam leans on exact syntax. If Apply or Analyze trails Recall, study those levels.</p></section>
       </div>

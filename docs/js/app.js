@@ -428,58 +428,54 @@
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
-  const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
-    : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
-  const estimateBasis = pp => `From ${plural(pp.seen, "fresh answer")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
-  // Temporary, so both readiness layouts can be rendered. Remove once one is chosen.
-  // "gauge" (default): the likely range, a fixed pass mark, and one line for the gap.
-  // "distance": the gap is the headline. Set window.READINESS_DISPLAY = "distance" before this file loads to render it.
-  const READINESS_DISPLAY = window.READINESS_DISPLAY === "distance" ? "distance" : "gauge";
-  // Points between the mean and the goal. Within 2 points a dot and a notch draw as one mark, so the bar keeps a single mark.
-  function goalGap(mean, T) {
-    const d = mean - T, n = Math.abs(d);
-    const points = n === 1 ? "point" : "points";
-    const way = d < 0 ? "below" : "above";
-    const dist = n + " " + points + " " + way;
-    return {
-      close: n <= 2,
-      headline: d === 0 ? "At " + T + "%" : dist + " " + T + "%",
-      caption: d === 0 ? "Mean " + mean + "%, at the pass mark" : "Mean " + mean + "%, " + dist + " the pass mark",
-      short: d === 0 ? "At the pass mark" : dist + " the pass mark",
-      ariaDist: d === 0 ? "at the " + T + " percent goal" : dist + " the " + T + " percent goal"
-    };
+  const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more new question")} to get an estimate`
+    : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate`;
+  const pointWord = n => n === 1 ? "point" : "points";
+  // Right-hand status. Below the pass mark it's the gap still to cover. On the mark, say so. Above it, how far past.
+  function gapPhrase(mean, T) {
+    const n = Math.abs(mean - T);
+    if (mean < T) return n + " " + pointWord(n) + " to go";
+    if (mean === T) return "At the pass mark";
+    return "Passing by " + n + " " + pointWord(n);
   }
-  function bandPin(pct, kind, label) {
-    const edge = pct >= 88 ? " end" : pct <= 12 ? " start" : "";
-    return `<span class="pin${edge}" style="left:${pct}%"><i class="${kind}"></i>${label ? `<span class="mark-label">${esc(label)}</span>` : ""}</span>`;
+  function gapValueText(mean, T) {
+    const n = Math.abs(mean - T);
+    if (mean < T) return n + " " + pointWord(n) + " below the " + T + "% pass mark";
+    if (mean === T) return "at the " + T + "% pass mark";
+    return n + " " + pointWord(n) + " above the " + T + "% pass mark";
   }
-  function scoreAria(est, T, label) {
-    return `${label}: mean ${est.mean} percent, likely ${est.low} to ${est.high} percent, ${goalGap(est.mean, T).ariaDist}.`;
-  }
-  function scoreBand(est, T, label) {
-    const g = goalGap(est.mean, T);
-    const aria = `role="img" aria-label="${esc(scoreAria(est, T, label))}"`;
-    if (READINESS_DISPLAY === "gauge") {
-      const span = Math.max(1, est.high - est.low);
-      // The mean dot would sit on the pass line, so the sentence under the bar carries the mean instead.
-      const mean = g.close ? "" : bandPin(est.mean, "dot");
-      return `<div class="scorebar band gauge" ${aria}><b class="range" style="left:${est.low}%;width:${span}%"></b>${mean}${bandPin(T, "notch", "Pass " + T + "%")}</div>`;
+  // One character is one cell. Cell k (1..n) is k*(100/n) percent, so 50 cells are 2% and 25 cells are 4%.
+  // The mean rounds to the nearest cell. The pass mark always owns its own cell, drawn as | even when the fill has gone past it.
+  function termGlyphs(n, mean, T) {
+    const step = 100 / n;
+    const passCell = Math.round(T / step);
+    const filled = mean == null ? 0 : Math.max(0, Math.min(n, Math.round(mean / step)));
+    let cells = "";
+    for (let k = 1; k <= n; k++) {
+      if (k === passCell) cells += `<span class="mk">|</span>`;
+      else if (k <= filled) cells += `<span class="on">█</span>`;
+      else cells += `<span class="off">░</span>`;
     }
-    if (g.close) return `<div class="scorebar band dist" ${aria}>${bandPin(est.mean, "dot", "at the goal")}</div>`;
-    const left = Math.min(est.mean, T), width = Math.abs(est.mean - T);
-    return `<div class="scorebar band dist" ${aria}><b class="gap" style="left:${left}%;width:${width}%"></b>${bandPin(est.mean, "dot")}${bandPin(T, "notch", T + "%")}</div>`;
+    return { cells, passCell };
   }
-  function scoreBandSkeleton(T) {
-    const name = READINESS_DISPLAY === "gauge" ? "Pass " + T + "%" : T + "%";
-    return `<div class="scorebar band skeleton" role="img" aria-label="Estimated score not ready yet. The target is ${T} percent.">${bandPin(T, "notch", name)}</div>`;
+  function termSize(n, mean, T) {
+    const g = termGlyphs(n, mean, T);
+    return `<div class="term-size term-${n}" aria-hidden="true"><div class="term-line"><span class="br">[</span><span class="cells">${g.cells}</span><span class="br">]</span></div><div class="term-under"><span class="passspot" style="--i:${g.passCell}"><span class="passlab">${T}% to pass</span></span></div></div>`;
   }
-  function scoreSection(est, pp, T) {
-    const fresh = `It counts only fresh answers: a question counts again once ${C.COLD_DAYS} days have passed since you last saw it, so quick repeats can't inflate it.`;
-    if (est == null) return `<section class="score-block"><h2>Estimated score</h2>${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} ${fresh}</p></section>`;
-    const g = goalGap(est.mean, T), basis = estimateBasis(pp);
-    if (READINESS_DISPLAY === "gauge")
-      return `<section class="score-block" data-readiness="gauge"><h2>Estimated score</h2>${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">${g.caption}. ${basis}</p></section>`;
-    return `<section class="score-block" data-readiness="distance"><h2>${esc(g.headline)}</h2><p class="small muted">likely ${est.low}–${est.high}%</p>${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">${basis}</p></section>`;
+  function termBar(mean, T, text) {
+    const now = mean == null ? "" : ` aria-valuenow="${mean}"`;
+    return `<div class="termbar" role="progressbar" aria-labelledby="est-score" aria-valuemin="0" aria-valuemax="100"${now} aria-valuetext="${esc(text)}">${termSize(25, mean, T)}${termSize(50, mean, T)}</div>`;
+  }
+  // Same block on Today, Exam and Progress. aside is extra markup in the top row (Progress: pass chance).
+  // The slot is the full column, so the 25/50 switch sees a real width. The fit then shrinks to the bar.
+  function scoreSection(est, pp, T, aside) {
+    aside = aside || "";
+    const name = `<div class="score-name"><h2 id="est-score">Estimated score</h2>${est ? `<b class="score-pct">${est.mean}%</b>` : ""}</div>`;
+    const gap = est ? `<p class="score-gap">${esc(gapPhrase(est.mean, T))}</p>` : "";
+    const wait = est ? "" : estimateWait(pp);
+    const text = est ? "Estimated " + est.mean + "%, " + gapValueText(est.mean, T) + ", likely " + est.low + " to " + est.high : wait;
+    const note = est ? "Likely " + est.low + "–" + est.high + "% · from " + plural(pp.seen, "fresh answer") : wait;
+    return `<section class="score-block"><div class="score-slot"><div class="score-fit"><div class="score-top">${name}${gap}${aside}</div>${termBar(est ? est.mean : null, T, text)}<p class="small muted band-note">${esc(note)}</p></div></div></section>`;
   }
   function renderToday() {
     const sk = C.streak(st.days, st.settings.goal), pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80;
@@ -601,6 +597,7 @@
   }
   function renderTest() {
     const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set the exam average uses
+    const pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80, est = estimateOf(pp);
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
@@ -633,6 +630,7 @@
         <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward your exam average.</p>
           <button data-start="test" data-untimed="1">${icon("clock")}Start an untimed run</button></div>
       </section>
+      ${scoreSection(est, pp, T)}
       ${stats}${next}${formsCard()}${tips}`);
     wireResume();
     wireStarts($("#page"));
@@ -810,18 +808,18 @@
   const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
+  // One "am I ready?" card at the top of Progress: the estimate, pass chance, and the single most useful next step.
   const passWhy = p => `The estimate uses only fresh answers: your first attempt at each question, and any answer given ${C.COLD_DAYS} or more days after you last saw it.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
-      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.`;
+      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.${p.repeats ? " " + plural(p.repeats, "repeated question") + " left out." : ""}`;
   const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   function heroCard() {
-    const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
+    const p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
     const pct = p.chance == null ? null : Math.round(p.chance * 100);
     const focus = p.focus.map(f => f.obj);
     const T = C.TARGET || 80;
-    const advice = est == null ? estimateWait(p)
+    const advice = est == null ? ""
       : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
       : est.low >= T ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above the goal.";
     const btns = focus.length
@@ -829,23 +827,8 @@
       : est == null ? `<button class="primary" data-start="unseen">Answer new questions</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
     const how = `<details class="small muted"><summary>How are these worked out?</summary><p>${passWhy(p)} Exam average is the plain average of your last three full exams, including questions you'd seen before, so it can read higher than the estimate.</p></details>`;
-    const avg = ready == null ? "" : `Last 3 exams averaged ${ready}%.`;
-    if (est == null) return `<section class="card readyhero">
-      <h2 class="hero-head">Not enough fresh answers yet</h2>
-      ${scoreBandSkeleton(T)}
-      <p class="muted">${advice}${avg ? " " + avg : ""}</p>
-      <div class="row">${btns}</div>${how}</section>`;
-    const g = goalGap(est.mean, T), gauge = READINESS_DISPLAY === "gauge";
-    const nums = gauge
-      ? `<div class="hero-fig"><b class="big">${est.mean}%</b><span class="small muted">mean</span></div><div class="hero-fig"><b class="big">${pct}%</b><span class="small muted">pass chance</span></div>`
-      : `<div class="hero-fig"><b class="hero-gap">${esc(g.headline)}</b><span class="small muted">likely ${est.low}–${est.high}%</span></div><div class="hero-fig"><b class="big">${pct}%</b><span class="small muted">pass chance</span></div>`;
-    const note = (gauge ? g.short + ". " : "") + estimateBasis(p) + (avg ? " " + avg : "");
-    return `<section class="card readyhero" data-readiness="${gauge ? "gauge" : "distance"}">
-      <div class="hero-nums">${nums}</div>
-      ${scoreBand(est, T, "Estimated score")}
-      <p class="small muted band-note">${note}</p>
-      <p class="muted">${advice}</p>
-      <div class="row">${btns}</div>${how}</section>`;
+    const aside = est && pct != null ? `<div class="hero-fig"><span class="small muted">Pass chance</span><b class="score-pct">${pct}%</b></div>` : "";
+    return `<section class="card readyhero">${scoreSection(est, p, T, aside)}${advice ? `<p class="muted">${advice}</p>` : ""}<div class="row">${btns}</div>${how}</section>`;
   }
 
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.

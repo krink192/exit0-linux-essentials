@@ -696,10 +696,8 @@ code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-va
 .pill b { color: var(--ink); font-weight: 700; }
 a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .readyhero { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 26px; }
-.hero-nums { display: flex; flex-wrap: wrap; gap: 12px 36px; align-items: flex-start; }
-.hero-fig { display: flex; flex-direction: column; gap: 4px; }
-.hero-nums .big, .hero-gap { font-size: var(--fs-title); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.hero-text { gap: 12px; }
+.hero-fig { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; flex: none; }
+.hero-fig .small { line-height: 1.3; }
 .hero-head { font-size: var(--fs-q); font-weight: 700; }
 .readyhero details summary { cursor: pointer; }
 .readyhero details p { margin-top: 6px; }
@@ -1037,7 +1035,8 @@ button.marked { background: var(--accent-soft); border-color: var(--accent); col
 .goalline { display: flex; align-items: center; gap: 0 10px; flex-wrap: wrap; color: var(--muted); margin: -20px 0 -8px; }
 .goalline button { padding: 0 2px; color: var(--accent-text); }
 .goalline button:hover { background: transparent; text-decoration: underline; text-underline-offset: 3px; }
-/* Phone: pipeline, score column, then Exam day. Wide: the two columns are equal height; Exam day sits under both. */
+/* Phone: pipeline, score column, then Exam day. Wide: two columns; Exam day sits under both.
+   Pipeline rows keep their own spacing. They do not stretch to the height of the score column. */
 .today-grid { display: flex; flex-direction: column; gap: 28px; }
 .today-main { display: contents; }
 .today-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; order: 2; }
@@ -1045,9 +1044,9 @@ button.marked { background: var(--accent-soft); border-color: var(--accent); col
 .today-plan { order: 3; min-width: 0; }
 @media (min-width: 1180px) {
   .page.today-page { max-width: 1080px; }
-  .today-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; row-gap: 28px; align-items: stretch; }
-  .today-main { display: flex; flex-direction: column; min-width: 0; order: 0; }
-  .today-main .pipe { flex: 1; order: 0; justify-content: space-between; }
+  .today-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; row-gap: 28px; align-items: start; }
+  .today-main { display: flex; flex-direction: column; min-width: 0; order: 0; align-self: start; }
+  .today-main .pipe { flex: none; order: 0; justify-content: flex-start; }
   .today-side, .today-plan { order: 0; }
   .today-plan { grid-column: 1 / -1; }
 }
@@ -1069,29 +1068,37 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
 .pipe-row:focus-visible { outline: 2px solid var(--pipe-ink); outline-offset: -3px; }
 .pipe-row.next:focus-visible { outline-color: var(--pipe-next-ink); }
 .sect-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.sect-head h2, .weak-head h2, .score-block h2 { font-size: var(--fs-row); }
-.score-block { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
-.score-block[data-readiness="distance"] h2 { font-size: var(--fs-q); }
+.sect-head h2, .weak-head h2 { font-size: var(--fs-row); }
+/* The slot is the full column (a real width, in the bar's font). The fit shrinks to the bar, so the gap sits at the bar's right end. */
+.score-block { width: 100%; min-width: 0; }
+.score-slot { container: score / inline-size; width: 100%; font: 500 var(--fs-body)/1.3 var(--mono); }
+.score-fit { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: max-content; max-width: 100%; }
+.score-top { display: flex; align-items: flex-start; gap: 8px 16px; }
+.score-name { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; font-family: var(--ui); }
+.score-name h2 { font-size: var(--fs-sm); font-weight: 600; line-height: 1.3; }
+.score-pct { font-family: var(--ui); font-size: var(--fs-num); font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.score-gap { margin: 2px 0 0 auto; font-family: var(--ui); font-size: var(--fs-sm); line-height: 1.3; color: var(--ink); white-space: nowrap; }
+.band-note { margin: 0; font-family: var(--ui); }
+/* Monospace score bar. 50 cells (2% each) when the row is wide enough, otherwise 25 (4% each). Each cell is one character wide so the line never wraps. */
+.termbar { min-width: 0; font: 500 var(--fs-body)/1 var(--mono); font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+.term-size { width: max-content; max-width: 100%; }
+.term-50 { display: none; }
+@container score (min-width: 53ch) {
+  .term-25 { display: none; }
+  .term-50 { display: block; }
+}
+.term-line { display: flex; align-items: stretch; white-space: nowrap; }
+.term-line .cells { display: flex; }
+.term-line .br, .term-line .cells span { width: 1ch; height: 1em; flex: none; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.term-line .on { color: var(--accent); }
+.term-line .off, .term-line .br { color: var(--muted); }
+.term-line .mk { color: var(--ink); }
+.term-under { position: relative; height: 1.2em; margin-top: 3px; }
+.passspot { position: absolute; top: 0; left: calc((var(--i) + 0.5) * 1ch); transform: translateX(-50%); line-height: 1; }
+.passlab { font-size: var(--fs-xs); font-weight: 500; color: var(--muted); white-space: nowrap; }
 .scorebar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin-top: 12px; }
 .scorebar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .scorebar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-/* Distance: a gap between the mean dot and the goal notch. Gauge: the likely range, with the pass mark labelled. */
-.scorebar.band { height: 10px; margin-top: 32px; overflow: visible; }
-.scorebar.band .range, .scorebar.band .gap { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
-.scorebar.band .range { background: color-mix(in srgb, var(--accent) 55%, var(--track)); }
-.scorebar.band .gap { background: color-mix(in srgb, var(--accent) 70%, var(--track)); }
-.scorebar.band .pin { position: absolute; top: -8px; bottom: -8px; width: 0; }
-.scorebar.band .notch { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-.scorebar.band .dot { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--ink); }
-.scorebar.band .mark-label { position: absolute; left: 0; bottom: calc(100% + 4px); transform: translateX(-50%);
-  font: 600 var(--fs-xs) var(--ui); color: var(--ink); white-space: nowrap; line-height: 1; }
-.scorebar.band .pin.end .mark-label { transform: translateX(-100%); }
-.scorebar.band .pin.start .mark-label { transform: none; }
-.scorebar.band.skeleton { background: var(--sunk); border: 1px solid var(--line); }
-@media (prefers-reduced-motion: reduce) {
-  .scorebar.band.skeleton { animation: none; }
-}
-.band-note { margin-top: 10px; }
 .today-side .weak { display: flex; flex-direction: column; margin: 0 -10px; }
 .weak-head, .weak-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.5em 3.5em; gap: 12px; align-items: center; padding: 0 10px; }
 .weak-head { align-items: baseline; padding-bottom: 8px; font-size: var(--fs-sm); color: var(--muted); }

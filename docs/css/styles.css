@@ -654,6 +654,19 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 /* ---------- labs on phones: one task at a time above the terminal */
 .taskpager { display: none; }
 .labfoot { margin-top: -8px; }
+/* Terminal help under labs, command practice and the sandbox. Each phrase stays on one line and wraps as a whole. */
+.termhelp { display: flex; flex-direction: column; gap: 16px; margin: 0; color: var(--muted); font-size: var(--fs-sm); line-height: 1.4; }
+.termhelp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0; }
+.termhelp-k { flex: none; min-width: 4.5rem; font-weight: 700; color: var(--ink); }
+.termhelp-bits { display: flex; flex: 1 1 18rem; flex-wrap: wrap; align-items: center; gap: 10px 20px; min-width: 0; }
+.termhelp .bit { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.termhelp .kpair { display: inline-flex; align-items: center; gap: 3px; }
+@media (max-width: 560px) {
+  .termhelp { gap: 14px; }
+  .termhelp-row { align-items: flex-start; gap: 6px; }
+  .termhelp-k, .termhelp-bits { flex-basis: 100%; }
+  .termhelp-bits { gap: 8px 14px; }
+}
 .show-one { display: none; }
 @media (max-width: 900px) {
   .labwrap.one .taskpager { display: flex; align-items: center; gap: 8px; }
@@ -1275,16 +1288,14 @@ button.lxchip.cmd .lxtag.no { color: var(--accent-ink); }
 .lxsort { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
 .lxsort:first-child { border-top: 0; }
 .lxname { font: 500 var(--fs-body)/1.2 var(--mono); color: var(--ink); min-height: var(--tap); display: inline-flex; align-items: center; white-space: nowrap; }
-.lxbin { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--sunk); }
-.lxbin button { min-height: var(--tap); min-width: var(--tap); padding: 0 .7rem; border: 0; border-radius: 0; background: transparent; color: var(--muted);
-  font-size: var(--fs-sm); box-shadow: none; }
-.lxbin button:first-child { border-radius: calc(var(--r-sm) - 1px) 0 0 calc(var(--r-sm) - 1px); }
-.lxbin button:last-child { border-radius: 0 calc(var(--r-sm) - 1px) calc(var(--r-sm) - 1px) 0; }
-.lxbin button + button { box-shadow: inset 1px 0 0 var(--line); }
-.lxbin button.on { background: var(--surface); color: var(--ink); }
+/* One choice per row. The picked side is a solid green chip; the other stays an empty outline. */
+.lxbin { display: inline-flex; gap: 6px; border: 0; background: transparent; }
+.lxbin button { min-height: var(--tap); min-width: var(--tap); padding: 0 .75rem; border: 1px solid var(--line-2); border-radius: var(--r-xs);
+  background: transparent; color: var(--ink); font: 600 var(--fs-sm)/1 var(--ui); box-shadow: none; }
+.lxbin button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .lxbin button:hover { background: var(--hover); }
-.lxbin button.on:hover { background: var(--surface); }
-.lxbin button:focus-visible { outline-offset: -2px; z-index: 1; }
+.lxbin button.on:hover { background: var(--accent-2); border-color: var(--accent-2); }
+.lxbin button:focus-visible { outline-offset: 2px; z-index: 1; }
 .lxmark { grid-column: 2; grid-row: 2; justify-self: end; display: inline-flex; align-items: center; gap: 4px; min-height: 1.25em; font: 700 var(--fs-xs) var(--ui); color: var(--muted); }
 .lxmark.ok { color: var(--good); } .lxmark.no { color: var(--bad); }
 .lxmark svg.i { width: 14px; height: 14px; }

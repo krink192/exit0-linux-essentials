@@ -592,6 +592,68 @@ t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(q2[0].id, q[1].id, "missed card comes back first");
   assert(!q2.some(c => c.id === q[0].id), "known card not due today");
 });
+t("new flashcards rotate across objectives, weakest first, in a seeded order", () => {
+  const today = 20000, seed = 7;
+  const deck = [{ id: "s-weak", obj: "2.1" }, { id: "s-strong", obj: "1.1" }];
+  for (const obj of ["1.1", "1.2", "2.1"]) for (let i = 0; i < 3; i++) deck.push({ id: obj + "-" + i, obj });
+  const cs = { "s-weak": { box: 1, seen: 2, right: 0, due: today + 4 }, "s-strong": { box: 2, seen: 2, right: 2, due: today + 4 } };
+  const q = C.cardQueue(deck, cs, null, today, 20, seed);
+  assert.deepStrictEqual(q.map(c => c.obj), ["2.1", "1.2", "1.1", "2.1", "1.2", "1.1", "2.1", "1.2", "1.1"]);
+  assert.ok(!q.some(c => c.id === "s-weak" || c.id === "s-strong"), "a card that is not due stays out");
+  const rand = C.rng(seed), g = {};
+  for (const obj of ["1.1", "1.2", "2.1"]) g[obj] = C.shuffle([0, 1, 2].map(i => obj + "-" + i), rand);
+  const expect = []; for (let i = 0; i < 3; i++) expect.push(g["2.1"][i], g["1.2"][i], g["1.1"][i]);
+  assert.deepStrictEqual(q.map(c => c.id), expect);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 20, seed).map(c => c.id), expect, "same seed, same order");
+  const other = C.cardQueue(deck, cs, null, today, 20, seed + 1);
+  assert.notDeepStrictEqual(other.map(c => c.id), expect, "a different seed shuffles within the objective");
+  assert.deepStrictEqual(other.map(c => c.obj), q.map(c => c.obj));
+  const plain = [];
+  for (const obj of ["1.1", "1.2"]) for (let i = 0; i < 3; i++) plain.push({ id: obj + "-" + i, obj });
+  const p = C.cardQueue(plain, {}, null, today, 6, 1);
+  assert.deepStrictEqual(p.map(c => c.obj), ["1.1", "1.2", "1.1", "1.2", "1.1", "1.2"]);
+  assert.notDeepStrictEqual(p.map(c => c.id), plain.map(c => c.id), "not deck order");
+});
+t("a missed flashcard returns once later in the same session, after five other cards", () => {
+  const q = ["a", "b", "c", "d", "e", "f", "g"].map(id => ({ id })), again = {};
+  assert.strictEqual(C.requeueMiss(q, 0, again), 1);
+  assert.deepStrictEqual(q.map(c => c.id), ["a", "b", "c", "d", "e", "f", "a", "g"]);
+  assert.strictEqual(C.requeueMiss(q, 6, again), 7, "the second miss is not queued again");
+  assert.strictEqual(q.length, 8);
+  const exact = ["a", "b", "c", "d", "e", "f"].map(id => ({ id }));
+  assert.strictEqual(C.requeueMiss(exact, 0, {}), 1);
+  assert.deepStrictEqual(exact.map(c => c.id), ["a", "b", "c", "d", "e", "f", "a"]);
+  const short = ["a", "b", "c", "d", "e"].map(id => ({ id }));
+  assert.strictEqual(C.requeueMiss(short, 0, {}), 1);
+  assert.deepStrictEqual(short.map(c => c.id), ["a", "b", "c", "d", "e"], "fewer than five cards left, so it waits for the next session");
+});
+t("at most five cards missed today lead the next session; the rest mix in", () => {
+  const today = 20000, seed = 3, deck = [];
+  for (let i = 0; i < 8; i++) deck.push({ id: "m" + i, obj: "1.1" });
+  for (let i = 0; i < 4; i++) deck.push({ id: "o" + i, obj: "1.1" });
+  deck.push({ id: "y", obj: "1.1" });
+  for (let i = 0; i < 4; i++) deck.push({ id: "n" + i, obj: "1.2" });
+  const cs = { y: { box: 0, seen: 1, right: 0, due: today - 1 } };
+  for (let i = 0; i < 8; i++) cs["m" + i] = { box: 0, seen: 1, right: 0, due: today };
+  for (let i = 0; i < 4; i++) cs["o" + i] = { box: 2, seen: 2, right: 2, due: today - 1 };
+  const ids = C.cardQueue(deck, cs, null, today, 40, seed).map(c => c.id);
+  const lead = C.shuffle(deck.filter(c => c.id[0] === "m"), C.rng(seed)).slice(0, 5).map(c => c.id);
+  assert.deepStrictEqual(ids.slice(0, 5), lead);
+  assert.ok(ids.indexOf("y") > 4, "a miss from yesterday is not one of the five");
+  assert.deepStrictEqual(ids.slice(5).map(id => id[0] === "n" ? "n" : id[0] === "m" ? "m" : "d"),
+    ["d", "d", "m", "n", "d", "m", "d", "n", "m", "d", "n", "n"]);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 40, seed).map(c => c.id), ids);
+});
+t("due and new flashcards alternate about three to one", () => {
+  const today = 20000, deck = [];
+  for (let i = 0; i < 6; i++) deck.push({ id: "d" + i, obj: "1.1" });
+  for (let i = 0; i < 3; i++) deck.push({ id: "n" + i, obj: "1.2" });
+  const cs = {};
+  for (let i = 0; i < 6; i++) cs["d" + i] = { box: 2, seen: 1, right: 1, due: today };
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 20, 4).map(c => c.id[0]), ["d", "d", "d", "n", "d", "d", "d", "n", "n"]);
+  const older = { a: { box: 2, seen: 1, right: 1, due: today }, b: { box: 1, seen: 1, right: 1, due: today - 3 } };
+  assert.deepStrictEqual(C.cardQueue([{ id: "a", obj: "1.1" }, { id: "b", obj: "1.1" }], older, null, today, 5, 1).map(c => c.id), ["b", "a"]);
+});
 t("streak counts consecutive goal days", () => {
   const days = {}; const now = new Date(2026, 9, 10, 12);
   for (let i = 0; i < 4; i++) { const d = new Date(now); d.setDate(d.getDate() - i); days[C.dayKey(d)] = 25; }
@@ -690,6 +752,31 @@ t("recording: first attempts and answers after a long gap are cold evidence; hin
   const st2 = C.freshState(); st.qstats = st2.qstats;
   assert.strictEqual(run(q.answer, t0, true).ev, -1, "a hinted first attempt is not evidence");
   assert.strictEqual(C.coldOutcome(st.qstats[q.id]), -1);
+});
+t("cold window is 4 days: day 3 is a repeat, day 4 is cold, and the latest cold result wins", () => {
+  assert.strictEqual(C.COLD_DAYS, 4);
+  const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
+  const st = C.freshState(), q = bank.questions.find(x => x.type === "single" && C.familyOf(bank, x.id).length === 1);
+  const wrong = [q.answer[0] === 0 ? 1 : 0];
+  const run = (ans, at) => { const s = C.buildStudy(bank, {}, { ids: [q.id], count: 1 }, { seed: 1 });
+    s.answers[q.id] = ans; C.recordResult(st, bank, s, C.grade(bank, s), at); return st.qstats[q.id]; };
+  const evOf = () => C.passEvidence(bank, st.qstats).ev[q.obj];
+  assert.strictEqual(run(wrong, t0).ev, 0, "first attempt, wrong");
+  assert.strictEqual(C.isCold(bank, st.qstats, q.id, t0 + 3 * day), false);
+  assert.strictEqual(run(q.answer, t0 + 3 * day).ev, 0, "3 days later is a repeat: the miss stands");
+  assert.strictEqual(C.passEvidence(bank, st.qstats).repeats, 0);
+  assert.deepStrictEqual(evOf(), { right: 0, wrong: 1 });
+  // the gap runs from the last attempt (day 3), so day 6 is still a repeat and day 7 is cold
+  assert.strictEqual(run(q.answer, t0 + 6 * day).ev, 0, "3 days after the last attempt is still a repeat");
+  assert.strictEqual(C.isCold(bank, st.qstats, q.id, t0 + 10 * day), true, "4 days after the last attempt is cold");
+  assert.strictEqual(run(q.answer, t0 + 10 * day).ev, 1, "the later cold right replaces the older cold miss");
+  assert.deepStrictEqual(evOf(), { right: 1, wrong: 0 });
+  assert.strictEqual(run(wrong, t0 + 14 * day).ev, 0, "and a later cold miss replaces that hit");
+  assert.deepStrictEqual(evOf(), { right: 0, wrong: 1 });
+  // a bare record seen once: 3 days on is a repeat, 4 days on is cold
+  const one = { [q.id]: { seen: 1, at: t0 } };
+  assert.strictEqual(C.isCold(bank, one, q.id, t0 + 3 * day), false);
+  assert.strictEqual(C.isCold(bank, one, q.id, t0 + 4 * day), true);
 });
 t("an estimate needs every topic covered, not just enough answers", () => {
   const q = {}; bank.questions.filter(x => x.obj >= "2").forEach(x => q[x.id] = { seen: 1, right: 1, last: true, ev: 1 });
@@ -1400,6 +1487,43 @@ t("placementSummary: outcome words and startWith ranking", () => {
   // Don't know counts as asked but not right.
   const dk = C.placementSummary(bank, { qids: pick(heavy, 2), answers: {}, dontKnow: pick(heavy, 2) });
   assert.strictEqual(dk.byObj[heavy].asked, 2); assert.strictEqual(dk.byObj[heavy].right, 0); assert.strictEqual(dk.byObj[heavy].outcome, "New to you");
+});
+t("Choose TWO/THREE can be checked only with exactly the asked number of picks", () => {
+  const two = bank.questions.find(q => q.type === "multi" && q.answer.length === 2);
+  const three = bank.questions.find(q => q.type === "multi" && q.answer.length === 3);
+  const single = bank.questions.find(q => q.type === "single");
+  const fill = bank.questions.find(q => q.type === "fill");
+  assert(two && three && single && fill);
+  assert.strictEqual(C.multiPick(single, [0]), null);
+  assert.strictEqual(C.multiPick(fill, fill.accept[0]), null);
+  assert.strictEqual(C.multiStatus(single, [0], true), "");
+  assert.deepStrictEqual(C.multiPick(two, [two.answer[0]]), { need: 2, have: 1, ready: false });
+  assert.strictEqual(C.multiStatus(two, [two.answer[0]], true), "Pick 1 more to check");
+  assert.strictEqual(C.multiStatus(two, [], true), "Pick 2 more to check");
+  assert.strictEqual(C.multiStatus(two, undefined, true), "Pick 2 more to check");
+  assert.strictEqual(C.multiStatus(two, [two.answer[0]], false), "Select 2. 1 selected.");
+  assert.deepStrictEqual(C.multiPick(two, two.answer.slice()), { need: 2, have: 2, ready: true });
+  assert.strictEqual(C.multiStatus(two, two.answer.slice(), true), "Select 2. 2 selected.");
+  assert.strictEqual(C.multiPick(two, two.answer.slice().reverse()).ready, true);
+  const extra = two.options.findIndex((_, i) => two.answer.indexOf(i) < 0);
+  assert.strictEqual(C.multiStatus(two, two.answer.concat(extra), true), "Unpick 1 to check");
+  assert.strictEqual(C.multiPick(two, two.answer.concat(extra)).ready, false);
+  assert.strictEqual(C.multiStatus(three, [three.answer[0]], true), "Pick 2 more to check");
+  assert.strictEqual(C.multiStatus(three, three.answer.slice(), true), "Select 3. 3 selected.");
+  const ids = [two.id, three.id, single.id, fill.id];
+  const s = C.newSession(bank, "test", "Exam", ids, { now: 1 });
+  s.answers[two.id] = [two.answer[0]];
+  s.answers[three.id] = [three.answer[0]];
+  s.answers[single.id] = single.answer.slice();
+  assert.deepStrictEqual(C.shortPicks(bank, s), [0, 1], "one of two and one of three are both short; a full single is not");
+  s.answers[two.id] = two.answer.slice();
+  assert.deepStrictEqual(C.shortPicks(bank, s), [1]);
+  s.answers[three.id] = three.options.map((_, i) => i);
+  assert.deepStrictEqual(C.shortPicks(bank, s), [], "too many picks is not a short question");
+  assert.strictEqual(C.shortPickLine([11, 30]), "2 questions have fewer picks than asked: 12, 31");
+  assert.strictEqual(C.shortPickLine([11]), "1 question has fewer picks than asked: 12");
+  assert.strictEqual(C.shortPickLine([]), "");
+  assert(bank.questions.every(q => (q.options || []).length <= 5), "options stop at E, so A-E does not clash with F for flag");
 });
 
 console.log(`\n${n} tests passed`);

@@ -65,7 +65,14 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   // `code` and **bold** (bold only outside code spans). Options that are commands or literals use backticks in the
   // question sources so they render in JetBrains Mono with whitespace kept (see .opt .t code).
-  const rich = s => esc(s).split(/(`[^`]+`)/).map(p => p.length > 1 && p[0] === "`" && p.endsWith("`") ? "<code>" + p.slice(1, -1) + "</code>" : p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")).join("");
+  // Short code (24 characters or fewer) is .nw: never split inside, and kept with punctuation right after it. Longer code wraps at spaces.
+  const rich = s => esc(s).split(/(`[^`]+`[?!.,:;)]*)/).map(p => {
+    const m = /^`([^`]+)`([?!.,:;)]*)$/.exec(p);
+    if (!m) return p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    if (m[1].length > 24) return "<code>" + m[1] + "</code>" + m[2];
+    const c = '<code class="nw">' + m[1] + "</code>";
+    return m[2] ? '<span class="nw">' + c + m[2] + "</span>" : c;
+  }).join("");
   const LPI_PDF = "https://learning.lpi.org/pdfstore/LPI-Learning-Material-010-160-en.pdf";     // the whole 010-160 book, CC BY-NC-ND (link only)
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const fmtDate = ms => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
@@ -412,7 +419,7 @@
       return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}" ${label}>${inner}</a>` : `<div class="${cls}" ${label}>${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}" ${label}>${inner}</a>` : `<button class="${cls}" ${s.attr} ${label}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
-  // The score estimate counts first attempts (and answers after a long gap) only, so it can't be pushed up by repeating questions.
+  // The score estimate counts first attempts (and answers given C.COLD_DAYS or more days after the last attempt) only, so it can't be pushed up by repeating questions.
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
@@ -544,11 +551,11 @@
     const best = {}; for (const t of st.tests) if (t.form && t.mode === "test") best[t.form] = Math.max(best[t.form] == null ? -1 : best[t.form], t.pct);
     const taken = Object.keys(best).length;
     return `<section class="card stack forms"><div class="row spread"><h2>Fixed practice exams</h2><span class="small muted">${taken} of 10 taken</span></div>
-      <p class="small muted">Ten set exams, A to J. Each is a full 40-question blueprint and no question appears in two of them, so a retake of the same letter shows real improvement. They count toward readiness like any exam.</p>
+      <p class="small muted">Ten set exams, A to J. Each is a full 40-question blueprint and no question appears in two of them, so a retake of the same letter shows real improvement. They count toward your exam average like any exam.</p>
       <div class="formgrid">${"ABCDEFGHIJ".split("").map(f => `<button data-form="${f}" class="${best[f] != null ? "done" : ""}" title="Practice exam ${f}${best[f] != null ? ": best " + best[f] + "%" : ""}"><b>${f}</b><span style="${best[f] != null ? "color:" + col(best[f]) : ""}">${best[f] != null ? best[f] + "%" : "new"}</span></button>`).join("")}</div></section>`;
   }
   function renderTest() {
-    const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set Readiness uses
+    const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set the exam average uses
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
@@ -565,20 +572,20 @@
     const stats = last ? `<div class="grid4">
         <div class="card stat"><b style="color:${tcol(last.pct)}">${last.pct}%</b><span>Last exam</span></div>
         <div class="card stat"><b>${Math.max(...tests.map(t => t.pct))}%</b><span>Best</span></div>
-        <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></div>
+        <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Exam average</span></div>
         <div class="card stat"><b>${tests.length}</b><span>${tests.length === 1 ? "Exam" : "Exams"} taken</span></div></div>` : "";
     const tips = last ? "" : `<div class="tips">
-        <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
+        <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward your exam average.</span></div></div>
         <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
-        <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
+        <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back sooner.</span></div></div></div>`;
     shell("test", `${resumeBanner()}
       <section class="hero">
         <div class="page-head"><h1>Exam</h1>
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
         <div class="cta"><button class="primary big" data-start="test">${icon("test")}Start exam</button>
           <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
-        <div class="rules"><span>${icon("clock")}60:00 timer, which you can hide</span><span>${icon("terminal")}At least ${C.EXAM_TYPED_MIN} typed answers</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
-        <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward readiness.</p>
+        <div class="rules"><span>${icon("clock")}60:00 timer, which you can hide</span><span>${icon("terminal")}At least ${C.EXAM_TYPED_MIN} typed answers</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward the exam average</span></div>
+        <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward your exam average.</p>
           <button data-start="test" data-untimed="1">${icon("clock")}Start an untimed run</button></div>
       </section>
       ${stats}${next}${formsCard()}${tips}`);
@@ -623,7 +630,7 @@
     const srcNote = !pool.length && SOURCE_EMPTY[sp.source] ? SOURCE_EMPTY[sp.source] : SOURCE_TEXT[sp.source] || SOURCE_TEXT.mix;
     shell("study", `${resumeBanner()}
       <div class="page-head"><h1>Study</h1>
-        <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
+        <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your exam average.</p></div>
       <div class="quick">
         <button class="qs" data-start="placement" ${placeOk ? "" : "disabled"}>${icon("target")}<b>Placement test</b><span>${placeOk ? "2 or 3 questions per objective, about 15 minutes" : "No unseen questions left in any objective"}</span></button>
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
@@ -710,7 +717,7 @@
   const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  // One "am I ready?" card at the top of Progress: readiness, pass chance and the single most useful next step.
+  // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
   const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
@@ -857,7 +864,7 @@
       sk.count ? `<span class="pill"><b>${sk.count}-day</b> streak</span>` : "", `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
     const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
-      shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your readiness, pass chance and weak objectives show up here.</p>
+      shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your estimated score, exam average, pass chance and weak objectives show up here.</p>
         <div class="u-jc row"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`);
       return wireStarts($("#page"));
     }
@@ -894,7 +901,7 @@
     const q = query.trim().toLowerCase();
     const list = q ? pool.filter(c => (c.front + " " + c.back + " " + (c.ex || "")).toLowerCase().includes(q)) : pool;
     const nextN = Math.min(cardSize, ds.due + ds.fresh);
-    shell("cards", `<div class="page-head"><h1>Flashcards</h1><p class="lead">Every term in LPI's exam objectives. Cards you know come back less often, and cards you miss come back first.</p></div>
+    shell("cards", `<div class="page-head"><h1>Flashcards</h1><p class="lead">Every term in LPI's exam objectives. Cards you know come back less often, cards you miss come back later in the session, and new cards mix across every topic.</p></div>
       <div class="deck-tabs">${decks.map(([k, name, desc]) => { const s = C.deckStats(CARDS, st.cards, c => c.deck === k);
         return `<button class="deck ${deck === k ? "on" : ""}" data-deck="${k}"><span class="row spread"><span class="dn">${name}</span><span class="chip lv-${s.due ? "due" : "new"}">${s.due ? s.due + " due" : s.total + " cards"}</span></span>
           <span class="ds">${desc}</span><span class="stackbar"><i style="width:${100 * s.mastered / s.total}%"></i><i style="width:${100 * s.learning / s.total}%"></i></span>
@@ -922,7 +929,7 @@
   function renderCardSession() {
     if (cs.i >= cs.queue.length) {
       shell("cards", `<div class="card celebrate">${icon("trophy")}<h2>Session complete</h2>
-        <p class="muted">You knew ${cs.knew} of ${cs.done} cards. Cards you missed will come back first next time.</p>
+        <p class="muted">You knew ${cs.knew} of ${cs.done} cards. Cards you missed will come back soon.</p>
         <div class="u-jc row"><button class="primary" id="again">Study more</button><button id="back">Back to decks</button></div></div>`);
       $("#again").onclick = () => { cs = null; $("#cstart") || renderCards(); const b = $("#cstart"); if (b && !b.disabled) b.click(); };
       $("#back").onclick = () => { cs = null; renderCards(); };
@@ -950,9 +957,11 @@
     const c = cs.queue[cs.i];
     C.reviewCard(st.cards, c.id, knew, C.dayNum(), Date.now(), C.examDayNum(st));
     C.addActivity(st, 1); save();
-    if (cs.i + 1 >= cs.queue.length) celebrate();
     cs.done++; if (knew) cs.knew++;
-    cs.i++; cs.flipped = false; renderCardSession();
+    if (knew) cs.i++;
+    else { cs.again = cs.again || {}; cs.i = C.requeueMiss(cs.queue, cs.i, cs.again); }
+    if (cs.i >= cs.queue.length) celebrate();
+    cs.flipped = false; renderCardSession();
   }
 
   // ================================================================== EXAM GUIDE
@@ -1003,7 +1012,7 @@
         <div class="grid2">
           <section class="card stack guide" id="g-plan"><h2>A study plan that works</h2><ol>
             <li>Take an exam cold to get a baseline.</li><li>Study your weak objectives. Use hints only when stuck, and read the linked lesson for anything you miss.</li>
-            <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your readiness stays at 80% or higher.</li></ol></section>
+            <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your exam average stays at 80% or higher.</li></ol></section>
           <section class="card stack guide" id="g-tips"><h2>Test-day tips</h2><ul>
             <li>Answer every question, because a blank can't score.</li><li>Flag hard questions and come back. Don't let one question eat your time.</li>
             <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></section></div>
@@ -1108,6 +1117,15 @@
     return best && best !== word ? best : null;
   }
   const focusTask = {};         // partId -> task shown on phones (one task at a time above the terminal)
+  /** Colour every prompt in the scrollback the same way as the live one: user@host in the accent, the path in its own colour, the typed command in plain ink. */
+  function paintTermLog(el, log) {
+    const re = /^([A-Za-z_][\w.-]*@[\w.-]+):(.*?)([$#]) (.*)$/;
+    el.innerHTML = String(log).split("\n").map(line => {
+      const m = re.exec(line);
+      if (!m) return esc(line);
+      return `<span class="pu">${esc(m[1])}</span>:<span class="pp">${esc(m[2])}</span>${esc(m[3])} ${esc(m[4])}`;
+    }).join("\n");
+  }
   function renderLab(id) {
     const meta = LABS.find(l => l.id === id); if (!meta) return go("labs");
     clearInterval(labTick);
@@ -1176,7 +1194,7 @@
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
-    const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
+    const paint = () => { paintTermLog(out, sh.log); $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
     // A sync swaps st.labs for merged copies, so the handlers below read this part's progress fresh each time.
@@ -1350,7 +1368,7 @@
     const out = $("#termOut"), inp = $("#termIn");
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
-    const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); $("#term").scrollTop = $("#term").scrollHeight; };
+    const paint = () => { paintTermLog(out, sh.log); $("#termPrompt").innerHTML = promptHTML(); $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
     const run = line => {
@@ -1801,6 +1819,8 @@
     const revealed = S.study && S.checked[id];
     const hintOn = !isPlace && S.study && S.hints && S.hints[id] && !revealed;
     const isTest = S.mode === "test";
+    const short = isTest ? C.shortPicks(BANK, S) : [];
+    const shortLine = C.shortPickLine(short);
     S.conf = S.conf || {}; S.dontKnow = S.dontKnow || {};
     (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
     const rated = !isPlace && (S.conf[id] === true || S.conf[id] === false);
@@ -1821,7 +1841,7 @@
           tag = k ? (sel ? "Correct, your pick" : multi && C.answered(q, a) ? "Correct, you missed this" : "Correct") : sel ? "Wrong, your pick" : ""; }
         return `<label class="opt ${cls}" for="o${pos}"><input type="${multi ? "checkbox" : "radio"}" name="opt" id="o${pos}" data-oi="${oi}" ${sel ? "checked" : ""} ${revealed ? "disabled" : ""}>
           <span class="key">${L[pos]}</span><span class="t">${rich(q.options[oi])}${revealed ? whyNote(q, oi) : ""}</span>${tag ? `<span class="tag">${icon(mark)}${tag}</span>` : ""}</label>`;
-      }).join("")}</div>${multi && !revealed ? `<p class="small muted">Select ${q.answer.length}. ${Array.isArray(a) ? a.length : 0} selected.</p>` : ""}`;
+      }).join("")}</div>${multi && !revealed ? `<p class="small muted" id="multiLine">${esc(C.multiStatus(q, a, !!S.study))}</p>` : ""}`;
     }
     const ok = revealed && !dontKnow && C.isCorrect(q, a);
     const confWrong = revealed && rated && S.conf[id] === true && !ok;
@@ -1847,8 +1867,10 @@
           <li><i class="nk uns"></i>Unseen <b>${nav.unseen}</b></li><li>${icon("flag", "nf")}Flagged <b>${nav.flagged}</b></li></ul></section>` : "";
     const typeTag = q.type === "fill" ? "Type your answer" : q.type === "multi" ? "Choose " + (q.answer.length === 2 ? "two" : "three") : "Choose one";
     // One filled button: Check / Next / Finish. Sure/Unsure is optional and never blocks. Placement hides Sure/Unsure and Hint.
+    // Choose TWO/THREE in Study, Daily review and Placement: Check stays off until the pick count matches.
     const last = S.cur >= n - 1, canCheck = S.study && !revealed;
-    const primary = canCheck ? `<button class="primary" id="check">Check answer</button>`
+    const multiReady = q.type !== "multi" || !!(C.multiPick(q, a) || {}).ready;
+    const primary = canCheck ? `<button class="primary" id="check"${multiReady ? "" : " disabled aria-describedby=\"multiLine\""}>Check answer</button>`
       : last ? `<button class="primary" id="end">${isTest ? "Review and submit" : "Finish"}</button>`
       : `<button class="primary" id="next">${revealed ? "Next question" : "Next"}</button>`;
     const confPick = !isPlace && !revealed ? `<div class="conf-opt" role="group" aria-label="Confidence (optional)">
@@ -1867,8 +1889,9 @@
       <main class="page qpage">
         <h1 class="sr">${esc(S.label)}: question ${S.cur + 1} of ${n}</h1>
         ${confirming ? `<div class="u-g10 card confirm stack"><h3>${isTest ? "Submit your exam?" : isPlace ? "Finish this placement test?" : "Finish this study session?"}</h3>
-          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
+          <p>${n - done ? (isTest ? `<b>${n - done}</b> unanswered ${n - done === 1 ? "question counts" : "questions count"} as wrong. ` : `<b>${n - done}</b> unanswered ${n - done === 1 ? "question is" : "questions are"} left out of your score. `) : "All questions answered. "}${shortLine ? esc(shortLine) + ". " : ""}${flagged ? `<b>${flagged}</b> flagged. ` : ""}${isTest ? "You can't change your answers after you submit." : ""}</p>
           <div class="row u-wrap"><button id="keep">Keep working</button>${n - done ? `<button data-review="open">Review unanswered</button>` : ""}${flagged ? `<button data-review="flagged">Review flagged</button>` : ""}
+            ${short.length ? `<button type="button" id="goShort">Go to question ${short[0] + 1}</button>` : ""}
             <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${navPanel}
         <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
@@ -1884,14 +1907,17 @@
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
         <p class="small muted qkeys"><span><span class="kbd">${icon("left")}</span><span class="kbd">${icon("right")}</span><span class="sr">Left and right arrow keys:</span> move</span>
-          <span><span class="kbd">1</span>to<span class="kbd">5</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
+          <span><span class="kbd">1</span>–<span class="kbd">5</span> or <span class="kbd">A</span>–<span class="kbd">E</span> choose</span>${n > 1 ? `<span><span class="kbd">F</span> flag</span>` : ""}${S.study && !isPlace ? `<span><span class="kbd">H</span> hint</span>` : ""}
           <span><span class="kbd">Enter</span> ${canCheck ? "check" : last ? "finish" : "next"}</span></p>
       </main>`;
     const move = i => { S.cur = Math.max(0, Math.min(n - 1, i)); save(); renderExam(); scrollTo(0, 0); };
     if ($("#prev")) $("#prev").onclick = () => move(S.cur - 1);
     if ($("#next")) $("#next").onclick = () => move(S.cur + 1);
     if ($("#end")) $("#end").onclick = () => { confirming = true; renderExam(); scrollTo(0, 0); };
-    if ($("#check")) $("#check").onclick = () => { delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam(); };
+    if ($("#check")) $("#check").onclick = () => {
+      if (q.type === "multi" && !(C.multiPick(q, S.answers[id]) || {}).ready) return;
+      delete S.dontKnow[id]; S.checked[id] = 1; save(); renderExam();
+    };
     if ($("#dontKnow")) $("#dontKnow").onclick = () => {
       S.dontKnow[id] = 1; delete S.answers[id]; S.checked[id] = 1; save(); renderExam();
     };
@@ -1920,6 +1946,7 @@
     $$("[data-cards-obj]").forEach(b => b.onclick = e => { e.preventDefault(); save(); startObjCards(b.dataset.cardsObj); });
     $$("[data-labgo]").forEach(b => b.onclick = () => save());
     if (confirming) { $("#keep").onclick = () => { confirming = false; renderExam(); }; $("#doSubmit").onclick = () => finish(); }
+    if ($("#goShort")) $("#goShort").onclick = () => { confirming = false; move(short[0]); };
     $$("[data-jump]").forEach(b => b.onclick = () => move(+b.dataset.jump));
     if (q.type === "fill" && !revealed) {
       const inp = $("#fillin");
@@ -2126,7 +2153,7 @@
         <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}${lu ? " lu" : ""}">${esc(verdict)}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
           <p class="u-fs-l"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
-            : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>
+            : `Study sessions don't count toward your exam average.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>
           ${calLine}</div></div>
       <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
           : rec.mode === "review" ? (C.deckStats(CARDS, st.cards).due ? `<button class="primary" data-start="duecards">Review ${plural(C.deckStats(CARDS, st.cards).due, "due flashcard")}</button>` : `<button class="primary" data-go="review">Back to daily review</button>`)
@@ -2239,12 +2266,13 @@
     const h = (location.hash || "#today").slice(1);
     if (h === "exam" && st.current && !typing) {
       const S = st.current;
-      if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }
-      else if (e.key === "ArrowLeft" && S.cur > 0) { S.cur--; save(); renderExam(); }
-      else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
+      // preventDefault: the arrow moves the question only, so its default sideways scroll can't land on the next question's code block
+      if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { e.preventDefault(); S.cur++; save(); renderExam(); }
+      else if (e.key === "ArrowLeft" && S.cur > 0) { e.preventDefault(); S.cur--; save(); renderExam(); }
+      else if (/^[1-5]$/.test(e.key) || /^[a-e]$/i.test(e.key)) pickByNumber(/^[1-5]$/.test(e.key) ? +e.key - 1 : e.key.toLowerCase().charCodeAt(0) - 97);
       else if (e.key.toLowerCase() === "f" && S.qids.length > 1) { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
       else if (e.key.toLowerCase() === "h") showHint(S, S.qids[S.cur]);
-      else if (e.key === "Enter" && !confirming && !(e.target.closest && e.target.closest("button, a, summary, textarea"))) { const b = $(".qactions .primary"); if (b) { e.preventDefault(); b.click(); } }
+      else if (e.key === "Enter" && !confirming && !(e.target.closest && e.target.closest("button, a, summary, textarea"))) { const b = $(".qactions .primary"); if (b && !b.disabled) { e.preventDefault(); b.click(); } }
     } else if (h === "cards" && cs && cs.i < cs.queue.length && !typing) {
       if (e.key === " " || e.key === "Enter") { e.preventDefault(); cs.flipped = !cs.flipped; renderCardSession(); }
       else if (cs.flipped && e.key === "1") gradeCard(false);

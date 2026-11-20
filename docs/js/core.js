@@ -10,7 +10,7 @@
 
   const EXAM_SECONDS = 3600;
   const TARGET = 80;
-  const DAY_MS = 86400000, COLD_DAYS = 30;  // an answer this long after the last attempt counts as fresh evidence again
+  const DAY_MS = 86400000, COLD_DAYS = 4;  // an answer 4+ days after the last attempt (in any wording) counts as fresh evidence again
   const BOX_DAYS = [0, 1, 2, 4, 8, 16];   // Leitner intervals for flashcards
 
   // ------------------------------------------------------------- utilities
@@ -159,6 +159,39 @@
     if (q.type === "fill") return checkTyped(q, a).ok;
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
+  }
+  /** Choose TWO/THREE: how many options it asks for, and how many are picked.
+   *  ready is true only at exactly that count. Null for single-choice and typed questions. */
+  function multiPick(q, a) {
+    if (!q || q.type !== "multi" || !Array.isArray(q.answer)) return null;
+    const need = q.answer.length, have = Array.isArray(a) ? a.length : 0;
+    return { need, have, ready: need > 0 && have === need };
+  }
+  /** The line under the options. In Study and Daily review a wrong count is why Check stays off
+   *  ("Pick 1 more to check"). An exam keeps the count, because moving on with too few picks is allowed. */
+  function multiStatus(q, a, study) {
+    const p = multiPick(q, a);
+    if (!p) return "";
+    if (study && p.have < p.need) return "Pick " + (p.need - p.have) + " more to check";
+    if (study && p.have > p.need) return "Unpick " + (p.have - p.need) + " to check";
+    return "Select " + p.need + ". " + p.have + " selected.";
+  }
+  /** 0-based indexes of multi-answer questions with fewer picks than they ask for.
+   *  Too many picks is a finished answer and is not listed. */
+  function shortPicks(bank, s) {
+    if (!bank || !s || !Array.isArray(s.qids)) return [];
+    const out = [];
+    s.qids.forEach((id, i) => {
+      const p = multiPick(bank.byId[id], s.answers && s.answers[id]);
+      if (p && p.have < p.need) out.push(i);
+    });
+    return out;
+  }
+  /** "2 questions have fewer picks than asked: 12, 31". Indexes are 0-based. Empty when none. */
+  function shortPickLine(indexes) {
+    if (!indexes || !indexes.length) return "";
+    const n = indexes.length;
+    return n + " " + (n === 1 ? "question has" : "questions have") + " fewer picks than asked: " + indexes.map(i => i + 1).join(", ");
   }
 
   // ------------------------------------------------------------- selection
@@ -686,7 +719,7 @@
   function examDayNum(state, now) {
     const d = parseDate(state && state.settings && state.settings.examDate); return d ? dayNum(d) : null;
   }
-  /** Full timed exams that feed readiness / "Exams taken" (untimed and study runs are practice). */
+  /** Full timed exams that feed the exam average (readiness()) / "Exams taken" (untimed and study runs are practice). */
   function isReadinessExam(t) {
     return !!(t && t.mode === "test" && t.total === 40 && !t.study && t.timed !== false);
   }
@@ -704,7 +737,7 @@
       if (!dontKnow && !answered(bank.byId[id], s.answers[id])) continue;
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       const ok = dontKnow ? false : !!res.perQ[id];
-      // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
+      // Cold evidence for the score estimate: a first attempt, or one COLD_DAYS or more after the last attempt, answered without a hint.
       const cold = isCold(bank, state.qstats, id, now);
       const lead = familyLead(bank, state.qstats, id);   // another wording answered more recently: carry on from its review step
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
@@ -1018,7 +1051,9 @@
    * Choose skills for a practice set. source:
    *   "recommended"  due first, then missed last time, then the weakest commands, then skills not tried yet (in exam order)
    *   "due" | "new" | "all"
-   * ids / cmds / objs narrow the pool. When the pool is smaller than count, skills repeat (each run gets new values).
+   * ids / cmds / objs narrow the pool. Each skill is chosen at most once. When that pool is smaller than count,
+   * the set is shorter: it is not padded with repeats. Recommended with no filter keeps drawing the next
+   * weakest skills across objectives, so a full catalogue still fills count.
    */
   function pickSkills(index, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed), today = opts.today == null ? dayNum() : opts.today;
@@ -1043,8 +1078,13 @@
     const ranked = shuffle(pool, rand).map(s => ({ s, r: rank(s) }))
       .sort((a, b) => { for (let i = 0; i < Math.max(a.r.length, b.r.length); i++) { if (a.r[i] < b.r[i]) return -1; if (a.r[i] > b.r[i]) return 1; } return 0; })
       .map(x => x.s);
-    const out = [];
-    for (let i = 0; out.length < count; i++) out.push(ranked[i % ranked.length]);
+    const out = [], seen = new Set();
+    for (const s of ranked) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+      if (out.length >= count) break;
+    }
     return out;
   }
   /** A practice session: one fresh machine per task. mode: "guided" (hints), "recall" (no hints), "timed" (recall + a clock). */
@@ -1053,8 +1093,8 @@
     const byId = {}; for (const s of drills.skills) byId[s.id] = s;
     const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
     if (!picks.length) return null;
-    // A skill that comes up again moves on to its next template, and the same task (same template, same values) isn't
-    // asked twice in a session while the template still has other values to offer.
+    // pickSkills lists each skill once. The template is chosen at random. If a skill were ever listed again, the
+    // next template would be used, and the same task text isn't asked twice while that template has other values.
     const used = {}, asked = new Set();
     const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
       let t = instantiateDrill(sk, k % sk.templates.length, rand);
@@ -1309,7 +1349,7 @@
     if (s.seen === 1 && (s.last === true || s.last === false)) return s.last ? 1 : 0;
     return Math.max(0, Math.min(1, (s.right || 0) / s.seen));
   }
-  /** Evidence from a cold (first, or after a long gap, unhinted) answer to this question: 1 right, 0 wrong, a share in
+  /** Evidence from a cold (first, or COLD_DAYS or more after the last attempt, unhinted) answer to this question: 1 right, 0 wrong, a share in
    *  between for old progress, or -1 when there is none. */
   function coldOutcome(s) {
     if (!s || !s.seen) return -1;
@@ -1439,13 +1479,74 @@
   }
 
   // ------------------------------------------------------------- flashcards (Leitner)
-  function cardQueue(cards, cstate, filter, today, limit) {
+  const MISS_LEAD = 5;   // missed-today cards that may open the next session
+  const MISS_GAP = 5;    // other cards before a miss returns in this session
+  const missedToday = (s, today) => !!(s && s.box === 0 && s.due === today);
+  /** Weave `extra` through `base` so the extras are not a second block at the front. */
+  function spreadList(base, extra) {
+    if (!extra.length) return base.slice();
+    if (!base.length) return extra.slice();
+    const out = [], gaps = extra.length + 1, per = Math.floor(base.length / gaps);
+    let rem = base.length % gaps, b = 0, e = 0;
+    for (let g = 0; g < gaps; g++) {
+      let n = per; if (rem) { n++; rem--; }
+      for (let k = 0; k < n; k++) out.push(base[b++]);
+      if (e < extra.length) out.push(extra[e++]);
+    }
+    return out;
+  }
+  /** About three due cards, then one new card, until one side runs out. */
+  function mixDueNew(due, fresh) {
+    const out = []; let d = 0, f = 0;
+    while (d < due.length || f < fresh.length) {
+      let n = 0;
+      for (let k = 0; k < 3 && d < due.length; k++) { out.push(due[d++]); n++; }
+      if (f < fresh.length) out.push(fresh[f++]);
+      else if (!n) break;
+    }
+    return out;
+  }
+  /**
+   * New cards, one objective at a time. Weakest objective first (fewest right answers; a topic with no
+   * reviews counts as half right, so a topic the learner is missing comes before one they have not
+   * touched). Ties break by objective id. Cards inside an objective are shuffled with `rand`.
+   */
+  function freshCards(pool, cstate, rand) {
+    const groups = {}, stat = {};
+    for (const c of pool) {
+      const o = c.obj || "", g = stat[o] || (stat[o] = { seen: 0, right: 0 }), s = cstate[c.id];
+      if (s) { g.seen += s.seen || 0; g.right += s.right || 0; }
+      else (groups[o] || (groups[o] = [])).push(c);
+    }
+    const objs = Object.keys(groups).sort();
+    for (const o of objs) groups[o] = shuffle(groups[o], rand);
+    const acc = o => { const g = stat[o] || { seen: 0, right: 0 }; return g.seen ? [g.right, g.seen] : [1, 2]; };
+    objs.sort((a, b) => { const [ar, an] = acc(a), [br, bn] = acc(b); return ar * bn - br * an || (a < b ? -1 : a > b ? 1 : 0); });
+    const out = [];
+    for (let more = true; more;) {
+      more = false;
+      for (const o of objs) if (groups[o].length) { out.push(groups[o].shift()); more = true; }
+    }
+    return out;
+  }
+  function cardQueue(cards, cstate, filter, today, limit, seed) {
     today = today == null ? dayNum() : today; limit = limit || 20;
     const pool = cards.filter(filter || (() => true));
-    const due = pool.filter(c => cstate[c.id] && cstate[c.id].due <= today)
-      .sort((a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box);
-    const fresh = pool.filter(c => !cstate[c.id]);
-    return due.concat(fresh).slice(0, limit);
+    const rand = rng(seed);
+    const dueAll = pool.filter(c => cstate[c.id] && cstate[c.id].due <= today);
+    const byDue = (a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const missed = shuffle(dueAll.filter(c => missedToday(cstate[c.id], today)), rand);
+    const other = dueAll.filter(c => !missedToday(cstate[c.id], today)).sort(byDue);
+    return missed.slice(0, MISS_LEAD).concat(mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand))).slice(0, limit);
+  }
+  /** A card missed at `index` comes back once, after at least 5 other cards. Returns the next index to show. */
+  function requeueMiss(queue, index, again) {
+    again = again || {};
+    const card = queue[index];
+    if (!card || Object.prototype.hasOwnProperty.call(again, card.id) || queue.length - index - 1 < MISS_GAP) return index + 1;
+    queue.splice(index + 1 + MISS_GAP, 0, card);
+    again[card.id] = 1;
+    return index + 1;
   }
   function reviewCard(cstate, id, knew, today, now, examDay) {
     today = today == null ? dayNum() : today;
@@ -1757,7 +1858,7 @@
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
   }
 
-  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, runLab, labShell,
+  return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, multiPick, multiStatus, shortPicks, shortPickLine, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
@@ -1767,7 +1868,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

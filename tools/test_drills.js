@@ -76,15 +76,19 @@ assert.ok(s1.tasks.slice(0, 3).every(t => X.skills.find(s => s.id === t.skill).o
 // the same seed gives the same session, a different seed different values
 assert.deepStrictEqual(C.buildCmdSession(D, index, st, { count: 10, seed: 3 }).tasks.map(t => t.text), C.buildCmdSession(D, index, st, { count: 10, seed: 3 }).tasks.map(t => t.text));
 
-// variety: practising one command isn't the same task with new names. Every skill of objectives 2.1-2.4 has at least
-// three differently shaped templates, a repeated skill rotates through them, and no task is asked twice in a set.
+// Every skill of objectives 2.1-2.4 has at least three differently shaped templates, so a later session can ask
+// something new. One session never repeats a skill to fill the count: a command with fewer skills than the set
+// gets a shorter session, and each of those skills is asked once.
 for (const sk of D.skills.filter(s => s.obj[0] === "2")) assert.ok(sk.templates.length >= 3 || sk.id === "find-iname", sk.id + ": needs at least 3 templates, has " + sk.templates.length);
-for (const cmd of ["locate", "which", "du", "rmdir", "export", "alias", "cd"]) for (const seed of [1, 2, 3, 4, 5]) {
-  const one = C.buildCmdSession(D, index, C.freshState(), { count: 10, cmds: [cmd], seed });
-  for (const sk of D.skills.filter(s => s.cmd === cmd)) { const mine = one.tasks.filter(t => t.skill === sk.id);
-    assert.strictEqual(new Set(mine.map(t => t.tpl)).size, Math.min(mine.length, sk.templates.length), sk.id + ": a set uses every template of a skill before repeating one"); }
-  assert.strictEqual(new Set(one.tasks.map(t => t.text)).size, 10, cmd + ": no task is asked twice in one set");
-  assert.ok(one.tasks.every((t, i) => !i || t.skill !== one.tasks[i - 1].skill || t.tpl !== one.tasks[i - 1].tpl), cmd + ": the same template never comes twice in a row");
+for (const cmd of ["locate", "which", "du", "rmdir", "export", "alias", "cd"]) {
+  const n = D.skills.filter(s => s.cmd === cmd).length;
+  assert.ok(n > 0 && n < 10, cmd + ": this check needs a command with fewer skills than the set");
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const one = C.buildCmdSession(D, index, C.freshState(), { count: 10, cmds: [cmd], seed });
+    assert.strictEqual(one.tasks.length, n, cmd + ": fewer matching skills means a shorter set, not repeats");
+    assert.strictEqual(new Set(one.tasks.map(t => t.skill)).size, n, cmd + ": a skill is not asked twice while others match");
+    assert.strictEqual(new Set(one.tasks.map(t => t.text)).size, one.tasks.length, cmd + ": no task is asked twice in one set");
+  }
 }
 
 assert.ok(C.cmdTaskOk({ solved: true }) && !C.cmdTaskOk({ solved: true, hint: true }) && !C.cmdTaskOk({ solved: true, revealed: true }) && !C.cmdTaskOk({ solved: true, timeout: true }) && !C.cmdTaskOk({ solved: false }),
@@ -99,11 +103,40 @@ assert.deepStrictEqual(C.cmdDue(st.cmdstats, day + 2), ["find-name"], "two right
 // recommended picks: due first
 const due = C.pickSkills(index, st, { count: 3, today: day + 2, seed: 1 });
 assert.strictEqual(due[0].id, "find-name", "due skills come first");
-const onlyTar = C.pickSkills(index, st, { count: 5, cmds: ["tar"], seed: 2 });
-assert.ok(onlyTar.length === 5 && onlyTar.every(s => s.cmd === "tar"), "picking by command repeats skills to fill the set");
+const tarN = index.skills.filter(s => s.cmd === "tar").length;
+assert.ok(tarN > 0 && tarN < 10, "tar is a filter smaller than the set");
+const onlyTar = C.pickSkills(index, st, { count: 10, cmds: ["tar"], seed: 2 });
+assert.strictEqual(onlyTar.length, tarN, "picking by command does not repeat skills to fill the set");
+assert.strictEqual(new Set(onlyTar.map(s => s.id)).size, tarN, "each tar skill is chosen once");
+assert.ok(onlyTar.every(s => s.cmd === "tar"));
 assert.strictEqual(C.pickSkills(index, C.freshState(), { source: "due" }).length, 0, "nothing is due for a new learner");
 const fresh5 = C.pickSkills(index, st, { source: "new", count: 5, seed: 4 });
 assert.ok(fresh5.every(s => !st.cmdstats[s.id]) && fresh5.every((s, i) => !i || s.obj >= fresh5[i - 1].obj), "new skills come in exam order");
+
+// A filter smaller than the set shortens the session. Objective 2.1 is where the same skills were coming back
+// (Print a variable's value, Set a shell variable); 2.4 is the six-skill example. Count 20 used to ask some of
+// them three times. Recommended with nothing narrowed still fills 10 from the next weakest objectives.
+const n21 = index.skills.filter(s => s.obj === "2.1").length, n24 = index.skills.filter(s => s.obj === "2.4").length;
+assert.ok(n21 > 0 && n21 < 10 && n24 > 0 && n24 < 10, "these objectives are smaller than a full set");
+for (const [obj, n, count] of [["2.1", n21, 10], ["2.1", n21, 20], ["2.4", n24, 10]]) {
+  const sess = C.buildCmdSession(D, index, C.freshState(), { count, objs: [obj], seed: 11, mode: "guided" });
+  assert.strictEqual(sess.tasks.length, n, obj + " count " + count + ": the run is " + n + " tasks, not padded to " + count);
+  assert.strictEqual(new Set(sess.tasks.map(t => t.skill)).size, n, obj + ": no skill twice while another matching skill is unused");
+  assert.ok(sess.tasks.every(t => index.skills.find(s => s.id === t.skill).obj === obj));
+}
+const wide = index.skills.filter(s => s.obj === "2.1" || s.obj === "2.2");
+assert.ok(wide.length > 10, "two objectives hold more than one set");
+const once = C.pickSkills(index, C.freshState(), { count: 10, objs: ["2.1", "2.2"], seed: 6 });
+assert.strictEqual(once.length, 10);
+assert.strictEqual(new Set(once.map(s => s.id)).size, 10, "a skill is not repeated while other matching skills are still unused");
+const recSt = C.freshState();
+C.recordDrill(recSt, "echo-var", false, at(0));
+C.recordDrill(recSt, "var-set", false, at(0));
+const rec = C.pickSkills(index, recSt, { count: 10, source: "recommended", today: day + 2, seed: 9 });
+assert.strictEqual(rec.length, 10, "recommended with no filter stays a full set of 10");
+assert.strictEqual(new Set(rec.map(s => s.id)).size, 10, "recommended does not repeat a skill to fill 10");
+assert.deepStrictEqual(rec.slice(0, 2).map(s => s.id).sort(), ["echo-var", "var-set"], "due skills still come first");
+assert.ok(rec.some(s => s.obj !== "2.1"), "the rest of the set is the next weakest skills in other objectives");
 
 // mastery: drills plus questions; old misses stop counting once fixed
 let m = C.commandMastery(index, st, { today: day + 2 });

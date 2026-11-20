@@ -1051,7 +1051,9 @@
    * Choose skills for a practice set. source:
    *   "recommended"  due first, then missed last time, then the weakest commands, then skills not tried yet (in exam order)
    *   "due" | "new" | "all"
-   * ids / cmds / objs narrow the pool. When the pool is smaller than count, skills repeat (each run gets new values).
+   * ids / cmds / objs narrow the pool. Each skill is chosen at most once. When that pool is smaller than count,
+   * the set is shorter: it is not padded with repeats. Recommended with no filter keeps drawing the next
+   * weakest skills across objectives, so a full catalogue still fills count.
    */
   function pickSkills(index, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed), today = opts.today == null ? dayNum() : opts.today;
@@ -1076,8 +1078,13 @@
     const ranked = shuffle(pool, rand).map(s => ({ s, r: rank(s) }))
       .sort((a, b) => { for (let i = 0; i < Math.max(a.r.length, b.r.length); i++) { if (a.r[i] < b.r[i]) return -1; if (a.r[i] > b.r[i]) return 1; } return 0; })
       .map(x => x.s);
-    const out = [];
-    for (let i = 0; out.length < count; i++) out.push(ranked[i % ranked.length]);
+    const out = [], seen = new Set();
+    for (const s of ranked) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+      if (out.length >= count) break;
+    }
     return out;
   }
   /** A practice session: one fresh machine per task. mode: "guided" (hints), "recall" (no hints), "timed" (recall + a clock). */
@@ -1086,8 +1093,8 @@
     const byId = {}; for (const s of drills.skills) byId[s.id] = s;
     const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
     if (!picks.length) return null;
-    // A skill that comes up again moves on to its next template, and the same task (same template, same values) isn't
-    // asked twice in a session while the template still has other values to offer.
+    // pickSkills lists each skill once. The template is chosen at random. If a skill were ever listed again, the
+    // next template would be used, and the same task text isn't asked twice while that template has other values.
     const used = {}, asked = new Set();
     const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
       let t = instantiateDrill(sk, k % sk.templates.length, rand);

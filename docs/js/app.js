@@ -40,7 +40,7 @@
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";
   // Opens a GitHub issue form with the question ID filled in.
-  const reportLink = q => `<a class="muted" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub.">Report a problem (${q.id})</a>`;
+  const reportBtn = q => `<a class="btn ghost" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub (question ${esc(q.id)}).">${icon("report")}Report</a>`;
   const app = document.getElementById("app");
   // ------------------------------------------------------------------ install on phone / offline (PWA)
   const DESKTOP = () => !!window.pywebview || /exit0-desktop/.test(navigator.userAgent) || location.hostname === "127.0.0.1";
@@ -118,6 +118,8 @@
     repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     bookmark: '<path d="M6 3h12v18l-6-4.5L6 21z"/>',
+    note: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    report: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1.1-1.3 2.2V14"/><circle cx="12" cy="17" r="1"/>',
     half: '<path d="M12 3a9 9 0 1 0 0 18z"/>',
     left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
@@ -1825,12 +1827,12 @@
     (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
     const rated = !isPlace && (S.conf[id] === true || S.conf[id] === false);
     const dontKnow = isPlace && C.isDontKnow(S, id);
-    if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
+    if ((q.lab || (revealed && q.type === "fill")) && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
     if (q.type === "fill") {
       body = `<label class="fill ${revealed ? "locked" : ""}" for="fillin"><span class="ps">$</span><input id="fillin" autocomplete="off" autocapitalize="off" spellcheck="false"
         value="${esc(a || "")}" placeholder="${q.lab ? "type a command" : "type your answer"}" ${revealed ? "disabled" : ""}></label>
-        <p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text, as a regular user in the current directory. Add <code>sudo</code> only when the task needs root. Case matters."} Press <span class="kbd">Enter</span> ${S.study && !revealed ? "to check" : "for the next question"}.</p>`;
+        ${revealed ? "" : `<p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text, as a regular user in the current directory. Add <code>sudo</code> only when the task needs root. Case matters."} Press <span class="kbd">Enter</span> ${S.study ? "to check" : "for the next question"}.</p>`}`;
     } else {
       const multi = q.type === "multi";
       body = `<div class="opts" role="${multi ? "group" : "radiogroup"}">${S.optOrder[id].map((oi, pos) => {
@@ -1849,7 +1851,7 @@
     const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" : dontKnow ? "Don't know yet" : near === "sudo" ? "Right command, but drop sudo" : near ? "Almost" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
         ${dontKnow ? `<p class="small muted">Counted as a miss so your study plan knows where to start.</p>` : ""}
         ${confWrong ? `<p class="conf-flag">${icon("flag")} You marked this <b>sure</b>, but it was wrong. Worth another look.</p>` : ""}
-        ${!dontKnow && q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok && !dontKnow ? multiNote(q, a) : ""}
+        ${ok ? rightNote(q, a) : answerFirst(q, a, S.optOrder[id], dontKnow)}
         ${explain(q)}${studyRef(q)}</div>` : "";
     const nav = C.navCounts(BANK, S), states = C.navStates(BANK, S);
     const shown = new Set(C.navFilter(BANK, S, navKind));
@@ -1897,12 +1899,14 @@
         <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${fb}${revealed && !isPlace ? noteBox(id) : ""}
+        ${body}${fb}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
           ${dontKnowBtn}
           ${S.study && !isPlace ? markButton(id) : ""}
+          ${revealed && !isPlace ? noteButton(id) + reportBtn(q) : ""}
           ${!isPlace && S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${confPick}</div>
+        ${revealed && !isPlace ? noteBox(id) : ""}
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
@@ -1981,23 +1985,36 @@
     if (!S.study || S.mode === "placement" || S.checked[id] || !BANK.byId[id].hint) return;
     S.hints = S.hints || {}; S.hints[id] = 1; save(); const y = scrollY; renderExam(); scrollTo(0, y);
   }
-  // "Study this" links shown with every answer in Study mode and in result reviews
-  // After a typed answer: the accepted spellings, and for lab-checked questions what the command printed on the simulated system.
-  function fillAnswerInfo(q, a, hideList) {
-    const r = q.lab ? C.runLab(q, a) : null;
-    const out = r && r.out ? (r.out.length > 1200 ? r.out.slice(0, 1200) + "\n…" : r.out) : "";
-    const t = C.checkTyped(q, a);
-    return (t.near ? `<p class="nearnote">${icon("bulb")}<span>${esc(C.TYPED_NEAR[t.near])}${t.near === "sudo" ? " Running a command as root also removes the permission checks that would stop a mistake." : ` You typed <code>${esc(t.typed)}</code>; the answer is <code>${esc(t.best)}</code>.`}</span></p>` : "") +
-      (hideList ? "" : `<div class="mono small">${q.lab ? "For example" : "Accepted"}: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>`) +
-      (r ? `<div class="small muted">${r.ok ? "Your command was run on a simulated system and did the job." : "Your command was run on a simulated system and didn't produce the result asked for."}${out ? " It printed:" : ""}</div>${out ? `<pre class="code small">${esc(out)}</pre>` : ""}` : "");
+  // After a wrong answer, the answer comes first: the command (or the right letters), one line on why yours missed
+  // when a rule can tell (core.js missTyped / missChoice), and what a lab command printed, folded away.
+  function answerFirst(q, a, order, dontKnow) {
+    if (q.type === "fill") {
+      const t = C.checkTyped(q, a), best = t.near ? t.best : t.answered ? C.closestAccepted(q, a) : (q.accept || [])[0] || "";
+      const w = dontKnow ? null : C.missTyped(q, a, window.LEManPages);
+      const rest = q.lab ? [] : (q.accept || []).filter(x => x !== best).slice(0, 3);
+      const r = q.lab && !dontKnow ? C.runLab(q, a) : null, out = r && !r.ok && r.out ? (r.out.length > 1200 ? r.out.slice(0, 1200) + "\n…" : r.out) : "";
+      return `<div class="ans-box"><span class="ans-label">Answer</span><pre class="code ans-cmd">${esc(best)}</pre>${q.lab ? `<p class="small muted">Other commands that do the same job also count.</p>`
+          : rest.length ? `<p class="small muted">Also accepted: ${rest.map(x => `<code>${esc(x)}</code>`).join(" · ")}</p>` : ""}</div>
+        ${w ? `<p class="ans-why"><b>Why yours didn't work:</b> ${rich(w.text)}</p>` : ""}
+        ${out ? `<details class="ans-out"><summary>What your command printed</summary><pre class="code small">${esc(out)}</pre></details>` : ""}`;
+    }
+    const m = C.missChoice(q, a, order); if (!m) return "";
+    const short = m.rightIdx.every(oi => q.options[oi].replace(/`/g, "").length <= 40);
+    const opt = x => /`/.test(x) || /^[A-Z]/.test(x) ? rich(x) : `<code>${esc(x)}</code>`;
+    return `<p class="ans-lead"><b>Answer: ${andList(m.right)}</b>${short ? ` <span class="ans-sep">·</span> ${andList(m.rightIdx.map(oi => opt(q.options[oi])))}` : ""}</p>
+      ${m.text && !dontKnow ? `<p class="ans-why"><b>Why yours didn't work:</b> ${rich(m.text)}</p>` : ""}`;
   }
-  // Two tiers: the first sentence is the answer in short; the rest is the longer explanation. On phones the rest
-  // sits behind a "More" disclosure so the next question stays within reach; on wider screens it is simply shown.
+  // A right typed answer that the lab accepted in other words: show the usual spelling too.
+  function rightNote(q, a) {
+    if (q.type !== "fill") return "";
+    const t = C.checkTyped(q, a);
+    return t.how === "ran" && q.accept && q.accept[0] && C.norm(q.accept[0]) !== t.typed ? `<p class="small muted">Also works: <code>${esc(q.accept[0])}</code></p>` : "";
+  }
+  // The explanation: its first two sentences, and the rest behind "More" so the next question stays within reach.
   function explain(q) {
-    const e = C.splitExplanation(q.explanation);
-    if (!e.rest) return `<div class="expl"><p class="expl-short">${rich(e.short)}</p></div>`;
-    return `<div class="expl"><p class="expl-short">${rich(e.short)}</p><p class="expl-rest">${rich(e.rest)}</p>
-      <details class="expl-more"><summary>More on this</summary><p>${rich(e.rest)}</p></details></div>`;   // styles.css shows one of the two, by screen width
+    const a = C.splitExplanation(q.explanation), b = a.rest ? C.splitExplanation(a.rest) : { short: "", rest: "" };
+    const lead = a.short + (b.short ? " " + b.short : "");
+    return `<div class="expl"><p>${rich(lead)}</p>${b.rest ? `<details class="expl-more"><summary>More</summary><p>${rich(b.rest)}</p></details>` : ""}</div>`;
   }
   // "Why that's wrong": a one-line note under each wrong option once the answer is revealed.
   function whyNote(q, oi) {
@@ -2005,30 +2022,28 @@
     return n ? `<span class="note"><b>Why not:</b> ${rich(n)}</span>` : "";
   }
 
-  // Why a partly right "Choose TWO" answer is still wrong.
-  function multiNote(q, a) {
-    if (q.type !== "multi" || !Array.isArray(a) || !a.length) return "";
-    const right = a.filter(x => q.answer.includes(x)).length, n = q.answer.length;
-    const why = a.length < n ? `you picked ${a.length} of the ${n} answers asked for` : `${right} of your ${a.length} picks ${right === 1 ? "is" : "are"} correct`;
-    return `<p class="small muted multinote">Scored as wrong because ${why}. A "Choose ${n === 2 ? "TWO" : "THREE"}" question only counts when every pick is right, so pick exactly ${n}.</p>`;
-  }
   // Bookmarks and notes. A bookmark keeps a question for later (Study > Bookmarked); a note is your own words on it.
   const markButton = id => { const on = C.markOf(st, id).on; return `<button class="${on ? "marked" : "ghost"}" data-mark="${esc(id)}" aria-pressed="${on}" title="${on ? "Remove from" : "Save to"} Study > Bookmarked">${icon("bookmark")}${on ? "Bookmarked" : "Bookmark"}</button>`; };
+  const noteButton = id => { const note = C.markOf(st, id).note;
+    return `<button class="ghost" data-note-open="${esc(id)}" aria-expanded="${!!note}">${icon("note")}${note ? "Your note" : "Note"}</button>`; };
   const noteBox = id => { const note = C.markOf(st, id).note;
-    return `<details class="notebox"${note ? " open" : ""}><summary>${note ? "Your note" : "Add a note"}</summary>
-      <textarea data-note="${esc(id)}" rows="2" maxlength="1000" placeholder="Your own words: a mnemonic, why you missed it, what to look up" aria-label="Your note on this question">${esc(note)}</textarea></details>`; };
+    return `<div class="notebox" data-note-box="${esc(id)}"${note ? "" : " hidden"}>
+      <textarea data-note="${esc(id)}" rows="2" maxlength="1000" placeholder="Your own words: a mnemonic, why you missed it, what to look up" aria-label="Your note on this question">${esc(note)}</textarea></div>`; };
   function wireMarks(root, redraw) {
     $$("[data-mark]", root).forEach(b => b.onclick = () => { const id = b.dataset.mark; C.setMark(st, id, { on: !C.markOf(st, id).on }); save(); redraw(); });
+    $$("[data-note-open]", root).forEach(b => b.onclick = () => {
+      const box = $$("[data-note-box]", root).find(x => x.dataset.noteBox === b.dataset.noteOpen); if (!box) return;
+      box.hidden = !box.hidden; b.setAttribute("aria-expanded", !box.hidden); if (!box.hidden) $("textarea", box).focus(); });
     $$("[data-note]", root).forEach(t => t.onchange = () => { C.setMark(st, t.dataset.note, { note: t.value.trim() }); save(); toast(t.value.trim() ? "Note saved" : "Note removed"); });
   }
+  // "Study this" links shown with every answer in Study mode and in result reviews: one quiet line.
   function studyRef(q) {
     const nc = CARDS.filter(c => c.obj === q.obj).length;
     const labs = (LABX.q[q.id] || []).map(pid => LABS.find(x => x.id === pid)).filter(Boolean);
-    return `<div class="studyref">
-      <a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener" title="LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}">${icon("guide")}Read the lesson</a>
-      ${labs.map(p => `<a href="#lab/${p.id}" data-labgo="${p.id}" class="lablink" title="${esc(partLabel(p))}: ${esc(p.title)}">${icon("terminal")}Try it in a lab${labs.length > 1 ? ": " + esc(partLabel(p)) : ""}</a>`).join("")}
-      ${nc ? `<a href="#cards" data-cards-obj="${q.obj}">${icon("cards")}${nc} flashcards for ${q.obj}</a>` : ""}
-      <span class="grow"></span>${reportLink(q)}</div>`;
+    const lab = labs[0];
+    return `<p class="studyref qlinks"><span class="sr">Study this: </span><a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener" title="LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}">Lesson</a>
+      ${lab ? `<span class="dotsep" aria-hidden="true">·</span><a href="#lab/${lab.id}" data-labgo="${lab.id}" title="${esc(partLabel(lab))}: ${esc(lab.title)}">${esc(partLabel(lab).replace(/, part \d+$/, ""))}</a>` : ""}
+      ${nc ? `<span class="dotsep" aria-hidden="true">·</span><a href="#cards" data-cards-obj="${q.obj}">${nc} flashcards</a>` : ""}</p>`;
   }
   function pickByNumber(pos) {
     const S = st.current, id = S.qids[S.cur], q = BANK.byId[id];
@@ -2135,14 +2150,14 @@
     const item = ({ id, i }) => {
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;
-      if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
+      if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${ok ? rightNote(q, a) : answerFirst(q, a)}`;
       else body = `<div class="u-g4 stack">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
-        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
+        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : answerFirst(q, a, order(q, rec.optOrder[id]))}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}${confLabel(id, ok)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p class="u-fw6">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
-        <div class="ex">${explain(q)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
-        <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
+        <div class="ex">${explain(q)}</div>${ok ? "" : studyRef(q)}
+        <div class="row marks">${markButton(id)}${noteButton(id)}${reportBtn(q)}</div>${noteBox(id)}</article>`;
     };
     const calLine = cal.sureN
       ? `<p class="small muted">When you said <b>sure</b> you were right ${cal.surePct}% of the time (${cal.sureOk} of ${cal.sureN})${cal.unsureN ? `; when <b>unsure</b>, ${cal.unsurePct}% (${cal.unsureOk} of ${cal.unsureN})` : ""}.${cal.cw.length ? ` ${plural(cal.cw.length, "confident miss")} to review.` : ""}</p>`
@@ -2176,6 +2191,8 @@
     wireStarts($("#page"));
     $$("[data-f]").forEach(b => b.onclick = () => { reviewFilter = b.dataset.f; const y = $("#review").offsetTop; renderResults(rec); scrollTo(0, y - 16); });
     wireMarks($("#page"), () => { const y = scrollY; renderResults(rec); scrollTo(0, y); });
+    if (!window.LEManPages && rec.qids.some(id => BANK.byId[id] && BANK.byId[id].type === "fill" && !perQ[id] && C.answered(BANK.byId[id], rec.answers[id])))
+      ensureShell().then(() => { if (location.hash === "#results" || $("#review")) { const y = scrollY; renderResults(rec); scrollTo(0, y); } }, () => {});
   }
 
   // ================================================================== HANDS-ON (matching and ordering)

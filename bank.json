@@ -1721,7 +1721,7 @@
    "obj": "2.2",
    "form": "H",
    "q": "While viewing a man page, which input searches forward for the word recursive?",
-   "explanation": "man displays pages with `less`, where `/text` searches forward, `?text` searches backward, and `n` jumps to the next match. In less, `:` starts a less command and Ctrl+F scrolls forward one screen.",
+   "explanation": "`man` displays pages with `less`, where `/text` searches forward, `?text` searches backward, and `n` jumps to the next match. In less, `:` starts a less command and Ctrl+F scrolls forward one screen.",
    "options": [
     "/recursive",
     "?recursive",
@@ -1747,7 +1747,7 @@
    "obj": "2.2",
    "form": "C",
    "q": "Type the key that exits a man page and returns you to the shell prompt.",
-   "explanation": "man uses the less pager, and q quits. Space or Page Down scrolls forward, b scrolls back, h shows help, and / searches.",
+   "explanation": "`man` uses the less pager, and q quits. Space or Page Down scrolls forward, b scrolls back, h shows help, and / searches.",
    "type": "fill",
    "accept": [
     "q",
@@ -2258,7 +2258,7 @@
    "obj": "2.4",
    "form": "H",
    "q": "What does `touch report.txt` do if report.txt already exists?",
-   "explanation": "touch creates an empty file if it doesn't exist and otherwise just updates the access and modification times. To empty a file, you could use `> report.txt` or `truncate -s 0 report.txt`.",
+   "explanation": "`touch` creates an empty file if it doesn't exist and otherwise just updates the access and modification times. To empty a file, you could use `> report.txt` or `truncate -s 0 report.txt`.",
    "options": [
     "Updates its timestamps but leaves the contents alone",
     "Empties the file so that its size becomes zero",
@@ -2611,7 +2611,7 @@
    "obj": "3.1",
    "form": "F",
    "q": "After running `gzip report.txt`, what is left in the directory?",
-   "explanation": "gzip, bzip2 and xz replace the original file with the compressed one by default. Use `-k` to keep the original, or `gzip -c report.txt > report.txt.gz` to write to standard output. gunzip reverses the process and removes the .gz file.",
+   "explanation": "`gzip`, `bzip2` and `xz` replace the original file with the compressed one by default. Use `-k` to keep the original, or `gzip -c report.txt > report.txt.gz` to write to standard output. gunzip reverses the process and removes the .gz file.",
    "options": [
     "Only report.txt.gz",
     "report.txt and report.txt.gz",
@@ -3060,7 +3060,7 @@
    "obj": "3.2",
    "form": "D",
    "q": "How many lines does `head file.txt` show by default?",
-   "explanation": "head and tail both default to 10 lines. Use `-n N` (or `-N`) to change the count. A pager like less shows a screen at a time.",
+   "explanation": "`head` and `tail` both default to 10 lines. Use `-n N` (or `-N`) to change the count. A pager like less shows a screen at a time.",
    "options": [
     "10",
     "5",
@@ -3567,7 +3567,7 @@
    "obj": "3.3",
    "form": "C",
    "q": "In nano, which key combination writes (saves) the file?",
-   "explanation": "nano lists its shortcuts at the bottom of the screen with ^ meaning Ctrl. ^O is Write Out (save), ^X exits (and offers to save), ^W searches (Where Is), and ^K cuts the current line. Unlike vi, nano has no separate modes.",
+   "explanation": "`nano` lists its shortcuts at the bottom of the screen with ^ meaning Ctrl. ^O is Write Out (save), ^X exits (and offers to save), ^W searches (Where Is), and ^K cuts the current line. Unlike vi, nano has no separate modes.",
    "options": [
     "Ctrl+O",
     "Ctrl+X",
@@ -3593,7 +3593,7 @@
    "obj": "3.3",
    "form": "I",
    "q": "You open a file in vi and start typing, but the text doesn't appear. Which key switches to insert mode so you can type?",
-   "explanation": "vi starts in normal (command) mode, where keys are commands. `i` enters insert mode, Esc returns to normal mode, and `:` opens the command line for commands such as :w and :q.",
+   "explanation": "`vi` starts in normal (command) mode, where keys are commands. `i` enters insert mode, Esc returns to normal mode, and `:` opens the command line for commands such as :w and :q.",
    "options": [
     "i",
     ":",
@@ -3633,7 +3633,7 @@
    "obj": "3.3",
    "form": "H",
    "q": "What exit status does grep return when no lines match?",
-   "explanation": "grep returns 0 when it finds a match, 1 when nothing matches, and 2 on an error such as a missing file. Scripts often use this as `if grep -q pattern file; then ...`. Status 127 means \"command not found\".",
+   "explanation": "`grep` returns 0 when it finds a match, 1 when nothing matches, and 2 on an error such as a missing file. Scripts often use this as `if grep -q pattern file; then ...`. Status 127 means \"command not found\".",
    "options": [
     "1",
     "0",
@@ -5501,7 +5501,7 @@
    "obj": "5.2",
    "form": "F",
    "q": "After `useradd -m dave`, dave still cannot log in with a password. Why?",
-   "explanation": "useradd leaves the password field locked (`!` or `!!` in /etc/shadow) until root runs `passwd dave`. `-m` did create /home/dave. Group membership in sudo only matters for running sudo, not for logging in.",
+   "explanation": "`useradd` leaves the password field locked (`!` or `!!` in /etc/shadow) until root runs `passwd dave`. `-m` did create /home/dave. Group membership in sudo only matters for running sudo, not for logging in.",
    "options": [
     "No password has been set yet; run passwd dave",
     "The home directory was not created by -m",
@@ -5687,7 +5687,7 @@
    "obj": "5.3",
    "form": "D",
    "q": "Which command sets the owner to alice and the group to devs for app.py?",
-   "explanation": "chown takes `user:group`, with the user first. chgrp only accepts a group, and chmod changes permissions, not ownership.",
+   "explanation": "`chown` takes `user:group`, with the user first. chgrp only accepts a group, and chmod changes permissions, not ownership.",
    "options": [
     "chown alice:devs app.py",
     "chown devs:alice app.py",
@@ -6156,7 +6156,7 @@
    "obj": "1.1",
    "form": "A",
    "q": "A how-to guide uses `apt-get install` and edits /etc/apt/sources.list. On which distributions will it work without changes? (Choose TWO.)",
-   "explanation": "apt-get and /etc/apt/sources.list belong to the Debian family, which includes Ubuntu and Linux Mint. CentOS and RHEL use rpm with yum/dnf, and openSUSE uses rpm with zypper.",
+   "explanation": "`apt-get` and /etc/apt/sources.list belong to the Debian family, which includes Ubuntu and Linux Mint. CentOS and RHEL use rpm with yum/dnf, and openSUSE uses rpm with zypper.",
    "options": [
     "Debian",
     "Linux Mint",
@@ -6209,7 +6209,7 @@
    "obj": "1.2",
    "form": "C",
    "q": "On Ubuntu, which command installs NGINX from the configured repositories together with its dependencies?",
-   "explanation": "apt-get downloads the package and everything it depends on from the repositories (run it with sudo). dpkg -i needs a local .deb file and does not resolve dependencies. rpm and yum are Red Hat tools.",
+   "explanation": "`apt-get` downloads the package and everything it depends on from the repositories (run it with sudo). dpkg -i needs a local .deb file and does not resolve dependencies. rpm and yum are Red Hat tools.",
    "options": [
     "apt-get install nginx",
     "dpkg -i nginx",
@@ -6849,7 +6849,7 @@
    "obj": "2.2",
    "form": "A",
    "q": "Which command finds files whose names contain readme, matching README, Readme and readme alike?",
-   "explanation": "locate is case-sensitive by default, and `-i` ignores case. `find readme` looks only for a path named exactly readme in the current directory. whatis searches man page names, not files.",
+   "explanation": "`locate` is case-sensitive by default, and `-i` ignores case. `find readme` looks only for a path named exactly readme in the current directory. whatis searches man page names, not files.",
    "options": [
     "locate -i readme",
     "locate readme",
@@ -7133,7 +7133,7 @@
    "form": "E",
    "q": "What happens when these commands run in a directory that contains only report.txt?",
    "code": "$ cp report.txt backup\n$ cp report.txt backup/",
-   "explanation": "cp to a name that doesn't exist creates a file with that name. A trailing slash says the target must be a directory, so the second cp fails with 'Not a directory'. Create directories first with mkdir.",
+   "explanation": "`cp` to a name that doesn't exist creates a file with that name. A trailing slash says the target must be a directory, so the second cp fails with 'Not a directory'. Create directories first with mkdir.",
    "options": [
     "The first creates a file named backup, and the second fails because backup is not a directory",
     "Both create a directory named backup and copy the file into it",
@@ -7284,7 +7284,7 @@
    "obj": "3.1",
    "form": "D",
    "q": "Which commands create a single compressed archive of the directory logs? (Choose TWO.)",
-   "explanation": "tar with `-j` bundles and compresses with bzip2, and `zip -r` archives and compresses in one step. `gzip -r` compresses each file separately inside the directory, plain gzip refuses to compress a directory, and `-t` lists an archive.",
+   "explanation": "`tar` with `-j` bundles and compresses with bzip2, and `zip -r` archives and compresses in one step. `gzip -r` compresses each file separately inside the directory, plain gzip refuses to compress a directory, and `-t` lists an archive.",
    "options": [
     "tar -cjf logs.tar.bz2 logs",
     "zip -r logs.zip logs",
@@ -7540,7 +7540,7 @@
    "obj": "3.2",
    "form": "B",
    "q": "Which command prints only line 5 of notes.txt?",
-   "explanation": "head keeps lines 1 to 5, and tail then keeps the last of those. `tail -n 5 | head -n 1` gives the fifth line from the end. cut selects fields within each line, not lines.",
+   "explanation": "`head` keeps lines 1 to 5, and tail then keeps the last of those. `tail -n 5 | head -n 1` gives the fifth line from the end. cut selects fields within each line, not lines.",
    "options": [
     "head -n 5 notes.txt | tail -n 1",
     "tail -n 5 notes.txt | head -n 1",
@@ -7723,7 +7723,7 @@
    "form": "D",
    "q": "What does this command print?",
    "code": "$ ls /nonexistent 2>/dev/null && echo found || echo missing",
-   "explanation": "ls fails (non-zero exit status), so the command after `&&` is skipped and the one after `||` runs. `&&` means run if the previous command succeeded, and `||` means run if it failed.",
+   "explanation": "`ls` fails (non-zero exit status), so the command after `&&` is skipped and the one after `||` runs. `&&` means run if the previous command succeeded, and `||` means run if it failed.",
    "options": [
     "missing",
     "found",
@@ -8523,7 +8523,7 @@
    "obj": "4.4",
    "form": "F",
    "q": "Which command shows which program is listening on TCP port 22?",
-   "explanation": "ss lists sockets: `-t` TCP, `-l` listening, `-n` numeric ports and `-p` the owning process (root sees all of them). `netstat -tlnp` is the older equivalent. ip route shows routes, and host does DNS lookups.",
+   "explanation": "`ss` lists sockets: `-t` TCP, `-l` listening, `-n` numeric ports and `-p` the owning process (root sees all of them). `netstat -tlnp` is the older equivalent. ip route shows routes, and host does DNS lookups.",
    "options": [
     "sudo ss -tlnp",
     "ip route show",
@@ -9142,7 +9142,7 @@
    "obj": "1.2",
    "form": "J",
    "q": "On Ubuntu, `sudo dpkg -i app.deb` stops with \"dependency problems\". What's the usual fix?",
-   "explanation": "dpkg installs a single package file but doesn't download anything. apt works with the repositories: `apt-get install -f` (fix broken) installs the missing dependencies and finishes the setup. Installing the file with `sudo apt install ./app.deb` avoids the problem in the first place.",
+   "explanation": "`dpkg` installs a single package file but doesn't download anything. apt works with the repositories: `apt-get install -f` (fix broken) installs the missing dependencies and finishes the setup. Installing the file with `sudo apt install ./app.deb` avoids the problem in the first place.",
    "options": [
     "Run `sudo apt-get install -f` so apt fetches the missing packages",
     "Install the same file again with `sudo rpm -i app.deb` instead",
@@ -9646,7 +9646,7 @@
    "obj": "3.2",
    "form": "J",
    "q": "Save every line of /var/log/app.log that contains ERROR into the file errors.txt in your current directory, replacing any old errors.txt. Type the full command.",
-   "explanation": "grep prints the matching lines and `>` redirects standard output into a file, creating it or replacing its contents. `>>` would append instead, and `cat file | grep ERROR > errors.txt` works too, with one extra process.",
+   "explanation": "`grep` prints the matching lines and `>` redirects standard output into a file, creating it or replacing its contents. `>>` would append instead, and `cat file | grep ERROR > errors.txt` works too, with one extra process.",
    "type": "fill",
    "accept": [
     "grep ERROR /var/log/app.log > errors.txt",
@@ -9899,7 +9899,7 @@
    "form": "J",
    "q": "What can you conclude from these kernel messages, which appeared right after a USB drive was plugged in?",
    "code": "$ sudo dmesg | tail -4\n[ 9120.44] usb 2-1: new high-speed USB device number 4 using xhci_hcd\n[ 9120.61] usb-storage 2-1:1.0: USB Mass Storage device detected\n[ 9121.65] sd 3:0:0:0: [sdc] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)\n[ 9121.68]  sdc: sdc1 sdc2",
-   "explanation": "dmesg shows the kernel ring buffer: the USB device was found, recognised as mass storage, named sdc with its size, and the partition table lists sdc1 and sdc2. Mounting is a separate step and doesn't show up here.",
+   "explanation": "`dmesg` shows the kernel ring buffer: the USB device was found, recognised as mass storage, named sdc with its size, and the partition table lists sdc1 and sdc2. Mounting is a separate step and doesn't show up here.",
    "options": [
     "A 32 GB USB disk was detected as /dev/sdc, with two partitions",
     "The drive was mounted automatically on /media/sdc by the kernel",
@@ -9950,7 +9950,7 @@
    "form": "J",
    "q": "Which statements about this output are true? (Choose TWO.)",
    "code": "$ last -n 3\nana      pts/0        192.168.1.20     Fri Oct  9 08:58   still logged in\nreboot   system boot  6.8.0-45-generic Fri Oct  9 08:55   still running\nroot     tty1                          Thu Oct  8 23:41 - crash  (00:02)",
-   "explanation": "last reads the login records in /var/log/wtmp. A host address in the third column means a remote (network) login, and `pts/0` is a pseudo-terminal, as used by SSH. `- crash` means the session was still open when the system went down without logging it out; the reboot line follows.",
+   "explanation": "`last` reads the login records in /var/log/wtmp. A host address in the third column means a remote (network) login, and `pts/0` is a pseudo-terminal, as used by SSH. `- crash` means the session was still open when the system went down without logging it out; the reboot line follows.",
    "options": [
     "ana is logged in remotely from 192.168.1.20",
     "root's session ended because the system went down without a clean shutdown",
@@ -10055,7 +10055,7 @@
    "form": "J",
    "q": "On an Ubuntu system, which statements follow from this output? (Choose TWO.)",
    "code": "$ id\nuid=1000(ana) gid=1000(ana) groups=1000(ana),4(adm),27(sudo)",
-   "explanation": "id shows the user, the primary group (gid) and all groups. On Debian and Ubuntu, members of the sudo group may use sudo, and the adm group may read most system logs. The UID is 1000, not 0, and the primary group is ana.",
+   "explanation": "`id` shows the user, the primary group (gid) and all groups. On Debian and Ubuntu, members of the sudo group may use sudo, and the adm group may read most system logs. The UID is 1000, not 0, and the primary group is ana.",
    "options": [
     "ana may run commands as root with sudo",
     "ana can read many log files in /var/log through the adm group",
@@ -10138,7 +10138,7 @@
    "obj": "5.2",
    "form": "J",
    "q": "An employee has left, and an administrator ran `sudo userdel sam`. What is left on the system?",
-   "explanation": "userdel removes the account from /etc/passwd, /etc/shadow and /etc/group. Without `-r` it leaves /home/sam alone; files elsewhere still belong to sam's old UID number and show it in ls -l, until they're removed or given to someone else.",
+   "explanation": "`userdel` removes the account from /etc/passwd, /etc/shadow and /etc/group. Without `-r` it leaves /home/sam alone; files elsewhere still belong to sam's old UID number and show it in ls -l, until they're removed or given to someone else.",
    "options": [
     "sam's home directory and its files, because userdel doesn't delete them without -r",
     "Nothing: userdel always removes the account, the home directory and every file sam owned",
@@ -10163,7 +10163,7 @@
    "obj": "5.3",
    "form": "J",
    "q": "Give the directory site and everything inside it to the user www-data and the group www-data, using one command. You have sudo.",
-   "explanation": "chown sets the owner and, after a colon, the group; `-R` applies it to the directory and everything below it.",
+   "explanation": "`chown` sets the owner and, after a colon, the group; `-R` applies it to the directory and everything below it.",
    "type": "fill",
    "accept": [
     "sudo chown -R www-data:www-data site",
@@ -10240,7 +10240,7 @@
    "obj": "5.4",
    "form": "J",
    "q": "In the current directory, create a hard link named copy.txt for the file data.txt. Type the full command.",
-   "explanation": "Without -s, ln makes a hard link: a second name for the same inode, so both names show the same data and `ls -li` shows the same inode number and a link count of 2. `ln -s` would make a symbolic link instead.",
+   "explanation": "`ln` without `-s` makes a hard link: a second name for the same inode, so both names show the same data and `ls -li` shows the same inode number and a link count of 2. `ln -s` would make a symbolic link instead.",
    "type": "fill",
    "accept": [
     "ln data.txt copy.txt"
@@ -10779,7 +10779,7 @@
    "obj": "2.4",
    "variantOf": "2.4-06",
    "q": "No file named notes.txt exists in the current directory. What does `touch notes.txt` do?",
-   "explanation": "touch updates a file's timestamps, and creates the file, empty, when it doesn't exist yet. That makes it the usual way to create an empty file.",
+   "explanation": "`touch` updates a file's timestamps, and creates the file, empty, when it doesn't exist yet. That makes it the usual way to create an empty file.",
    "options": [
     "Creates an empty file named notes.txt",
     "Fails with \"No such file or directory\"",
@@ -10805,7 +10805,7 @@
    "obj": "2.4",
    "variantOf": "2.4-01",
    "q": "Which command removes the directory projects only when it is empty, and otherwise reports an error and deletes nothing?",
-   "explanation": "rmdir removes empty directories only, which makes it the safe choice: if anything is still inside, it fails with \"Directory not empty\". `rm -r` deletes a directory together with all of its contents.",
+   "explanation": "`rmdir` removes empty directories only, which makes it the safe choice: if anything is still inside, it fails with \"Directory not empty\". `rm -r` deletes a directory together with all of its contents.",
    "options": [
     "rmdir projects",
     "rm -r projects",
@@ -10882,7 +10882,7 @@
    "obj": "3.1",
    "variantOf": "3.1-05",
    "q": "A directory holds only report.txt.gz. What is in it after you run `gunzip report.txt.gz`?",
-   "explanation": "gzip and gunzip replace the file they work on: `gzip report.txt` leaves only report.txt.gz, and gunzip turns it back into report.txt. Use `-k` to keep the original, or `zcat` to print the contents without changing anything.",
+   "explanation": "`gzip` and `gunzip` replace the file they work on: `gzip report.txt` leaves only report.txt.gz, and gunzip turns it back into report.txt. Use `-k` to keep the original, or `zcat` to print the contents without changing anything.",
    "options": [
     "Only report.txt",
     "Both report.txt and report.txt.gz",
@@ -10908,7 +10908,7 @@
    "obj": "3.1",
    "variantOf": "3.1-06",
    "q": "Which compression program does tar use when you add the `-j` option?",
-   "explanation": "tar can pass the archive through a compressor: `-z` uses gzip (.tar.gz), `-j` uses bzip2 (.tar.bz2) and `-J` uses xz (.tar.xz).",
+   "explanation": "`tar` can pass the archive through a compressor: `-z` uses gzip (.tar.gz), `-j` uses bzip2 (.tar.bz2) and `-J` uses xz (.tar.xz).",
    "options": [
     "bzip2",
     "gzip",
@@ -10974,7 +10974,7 @@
    "obj": "3.2",
    "variantOf": "3.2-06",
    "q": "Type the complete command that prints the last 5 lines of the file app.log in the current directory.",
-   "explanation": "tail prints the end of a file, 10 lines unless `-n` says otherwise. head does the same for the beginning.",
+   "explanation": "`tail` prints the end of a file, 10 lines unless `-n` says otherwise. head does the same for the beginning.",
    "type": "fill",
    "accept": [
     "tail -n 5 app.log",
@@ -11218,7 +11218,7 @@
    "variantOf": "4.2-08",
    "q": "Which command produced this output?",
    "code": "NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nsda      8:0    0  100G  0 disk\n├─sda1   8:1    0    1G  0 part /boot\n└─sda2   8:2    0   99G  0 part /",
-   "explanation": "lsblk lists block devices as a tree: disks, the partitions on them, their sizes and where they are mounted.",
+   "explanation": "`lsblk` lists block devices as a tree: disks, the partitions on them, their sizes and where they are mounted.",
    "options": [
     "lsblk",
     "lscpu",
@@ -11366,7 +11366,7 @@
    "obj": "4.4",
    "variantOf": "4.4-07",
    "q": "A colleague says a server seems to be down. Which command is the quickest check of whether the host answers on the network at all?",
-   "explanation": "ping sends ICMP echo requests and reports the replies, so it shows whether the host is reachable and how long answers take. `-c 4` stops after four requests.",
+   "explanation": "`ping` sends ICMP echo requests and reports the replies, so it shows whether the host is reachable and how long answers take. `-c 4` stops after four requests.",
    "options": [
     "ping -c 4 server.example.com",
     "host server.example.com",
@@ -11406,7 +11406,7 @@
    "obj": "5.1",
    "variantOf": "5.1-06",
    "q": "An administrator wants to see when the server was last rebooted and who logged in during the past days. Which command shows that history?",
-   "explanation": "last reads /var/log/wtmp and lists past logins, logouts and reboots, newest first. who and w only show the users logged in right now.",
+   "explanation": "`last` reads /var/log/wtmp and lists past logins, logouts and reboots, newest first. who and w only show the users logged in right now.",
    "options": [
     "last",
     "who",
@@ -11458,7 +11458,7 @@
    "obj": "5.2",
    "variantOf": "5.2-08",
    "q": "Type the complete command, including sudo, that deletes the user tom together with his home directory.",
-   "explanation": "userdel removes the account from /etc/passwd, /etc/shadow and /etc/group. With `-r` it also removes the home directory and the mail spool; without it, the files stay behind.",
+   "explanation": "`userdel` removes the account from /etc/passwd, /etc/shadow and /etc/group. With `-r` it also removes the home directory and the mail spool; without it, the files stay behind.",
    "type": "fill",
    "accept": [
     "sudo userdel -r tom",
@@ -11533,7 +11533,7 @@
    "obj": "5.2",
    "variantOf": "5.2-03",
    "q": "The user dave has forgotten his password. Type the complete command, including sudo, with which an administrator sets a new one for him.",
-   "explanation": "passwd without an argument changes your own password. root can name another user, and is then not asked for the old password.",
+   "explanation": "`passwd` without an argument changes your own password. root can name another user, and is then not asked for the old password.",
    "type": "fill",
    "accept": [
     "sudo passwd dave"
@@ -11561,7 +11561,7 @@
    "obj": "5.3",
    "variantOf": "5.3-12",
    "q": "Type the complete command (run as root) that changes only the group of report.txt to users, leaving the owner as it is.",
-   "explanation": "chgrp changes the group of a file. chown can do it too when the name is written after a colon: `chown :users report.txt`.",
+   "explanation": "`chgrp` changes the group of a file. chown can do it too when the name is written after a colon: `chown :users report.txt`.",
    "type": "fill",
    "accept": [
     "chgrp users report.txt",

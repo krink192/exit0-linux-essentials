@@ -103,10 +103,10 @@ F("2.2-06", "Type the command that rebuilds the database used by locate.",
   "`updatedb` scans the filesystem and rewrites the locate database. It runs automatically from a scheduled job, but root can run it manually with `sudo updatedb`.")
 S("2.2-07", "While viewing a man page, which input searches forward for the word recursive?",
   ["✔/recursive", "?recursive", ":recursive", "Ctrl+F recursive"],
-  "man displays pages with `less`, where `/text` searches forward, `?text` searches backward, and `n` jumps to the next match. In less, `:` starts a less command and Ctrl+F scrolls forward one screen.")
+  "`man` displays pages with `less`, where `/text` searches forward, `?text` searches backward, and `n` jumps to the next match. In less, `:` starts a less command and Ctrl+F scrolls forward one screen.")
 F("2.2-08", "Type the key that exits a man page and returns you to the shell prompt.",
   ["q", "Q"],
-  "man uses the less pager, and q quits. Space or Page Down scrolls forward, b scrolls back, h shows help, and / searches.")
+  "`man` uses the less pager, and q quits. Space or Page Down scrolls forward, b scrolls back, h shows help, and / searches.")
 S("2.2-09", "Which command prints only the one-line description of the ls man page?",
   ["✔whatis ls", "apropos -a ls", "info --short ls", "man -h ls"],
   "`whatis` prints the NAME line from the matching man pages, such as `ls (1) - list directory contents`. `apropos` searches descriptions for a keyword and usually returns many matches.")
@@ -206,7 +206,7 @@ S("2.4-05", "Which command creates projects/2026/reports when none of those dire
 S("2.4-06", "What does `touch report.txt` do if report.txt already exists?",
   ["✔Updates its timestamps but leaves the contents alone", "Empties the file so that its size becomes zero",
    "It fails with a \"File exists\" error and leaves the file unchanged", "Creates a second copy named report.txt.1"],
-  "touch creates an empty file if it doesn't exist and otherwise just updates the access and modification times. To empty a file, you could use `> report.txt` or `truncate -s 0 report.txt`.",
+  "`touch` creates an empty file if it doesn't exist and otherwise just updates the access and modification times. To empty a file, you could use `> report.txt` or `truncate -s 0 report.txt`.",
   run="echo data > report.txt; touch report.txt; cat report.txt", expect="data")
 S("2.4-07", "A directory contains log1.txt, log2.txt, log4.txt and log12.txt. Which files does `ls log[1-3].txt` match?",
   ["✔log1.txt and log2.txt", "log1.txt, log2.txt and log12.txt", "All four files", "log12.txt only"],

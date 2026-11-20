@@ -89,7 +89,7 @@ S("5.2-09", "Which command locks the account of user dave so he can no longer lo
 S("5.2-10", "After `useradd -m dave`, dave still cannot log in with a password. Why?",
   ["✔No password has been set yet; run passwd dave", "The home directory was not created by -m",
    "useradd gives every new account the shell /bin/false", "He must be added to the sudo group before logging in"],
-  "useradd leaves the password field locked (`!` or `!!` in /etc/shadow) until root runs `passwd dave`. `-m` did create /home/dave. Group membership in sudo only matters for running sudo, not for logging in.",
+  "`useradd` leaves the password field locked (`!` or `!!` in /etc/shadow) until root runs `passwd dave`. `-m` did create /home/dave. Group membership in sudo only matters for running sudo, not for logging in.",
   run="useradd -m le010d2; getent shadow le010d2 | cut -d: -f2 | cut -c1; userdel -r le010d2 2>/dev/null", expect="!")
 S("5.2-11", "By default on most modern distributions, what UID does useradd give the first regular user?",
   ["✔1000", "0", "100", "500"],
@@ -123,7 +123,7 @@ F("5.3-05", "Type the three-digit octal mode for the permissions -rw-r-----.",
   run="touch f; chmod {A} f; stat -c %A f", expect="-rw-r-----")
 S("5.3-06", "Which command sets the owner to alice and the group to devs for app.py?",
   ["✔chown alice:devs app.py", "chown devs:alice app.py", "chgrp alice:devs app.py", "chmod alice:devs app.py"],
-  "chown takes `user:group`, with the user first. chgrp only accepts a group, and chmod changes permissions, not ownership.",
+  "`chown` takes `user:group`, with the user first. chgrp only accepts a group, and chmod changes permissions, not ownership.",
   run="groupadd le010devs; useradd le010alice; touch app.py; chown le010alice:le010devs app.py; stat -c '%U:%G' app.py; rm app.py; userdel le010alice; groupdel le010devs; groupdel le010alice 2>/dev/null; true", expect="le010alice:le010devs")
 F("5.3-07", "Type the option that makes chmod or chown apply to a directory and everything inside it.",
   ["-R", "--recursive"],

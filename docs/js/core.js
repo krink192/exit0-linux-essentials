@@ -160,6 +160,101 @@
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
   }
+  // ------------------------------------------------------------- why a wrong answer is wrong
+  // One plain line on why a wrong answer missed, made from the answer key and the lab's manual pages (man.js, passed
+  // in as `man`; without it the line is shorter but still right). Nothing is written per question, but a question
+  // can give its own line for a known wrong answer with `miss: { "<typed command>": "note" }`.
+  const MISS_ROLE = { TARGET: "existing file", LINK_NAME: "new name", SOURCE: "source", DEST: "destination", DIRECTORY: "directory",
+    DIR: "directory", ARCHIVE: "archive", FILE: "file", PATTERN: "pattern", MODE: "mode", OWNER: "new owner", GROUP: "group",
+    LOGIN: "user", USER: "user", NAME: "name", PAGE: "page" };
+  const missToks = s => norm(s).split(" ").filter(Boolean);
+  const missAt = t => t[0] === "sudo" ? 1 : 0;
+  const missOpt = x => /^-/.test(x) && x !== "-";
+  const missExpand = x => /^-[A-Za-z]{2,}$/.test(x) ? x.slice(1).split("").map(c => "-" + c) : [x];   // -cjf -> -c -j -f
+  function missParts(t) {
+    const r = { cmd: t[missAt(t)], sudo: missAt(t) === 1, opts: [], args: [] };
+    t.slice(missAt(t) + 1).forEach(x => missOpt(x) ? r.opts.push(...missExpand(x)) : r.args.push(x));
+    return r;
+  }
+  const sameSet = (x, y) => x.slice().sort().join("\n") === y.slice().sort().join("\n");
+  const minus = (x, y) => x.filter(v => !y.includes(v));
+  /** The accepted answer closest to what was typed: same command first, then the fewest differing parts. */
+  function closestAccepted(q, a) {
+    const accept = (q && q.accept) || [], p = missParts(missToks(a));
+    const score = s => { const r = missParts(missToks(s)); return (r.cmd === p.cmd ? 0 : 100) + minus(r.opts, p.opts).length
+      + minus(p.opts, r.opts).length + minus(r.args, p.args).length + minus(p.args, r.args).length; };
+    return accept.reduce((best, s) => best == null || score(s) < score(best) ? s : best, null) || "";
+  }
+  /** Why a typed answer is wrong: { kind, text } with `code` in backticks, or null when no rule fits
+   *  (a one-word answer, several commands joined with && or |, or a change too big to name). */
+  function missTyped(q, a, man) {
+    const t = checkTyped(q, a);
+    if (t.ok || !t.answered) return null;
+    if (t.near) return { kind: t.near, text: TYPED_NEAR[t.near] };
+    if (q.miss && q.miss[t.typed]) return { kind: "own", text: q.miss[t.typed] };
+    const page = c => man && Object.prototype.hasOwnProperty.call(man, c) ? man[c] : null;
+    const summary = c => { const m = page(c); return m ? m.summary : ""; };
+    const roles = c => { const m = page(c); if (!m || !m.synopsis) return [];
+      return m.synopsis[0].split(" ").slice(1).filter(x => !/^[[-]/.test(x)).map(x => x.replace(/\.\.\.$/, "")); };
+    const role = r => r ? MISS_ROLE[r] || MISS_ROLE[r.split(".")[0]] || "" : "";
+    const optText = (c, o) => {       // the option's first sentence; gunzip's options live on the gzip page
+      const m = page(c); if (!m) return "";
+      const pages = [m].concat((m.see || []).map(x => page(String(x).split("(")[0]))).filter(x => x && x.options);
+      for (const pg of pages) {
+        const hit = pg.options.find(([n]) => n.split(/,\s*/).some(k => k.split(" ")[0] === o));
+        if (hit) return hit[1].split(/(?<=[a-z0-9)])\.\s+|;\s|:\s/)[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase());
+      }
+      return "";
+    };
+    const code = x => "`" + x + "`";
+    const T = missToks(t.typed), best = closestAccepted(q, t.typed), A = missToks(best);
+    if (!A.length || !/^[a-z][\w.+-]*$/.test(A[missAt(A)]) || (A.length < 2 && T.length < 2)) return null;   // a word or a path, not a command line
+    if (T.concat(A).some(x => /^(&&|\|\|?|;)$/.test(x))) return null;
+    const p = missParts(T), r = missParts(A);
+    if (p.cmd !== r.cmd) {
+      const s2 = summary(r.cmd) ? `: "${summary(r.cmd)}"` : "";
+      if (!page(p.cmd)) return { kind: "command", text: `This task needs ${code(r.cmd)}${s2}.` };
+      return { kind: "command", text: `Wrong command: ${code(p.cmd)} is for "${summary(p.cmd)}". This task needs ${code(r.cmd)}${s2}.` };
+    }
+    if (r.sudo && !p.sudo && sameSet(T, A.slice(1))) return { kind: "root", text: "This one needs root: start with `sudo`." };
+    if (sameSet(p.opts, r.opts) && sameSet(p.args, r.args)) {
+      const ro = roles(r.cmd), named = r.args.map((x, i) => role(ro[i]) ? `the ${role(ro[i])} ${code(x)}` : null);
+      return { kind: "order", text: named.length > 1 && named.every(Boolean)
+        ? `Right parts, wrong order. ${code(r.cmd)} takes ${named.slice(0, -1).join(", ")} first, then ${named[named.length - 1]}.`
+        : "Right parts, wrong order. Check which name comes first." };
+    }
+    const lack = minus(r.opts, p.opts), extra = minus(p.opts, r.opts), d = o => { const s = optText(r.cmd, o); return s ? ` (${s})` : ""; };
+    if (sameSet(p.args, r.args)) {
+      if (lack.length === 1 && extra.length === 1) return { kind: "option", text: `Use ${code(lack[0])}${d(lack[0])}, not ${code(extra[0])}${d(extra[0])}.` };
+      if (lack.length && !extra.length) return { kind: "option", text: `Missing ${lack.map(o => code(o) + d(o)).join(" and ")}.` };
+      if (extra.length && !lack.length) return { kind: "option", text: `Leave out ${extra.map(o => code(o) + d(o)).join(" and ")}: the task doesn't ask for that.` };
+    }
+    if (!lack.length && !extra.length) {
+      const gone = minus(r.args, p.args), more = minus(p.args, r.args);
+      if (gone.length && !more.length) return { kind: "args", text: `Something is missing: the answer also has ${code(gone.join(" "))}.` };
+      if (gone.length === 1 && more.length === 1) return { kind: "args", text: `Check the name: the answer uses ${code(gone[0])} where you typed ${code(more[0])}.` };
+      if (more.length && !gone.length) return { kind: "args", text: `Leave out ${more.map(code).join(" and ")}: the task doesn't ask for it.` };
+    }
+    return null;
+  }
+  const andWords = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+  /** A wrong choice answer: the right letters in the order shown (`order` maps position to option index), what was
+   *  missed or wrongly picked, and one line saying so. Returns null for a right answer. */
+  function missChoice(q, a, order) {
+    const picked = Array.isArray(a) ? a : [], L = "ABCDEF";
+    order = order || q.options.map((_, i) => i);
+    const pos = oi => L[order.indexOf(oi)];
+    const right = order.filter(oi => q.answer.includes(oi));
+    const missed = right.filter(oi => !picked.includes(oi)), wrong = order.filter(oi => picked.includes(oi) && !q.answer.includes(oi));
+    if (picked.length && !missed.length && !wrong.length) return null;
+    const bits = [];
+    if (picked.length) {
+      if (missed.length && q.type === "multi") bits.push(`You missed ${andWords(missed.map(pos))}.`);
+      wrong.forEach(oi => { const w = q.why && q.why[oi]; bits.push(`${pos(oi)} is wrong${w ? ": " + w.replace(/\.$/, "") : ""}.`); });
+      if (q.type === "multi" && missed.length && !wrong.length) bits.push(`"Choose ${q.answer.length === 2 ? "TWO" : "THREE"}" only counts when you pick all ${q.answer.length}.`);
+    }
+    return { right: right.map(pos), rightIdx: right, missed: missed.map(pos), wrong: wrong.map(pos), text: bits.join(" ") };
+  }
   /** Choose TWO/THREE: how many options it asks for, and how many are picked.
    *  ready is true only at exactly that count. Null for single-choice and typed questions. */
   function multiPick(q, a) {
@@ -1866,7 +1961,7 @@
            buildPlacement, placementSummary, isDontKnow,
            setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, objectiveMapCounts, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
-           familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
+           familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN, missTyped, missChoice, closestAccepted,
            navStates, navCounts, navFilter, navNext, splitExplanation,
            recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,

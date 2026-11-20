@@ -340,12 +340,16 @@ pre.code { margin: 0; font: 400 var(--fs-body)/1.6 var(--mono); background: var(
 /* Explanations in two tiers, and the note on a typed answer that was nearly right */
 .expl { display: flex; flex-direction: column; gap: 8px; }
 .expl p { margin: 0; }
-.expl-rest, .expl-more p { color: var(--ink-2); }
-.expl-more { display: none; }
-@media (max-width: 640px) { .expl-rest { display: none; } .expl-more { display: block; } }
-.expl-more summary { cursor: pointer; padding: 12px 0; font: 600 var(--fs-sm) var(--ui); color: var(--accent-text); }
-.nearnote { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; background: var(--sunk); border-radius: var(--r-sm); }
-.nearnote svg.i { flex: none; width: 18px; height: 18px; margin-top: 2px; color: var(--muted); }
+.expl-more p { color: var(--ink-2); margin-top: 4px; }
+.expl-more summary, .ans-out summary { cursor: pointer; width: max-content; padding: 12px 0; font: 600 var(--fs-sm)/20px var(--ui); color: var(--accent-text); }
+.ans-out pre { margin-top: 4px; }
+/* A wrong answer: the answer first, in its own block, then one line on why yours missed */
+.ans-box { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; background: var(--accent-soft); border-radius: var(--r-sm); border-left: 3px solid var(--accent); }
+.ans-box p { margin: 0; }
+.ans-label { font: 700 var(--fs-xs) var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
+pre.code.ans-cmd { font-size: var(--fs-row); background: var(--surface); overflow-x: auto; }
+.ans-why, .ans-lead { margin: 0; }
+.ans-sep { color: var(--muted); padding: 0 2px; }
 .untimed { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .untimed p { margin: 0; max-width: 60ch; }
 .qgrid button.ok { background: var(--good-soft); color: var(--good); border-color: transparent; }
@@ -557,7 +561,6 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .partnav a.done { background: var(--good-soft); border-color: transparent; color: var(--good); } .partnav a svg.i { width: 13px; height: 13px; stroke-width: 3; }
 .explain { margin-top: 8px; font-size: var(--fs-sm); color: var(--ink-2); }
 .coach.stuck { background: var(--bad-soft, var(--flag-soft)); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
-.multinote { margin: 8px 0 0; }
 .coach { margin-top: 8px; background: var(--flag-soft); border: 1px solid color-mix(in srgb, var(--flag) 35%, transparent); border-radius: var(--r-sm); padding: 8px 10px; font-size: var(--fs-sm); }
 .cmdrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .cmdchip { font: 600 var(--fs-xs) var(--mono); padding: 4px 8px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); color: var(--ink-2); }
@@ -954,10 +957,18 @@ a.qs:hover { border-color: var(--accent); background: var(--surface); }
 .formgrid button span { font-size: var(--fs-sm); color: var(--muted); }
 .formgrid button.done { background: var(--surface); border-color: var(--line-2); }
 button.marked { background: var(--accent-soft); border-color: var(--accent); color: var(--accent-2); }
-.notebox { margin-top: 10px; font-size: var(--fs-body); }
-.notebox summary { cursor: pointer; color: var(--muted); }
-.notebox textarea { width: 100%; margin-top: 8px; padding: 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
-.row.marks { margin-top: 10px; }
+.notebox { font-size: var(--fs-body); }
+.notebox textarea { width: 100%; padding: 10px; border-radius: var(--r-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); font: inherit; resize: vertical; }
+.row.marks { margin: 0 0 0 -10px; gap: 4px; flex-wrap: wrap; }
+.row.marks button, .row.marks .btn { padding-left: 10px; padding-right: 12px; }
+/* Bookmark, Note and Report under an answer: quiet icon + word controls */
+.btn.ghost { background: transparent; border-color: transparent; }
+.qtools .btn.ghost, .row.marks .btn.ghost { color: var(--muted); font-weight: 500; }
+.qtools .btn.ghost:hover, .row.marks .btn.ghost:hover { color: var(--ink); }
+/* "Lesson · Lab 5.4 · 9 flashcards": the study links as one quiet line */
+.studyref.qlinks { gap: 0 8px; margin: 0; padding-top: 4px; border-top: 0; color: var(--muted); }
+.studyref.qlinks a { min-height: var(--tap); color: var(--accent-text); }
+.dotsep { color: var(--muted); }
 .searchbox { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--surface); }
 .searchbox input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--fs-row); }
 .searchbox svg.i { width: 20px; height: 20px; color: var(--muted); }

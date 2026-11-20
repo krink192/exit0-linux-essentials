@@ -28,7 +28,7 @@ S("1.1-17", "Which statements about Android are true?",
   level=2)
 S("1.1-18", "A how-to guide uses `apt-get install` and edits /etc/apt/sources.list. On which distributions will it work without changes?",
   ["✔Debian", "✔Linux Mint", "CentOS", "openSUSE", "Red Hat Enterprise Linux"],
-  "apt-get and /etc/apt/sources.list belong to the Debian family, which includes Ubuntu and Linux Mint. CentOS and RHEL use rpm with yum/dnf, and openSUSE uses rpm with zypper.",
+  "`apt-get` and /etc/apt/sources.list belong to the Debian family, which includes Ubuntu and Linux Mint. CentOS and RHEL use rpm with yum/dnf, and openSUSE uses rpm with zypper.",
   level=2)
 
 # ---------------- 1.2 Major Open Source Applications (6) ----------------
@@ -38,7 +38,7 @@ S("1.2-13", "On a CentOS server you downloaded webmin-2.1.noarch.rpm. Which comm
   level=2)
 S("1.2-14", "On Ubuntu, which command installs NGINX from the configured repositories together with its dependencies?",
   ["✔apt-get install nginx", "dpkg -i nginx", "rpm --install nginx.rpm", "yum install nginx"],
-  "apt-get downloads the package and everything it depends on from the repositories (run it with sudo). dpkg -i needs a local .deb file and does not resolve dependencies. rpm and yum are Red Hat tools.",
+  "`apt-get` downloads the package and everything it depends on from the repositories (run it with sudo). dpkg -i needs a local .deb file and does not resolve dependencies. rpm and yum are Red Hat tools.",
   level=2)
 S("1.2-15", "Which two applications would you combine to host a dynamic website backed by a relational database?",
   ["✔Apache HTTPD and MariaDB", "Samba and NFS file servers", "GIMP and Thunderbird", "Firefox and Nextcloud"],
@@ -159,7 +159,7 @@ S("2.2-14", "While reading a document in the info viewer, which key moves to the
   level=1)
 S("2.2-15", "Which command finds files whose names contain readme, matching README, Readme and readme alike?",
   ["✔locate -i readme", "locate readme", "find readme", "whatis -i readme"],
-  "locate is case-sensitive by default, and `-i` ignores case. `find readme` looks only for a path named exactly readme in the current directory. whatis searches man page names, not files.",
+  "`locate` is case-sensitive by default, and `-i` ignores case. `find readme` looks only for a path named exactly readme in the current directory. whatis searches man page names, not files.",
   level=2)
 S("2.2-16", "What does this SYNOPSIS line from the cp man page tell you?",
   ["✔Options are optional, and you can name several source files followed by a target directory",
@@ -219,7 +219,7 @@ S("2.4-14", "What happens when these commands run in a directory that contains o
   ["✔The first creates a file named backup, and the second fails because backup is not a directory",
    "Both create a directory named backup and copy the file into it", "The first fails because backup doesn't exist",
    "The second overwrites backup with a directory"],
-  "cp to a name that doesn't exist creates a file with that name. A trailing slash says the target must be a directory, so the second cp fails with 'Not a directory'. Create directories first with mkdir.",
+  "`cp` to a name that doesn't exist creates a file with that name. A trailing slash says the target must be a directory, so the second cp fails with 'Not a directory'. Create directories first with mkdir.",
   code="$ cp report.txt backup\n$ cp report.txt backup/",
   run="touch report.txt; cp report.txt backup; cp report.txt backup/ 2>/dev/null; echo $?; [ -f backup ] && echo file", expect="1\nfile", level=3)
 S("2.4-15", "A directory contains data1.csv, data2.csv, data10.csv, Data3.csv and data_old.csv. Which files does `ls data[0-9]*.csv` list?",
@@ -246,7 +246,7 @@ S("3.1-13", "An archive was created with `tar -cvzf site.tar.gz www/`. Which com
   run="mkdir www; echo hi > www/i; tar -cvzf site.tar.gz www/ >/dev/null; rm -r www; tar -xzf site.tar.gz; cat www/i", expect="hi", level=2)
 S("3.1-14", "Which commands create a single compressed archive of the directory logs?",
   ["✔tar -cjf logs.tar.bz2 logs", "✔zip -r logs.zip logs", "gzip -r logs", "tar -tf logs.tar logs", "gzip logs"],
-  "tar with `-j` bundles and compresses with bzip2, and `zip -r` archives and compresses in one step. `gzip -r` compresses each file separately inside the directory, plain gzip refuses to compress a directory, and `-t` lists an archive.",
+  "`tar` with `-j` bundles and compresses with bzip2, and `zip -r` archives and compresses in one step. `gzip -r` compresses each file separately inside the directory, plain gzip refuses to compress a directory, and `-t` lists an archive.",
   run="mkdir logs; echo a > logs/x; tar -cjf logs.tar.bz2 logs && bzip2 -t logs.tar.bz2 && echo ok; zip -qr logs.zip logs && unzip -l logs.zip | grep -c logs/x; gzip -r logs; ls logs",
   expect="ok\n1\nx.gz", level=2)
 S("3.1-15", "You run `tar -xzf backup.tar.gz` from /tmp. Where does notes.txt end up?",
@@ -294,7 +294,7 @@ S("3.2-22", "f exists and nofile doesn't. What appears on the terminal?",
   run="touch f; ls f nofile 2>&1 >out.txt | grep -c nofile; cat out.txt", expect="1\nf", level=3)
 S("3.2-23", "Which command prints only line 5 of notes.txt?",
   ["✔head -n 5 notes.txt | tail -n 1", "tail -n 5 notes.txt | head -n 1", "head -n 5 notes.txt | head -n 1", "cut -f 5 notes.txt"],
-  "head keeps lines 1 to 5, and tail then keeps the last of those. `tail -n 5 | head -n 1` gives the fifth line from the end. cut selects fields within each line, not lines.",
+  "`head` keeps lines 1 to 5, and tail then keeps the last of those. `tail -n 5 | head -n 1` gives the fifth line from the end. cut selects fields within each line, not lines.",
   run="seq 1 20 > notes.txt; head -n 5 notes.txt | tail -n 1", expect="5", level=3)
 S("3.2-24", "Which command sorts the lines of /etc/passwd numerically by UID (the third field)?",
   ["✔sort -t: -k3 -n /etc/passwd", "sort -k3 /etc/passwd", "sort -n /etc/passwd", "cut -d: -f3 /etc/passwd | sort -n"],
@@ -327,7 +327,7 @@ S("3.3-26", "What does this script print when it is run as `./check.sh /etc`?",
   expect="dir", level=3)
 S("3.3-27", "What does this command print?",
   ["✔missing", "found", "found and then missing", "Nothing"],
-  "ls fails (non-zero exit status), so the command after `&&` is skipped and the one after `||` runs. `&&` means run if the previous command succeeded, and `||` means run if it failed.",
+  "`ls` fails (non-zero exit status), so the command after `&&` is skipped and the one after `||` runs. `&&` means run if the previous command succeeded, and `||` means run if it failed.",
   code="$ ls /nonexistent 2>/dev/null && echo found || echo missing",
   run="ls /nonexistent 2>/dev/null && echo found || echo missing", expect="OPT", level=3)
 S("3.3-28", "What do the two `echo $?` commands print?",
@@ -486,7 +486,7 @@ S("4.4-16", "On a system with the usual name lookup order, what happens when you
   level=3)
 S("4.4-17", "Which command shows which program is listening on TCP port 22?",
   ["✔sudo ss -tlnp", "ip route show", "host 22", "ping -p 22 localhost"],
-  "ss lists sockets: `-t` TCP, `-l` listening, `-n` numeric ports and `-p` the owning process (root sees all of them). `netstat -tlnp` is the older equivalent. ip route shows routes, and host does DNS lookups.",
+  "`ss` lists sockets: `-t` TCP, `-l` listening, `-n` numeric ports and `-p` the owning process (root sees all of them). `netstat -tlnp` is the older equivalent. ip route shows routes, and host does DNS lookups.",
   level=2)
 S("4.4-18", "Which of these are valid host addresses on the network 192.168.10.0/24?",
   ["✔192.168.10.1", "✔192.168.10.254", "192.168.10.255", "192.168.10.256", "192.168.11.1"],

@@ -1203,30 +1203,58 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outlin
 @media (max-width: 900px) { .termcol { position: static; } }
 .labwrap.single .taskpager, .labwrap.single .hide-one > .muted { display: none; }
 
-/* Lesson exercises on Labs: tag each word of a command, or sort a name as builtin or external. */
+/* Lesson exercises on Labs. Split: each word is a chip on a command line. Sort: a two-button toggle. */
 .lxrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; min-height: var(--tap); padding: 8px 0; text-decoration: none; color: inherit; border-top: 1px solid var(--line); }
 .lxrow:first-child { border-top: 0; }
 .lxrow .o { font: 600 var(--fs-xs) var(--ui); color: var(--muted); margin-right: 6px; }
 .lxrow.done .lname { color: var(--muted); }
 .lxrow:hover .lname { color: var(--ink); }
 .lxlines { display: flex; flex-direction: column; }
-.lxline { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); }
+.lxline { padding: 10px 0 8px; border-top: 1px solid var(--line); }
 .lxline:first-child { border-top: 0; }
-.lxobj { flex: 0 0 2.6em; min-height: var(--tap); display: inline-flex; align-items: center; font: 600 var(--fs-xs) var(--ui); color: var(--muted); }
-.lxtoks { display: flex; flex-wrap: wrap; gap: 8px 10px; flex: 1 1 12rem; min-width: 0; }
-.lxtok { display: flex; flex-direction: column; gap: 4px; flex: 1 1 9rem; min-width: min(100%, 9rem); max-width: 100%; }
-.lxtok code { font-size: var(--fs-sm); white-space: normal; overflow-wrap: anywhere; }
-.lxtok select { width: 100%; }
-.lxsort { display: grid; grid-template-columns: 6.5rem minmax(0, 1fr); gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.lxobj { display: block; margin-bottom: 2px; font: 600 var(--fs-xs)/1.2 var(--ui); color: var(--muted); }
+.lxcmd { display: flex; flex-wrap: wrap; gap: 2px 4px; align-items: flex-start; }
+/* Hit area is at least 44px. Short words get padding rather than a bigger label. */
+button.lxchip { min-width: var(--tap); min-height: var(--tap); padding: 4px 8px; gap: 1px; flex-direction: column; justify-content: center;
+  border-radius: var(--r-xs); font-weight: 500; line-height: 1.1; }
+button.lxchip .lxw { font: 500 var(--fs-sm)/1.15 var(--mono); white-space: nowrap; }
+button.lxchip .lxtag { display: inline-flex; align-items: center; gap: 3px; min-height: 1em; font: 600 var(--fs-xs)/1 var(--ui); }
+button.lxchip .lxtag svg.i { width: 12px; height: 12px; }
+button.lxchip.none { background: var(--surface); border-color: var(--line-2); color: var(--ink); }
+button.lxchip.cmd { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.lxchip.cmd:hover { background: var(--accent-2); border-color: var(--accent-2); }
+button.lxchip.opt { background: transparent; border-color: var(--accent); color: var(--accent-text); }
+button.lxchip.opt:hover { background: var(--accent-soft); }
+button.lxchip.arg { background: var(--sunk); border-color: var(--line); color: var(--ink); }
+button.lxchip.arg:hover { background: var(--hover); }
+button.lxchip.cmd .lxtag { color: var(--accent-ink); }
+button.lxchip.opt .lxtag { color: var(--accent-text); }
+button.lxchip.arg .lxtag { color: var(--ink-2); }
+button.lxchip .lxtag.ok { color: var(--good); }
+button.lxchip.cmd .lxtag.ok { color: var(--accent-ink); }
+button.lxchip .lxtag.no { color: var(--bad); }
+button.lxchip.cmd .lxtag.no { color: var(--accent-ink); }
+.lxpager { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.lxpager .lxpnum { color: var(--muted); font-variant-numeric: tabular-nums; }
+.lxsorts { display: block; }
+.lxsort { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 4px 0; border-top: 1px solid var(--line); }
 .lxsort:first-child { border-top: 0; }
-.lxsort .lxname { grid-column: 1; grid-row: 1; min-height: var(--tap); display: inline-flex; align-items: center; }
-.lxsort select { grid-column: 2; grid-row: 1; width: 100%; }
-.lxsort .lxmark { grid-column: 2; grid-row: 2; }
-.lxmark { display: inline-flex; align-items: center; gap: 4px; min-height: 1.25em; font: 700 var(--fs-xs) var(--ui); color: var(--muted); }
+.lxname { font: 500 var(--fs-body)/1.2 var(--mono); color: var(--ink); min-height: var(--tap); display: inline-flex; align-items: center; white-space: nowrap; }
+.lxbin { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--sunk); }
+.lxbin button { min-height: var(--tap); min-width: var(--tap); padding: 0 .7rem; border: 0; border-radius: 0; background: transparent; color: var(--muted);
+  font-size: var(--fs-sm); box-shadow: none; }
+.lxbin button:first-child { border-radius: calc(var(--r-sm) - 1px) 0 0 calc(var(--r-sm) - 1px); }
+.lxbin button:last-child { border-radius: 0 calc(var(--r-sm) - 1px) calc(var(--r-sm) - 1px) 0; }
+.lxbin button + button { box-shadow: inset 1px 0 0 var(--line); }
+.lxbin button.on { background: var(--surface); color: var(--ink); }
+.lxbin button:hover { background: var(--hover); }
+.lxbin button.on:hover { background: var(--surface); }
+.lxbin button:focus-visible { outline-offset: -2px; z-index: 1; }
+.lxmark { grid-column: 2; grid-row: 2; justify-self: end; display: inline-flex; align-items: center; gap: 4px; min-height: 1.25em; font: 700 var(--fs-xs) var(--ui); color: var(--muted); }
 .lxmark.ok { color: var(--good); } .lxmark.no { color: var(--bad); }
 .lxmark svg.i { width: 14px; height: 14px; }
 .lxresult p { margin: 0; }
-@media (min-width: 700px) {
-  .lxsort { grid-template-columns: 7rem minmax(10rem, 16rem) auto; }
-  .lxsort .lxmark { grid-column: 3; grid-row: 1; }
+@media (min-width: 900px) {
+  .lxsorts { display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; align-items: start; }
+  .lxsort:nth-child(2) { border-top: 0; }
 }

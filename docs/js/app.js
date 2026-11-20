@@ -475,7 +475,9 @@
     const wait = est ? "" : estimateWait(pp);
     const text = est ? "Estimated " + est.mean + "%, " + gapValueText(est.mean, T) + ", likely " + est.low + " to " + est.high : wait;
     const note = est ? "Likely " + est.low + "–" + est.high + "% · from " + plural(pp.seen, "fresh answer") : wait;
-    return `<section class="score-block"><div class="score-slot"><div class="score-fit"><div class="score-top">${name}${gap}${aside}</div>${termBar(est ? est.mean : null, T, text)}<p class="small muted band-note">${esc(note)}</p></div></div></section>`;
+    // Pass chance is a sibling of the score, so a narrow card can put it on its own row. Today and Exam have no aside.
+    const head = aside ? name + gap + aside : `<div class="score-top">${name}${gap}</div>`;
+    return `<section class="score-block"><div class="score-slot"><div class="score-fit">${head}${termBar(est ? est.mean : null, T, text)}<p class="small muted band-note">${esc(note)}</p></div></div></section>`;
   }
   function renderToday() {
     const sk = C.streak(st.days, st.settings.goal), pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80;

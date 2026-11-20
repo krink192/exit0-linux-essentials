@@ -1079,6 +1079,36 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
 .score-pct { font-family: var(--ui); font-size: var(--fs-num); font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .score-gap { margin: 2px 0 0 auto; font-family: var(--ui); font-size: var(--fs-sm); line-height: 1.3; color: var(--ink); white-space: nowrap; }
 .band-note { margin: 0; font-family: var(--ui); }
+/* Progress only (it passes the pass-chance figure). Wide: the figure stays on the top row, at the right.
+   Under 560px of this slot — the card's inner width — the figure moves to its own row under the estimate,
+   and the top row is the score and the points phrase, the same arrangement as Today. */
+.score-fit:has(.hero-fig) {
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) max-content max-content;
+  gap: 8px 16px;
+  align-items: start;
+  width: max-content;
+  max-width: 100%;
+}
+.score-fit:has(.hero-fig) .score-name { grid-column: 1; grid-row: 1; min-width: max-content; }
+.score-fit:has(.hero-fig) .score-gap { grid-column: 2; grid-row: 1; margin: 2px 0 0; min-width: max-content; }
+.score-fit:has(.hero-fig) .hero-fig { grid-column: 3; grid-row: 1; }
+.score-fit:has(.hero-fig) .termbar { grid-column: 1 / -1; grid-row: 2; }
+.score-fit:has(.hero-fig) .band-note { grid-column: 1 / -1; grid-row: 3; }
+@container score (max-width: 560px) {
+  .score-fit:has(.hero-fig) { grid-template-columns: minmax(min-content, 1fr) max-content; }
+  .score-fit:has(.hero-fig) .hero-fig {
+    grid-column: 1 / -1;
+    grid-row: 4;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+    text-align: start;
+    gap: 12px;
+  }
+  .score-fit:has(.hero-fig) .hero-fig .small,
+  .score-fit:has(.hero-fig) .hero-fig .score-pct { white-space: nowrap; }
+}
 /* Monospace score bar. 50 cells (2% each) when the row is wide enough, otherwise 25 (4% each). Each cell is one character wide so the line never wraps. */
 .termbar { min-width: 0; font: 500 var(--fs-body)/1 var(--mono); font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
 .term-size { width: max-content; max-width: 100%; }

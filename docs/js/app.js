@@ -570,7 +570,7 @@
     const tips = last ? "" : `<div class="tips">
         <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
         <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
-        <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
+        <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back sooner.</span></div></div></div>`;
     shell("test", `${resumeBanner()}
       <section class="hero">
         <div class="page-head"><h1>Exam</h1>
@@ -894,7 +894,7 @@
     const q = query.trim().toLowerCase();
     const list = q ? pool.filter(c => (c.front + " " + c.back + " " + (c.ex || "")).toLowerCase().includes(q)) : pool;
     const nextN = Math.min(cardSize, ds.due + ds.fresh);
-    shell("cards", `<div class="page-head"><h1>Flashcards</h1><p class="lead">Every term in LPI's exam objectives. Cards you know come back less often, and cards you miss come back first.</p></div>
+    shell("cards", `<div class="page-head"><h1>Flashcards</h1><p class="lead">Every term in LPI's exam objectives. Cards you know come back less often, cards you miss come back later in the session, and new cards mix across every topic.</p></div>
       <div class="deck-tabs">${decks.map(([k, name, desc]) => { const s = C.deckStats(CARDS, st.cards, c => c.deck === k);
         return `<button class="deck ${deck === k ? "on" : ""}" data-deck="${k}"><span class="row spread"><span class="dn">${name}</span><span class="chip lv-${s.due ? "due" : "new"}">${s.due ? s.due + " due" : s.total + " cards"}</span></span>
           <span class="ds">${desc}</span><span class="stackbar"><i style="width:${100 * s.mastered / s.total}%"></i><i style="width:${100 * s.learning / s.total}%"></i></span>
@@ -922,7 +922,7 @@
   function renderCardSession() {
     if (cs.i >= cs.queue.length) {
       shell("cards", `<div class="card celebrate">${icon("trophy")}<h2>Session complete</h2>
-        <p class="muted">You knew ${cs.knew} of ${cs.done} cards. Cards you missed will come back first next time.</p>
+        <p class="muted">You knew ${cs.knew} of ${cs.done} cards. Cards you missed will come back soon.</p>
         <div class="u-jc row"><button class="primary" id="again">Study more</button><button id="back">Back to decks</button></div></div>`);
       $("#again").onclick = () => { cs = null; $("#cstart") || renderCards(); const b = $("#cstart"); if (b && !b.disabled) b.click(); };
       $("#back").onclick = () => { cs = null; renderCards(); };

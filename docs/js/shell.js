@@ -172,7 +172,7 @@
     }
     const sh = node(m, resolve(m, "/usr/bin/sh").ino); sh.cmd = "sh";
   }
-  function snapshotPaths(m) { const out = []; const walk = (path, ino) => { const n = node(m, ino); if (path !== "/") out.push(path); if (n.type === "dir" && !path.startsWith("/proc") && !path.startsWith("/dev")) for (const [k, c] of n.entries) walk((path === "/" ? "" : path) + "/" + k, c); }; walk("/", m.rootIno); return out.sort(cmpC); }
+  function snapshotPaths(m) { const out = []; const walk = (path, ino) => { const n = node(m, ino); if (path !== "/") out.push(path); if (n.type === "dir" && !path.startsWith("/proc") && !path.startsWith("/dev")) for (const [k, c] of n.entries) walk(childPath(path, k), c); }; walk("/", m.rootIno); return out.sort(cmpC); }
   function g(name, gid, members) { return { name, gid, members: members || [] }; }
   function u(name, uid, gid, comment, home, shell) { return { name, uid, gid, comment, home, shell }; }
 
@@ -198,6 +198,12 @@
   }
   const dirname = p => { const i = p.lastIndexOf("/"); return i <= 0 ? "/" : p.slice(0, i); };
   const basename = p => p === "/" ? "/" : p.replace(/\/+$/, "").split("/").pop();
+  /** Append a child to a directory path. `work/` + `q3` is `work/q3`, never `work//q3`. */
+  function childPath(dir, name) {
+    const child = String(name == null ? "" : name).replace(/^\/+/, "");
+    if (dir == null || dir === "" || dir === "/") return "/" + child;
+    return String(dir).replace(/\/+$/, "") + "/" + child;
+  }
 
   /** Resolve a path. Returns {ino, parent, name, path} or throws ShellError with an errno-style message. */
   function resolve(m, p, opts) {
@@ -539,12 +545,12 @@
       const seg = segs[si]; const next = [];
       for (const b of bases) {
         const dirPath = b === "" ? "." : b;
-        if (!/[*?[]/.test(seg)) { const p = b === "" ? seg : (b === "/" ? "/" : b + "/") + seg; if (tryResolve(m, p).ino != null) next.push(p); continue; }
+        if (!/[*?[]/.test(seg)) { const p = b === "" ? seg : childPath(b, seg); if (tryResolve(m, p).ino != null) next.push(p); continue; }
         const r = tryResolve(m, dirPath); if (r.ino == null) continue; const d = node(m, r.ino);
         if (d.type !== "dir" || !can(m, d, 4)) continue;
         const re = globToRe(seg);
         [...d.entries.keys()].filter(n => re.test(n) && (n[0] !== "." || seg[0] === ".")).sort(cmpC)
-          .forEach(n => next.push(b === "" ? n : (b === "/" ? "/" : b + "/") + n));
+          .forEach(n => next.push(b === "" ? n : childPath(b, n)));
       }
       bases = next;
     }
@@ -830,7 +836,7 @@
   function findInPath(m, name) {
     for (const dir of (m.env.PATH || "").split(":")) {
       const d = dir === "" ? m.cwd : dir;
-      const p = (d === "/" ? "" : d.replace(/\/$/, "")) + "/" + name;
+      const p = childPath(d, name);
       const r = tryResolve(m, p); if (r.ino == null) continue;
       const n = node(m, r.ino); if (n.type === "file" && (n.mode & 0o111)) return { path: p.replace(/^\/\//, "/"), n };
     }
@@ -947,7 +953,7 @@
       if (m.aliases[a]) found.push(t ? "alias" : a + " is aliased to `" + m.aliases[a] + "'");
       if (KEYWORDS.has(a)) found.push(t ? "keyword" : a + " is a shell keyword");
       if (BUILTINS.has(a)) found.push(t ? "builtin" : a + " is a shell builtin");
-      if (all) { for (const dir of (m.env.PATH || "").split(":")) { const r = tryResolve(m, (dir.replace(/\/$/, "") || "") + "/" + a); if (r.ino != null && node(m, r.ino).type === "file" && (node(m, r.ino).mode & 0o111)) found.push(t ? "file" : a + " is " + dir.replace(/\/$/, "") + "/" + a); } }
+      if (all) { for (const dir of (m.env.PATH || "").split(":")) { const where = childPath(dir || m.cwd, a); const r = tryResolve(m, where); if (r.ino != null && node(m, r.ino).type === "file" && (node(m, r.ino).mode & 0o111)) found.push(t ? "file" : a + " is " + where); } }
       else if (!found.length) { const hit = findInPath(m, a); if (hit) found.push(t ? "file" : a + " is " + hit.path); }
       if (!found.length) { if (!t) io.err("bash: type: " + a + ": not found\n"); code = 1; continue; }
       io.out((all ? found : found.slice(0, 1)).join("\n") + "\n");
@@ -1132,11 +1138,11 @@
     const listDir = (t, n, label, recurse) => {
       if (!can(m, n, 4)) { io.err("ls: cannot open directory " + q(t) + ": Permission denied\n"); code = 2; return; }
       let entries = [...n.entries.entries()].filter(([k]) => f.a || f.A || k[0] !== ".").map(([k, ino]) => [k, node(m, ino)]);
-      if (f.a) { const up = tryResolve(m, (t === "/" ? "" : t.replace(/\/$/, "")) + "/.."); entries = [[".", n], ["..", up.ino != null ? node(m, up.ino) : n]].concat(entries); }
+      if (f.a) { const up = tryResolve(m, childPath(t, "..")); entries = [[".", n], ["..", up.ino != null ? node(m, up.ino) : n]].concat(entries); }
       sortEntries(entries);
       if (label) out += (out ? "\n" : "") + t + ":\n";
       out += fmt(entries, true);
-      if (recurse) entries.filter(([k, c]) => c.type === "dir" && k !== "." && k !== "..").forEach(([k, c]) => listDir((t === "/" ? "" : t) + "/" + k, c, true, true));
+      if (recurse) entries.filter(([k, c]) => c.type === "dir" && k !== "." && k !== "..").forEach(([k, c]) => listDir(childPath(t, k), c, true, true));
     };
     sortEntries(dirs).forEach(([t, n]) => listDir(t, n, f.R || dirs.length + files.length > 1, f.R));
     io.out(out); return code;
@@ -1254,7 +1260,7 @@
       const sn = node(m, sr.ino);
       if (sn.type === "dir" && !rec) { io.err("cp: -r not specified; omitting directory " + q(s) + "\n"); code = 1; continue; }
       if (!readable(m, sr.ino)) { io.err("cp: cannot open " + q(s) + " for reading: Permission denied\n"); code = 1; continue; }
-      const target = destIsDir ? (dest.replace(/\/$/, "") || "") + "/" + basename(s) : dest;
+      const target = destIsDir ? childPath(dest, basename(s)) : dest;
       if (!destIsDir && dest.endsWith("/")) { io.err("cp: cannot create regular file " + q(dest) + ": Not a directory\n"); code = 1; continue; }
       let tr;
       try { tr = resolve(m, target); } catch (e) { io.err("cp: cannot create regular file " + q(target) + ": " + e.message + "\n"); code = 1; continue; }
@@ -1267,7 +1273,7 @@
         if (f.u && tn.mtime >= sn.mtime && sn.type !== "dir") continue;
         if (f.i && sn.type !== "dir" && !ask(io, "cp: overwrite " + q(target) + "? ")) continue;
         if (tn.type === "file" && sn.type === "file") { if (!can(m, tn, 2)) { io.err("cp: cannot create regular file " + q(target) + ": Permission denied\n"); code = 1; continue; } tn.data = sn.data; tn.blob = sn.blob ? JSON.parse(JSON.stringify(sn.blob)) : null; tn.mtime = f.p || f.a ? sn.mtime : m.now; if (f.p || f.a) tn.mode = sn.mode; if (f.v) io.out(q(s) + " -> " + q(target) + "\n"); continue; }
-        if (tn.type === "dir" && sn.type === "dir") { for (const [k, child] of sn.entries) { const res = CMDS.cp(m, ["-r" + (f.a ? "a" : ""), (s.replace(/\/$/, "")) + "/" + k, target], io); if (res) code = res; } continue; }
+        if (tn.type === "dir" && sn.type === "dir") { for (const [k, child] of sn.entries) { const res = CMDS.cp(m, ["-r" + (f.a ? "a" : ""), childPath(s, k), target], io); if (res) code = res; } continue; }
       }
       if (!can(m, pd, 3)) { io.err("cp: cannot create " + (sn.type === "dir" ? "directory " : "regular file ") + q(target) + ": Permission denied\n"); code = 1; continue; }
       const c = cloneTree(m, sr.ino, !!(f.a || f.p)); pd.entries.set(tr.name, c); if (node(m, c).type === "dir") pd.nlink++;
@@ -1287,7 +1293,7 @@
       const sr = tryResolve(m, s, { follow: false });
       if (sr.ino == null) { io.err("mv: cannot stat " + q(s) + ": No such file or directory\n"); code = 1; continue; }
       const sp = node(m, sr.parent); const sn = node(m, sr.ino);
-      const target = destIsDir ? dest.replace(/\/$/, "") + "/" + basename(s) : dest;
+      const target = destIsDir ? childPath(dest, basename(s)) : dest;
       let tr; try { tr = resolve(m, target, { follow: false }); } catch (e) { io.err("mv: cannot move " + q(s) + " to " + q(target) + ": " + e.message + "\n"); code = 1; continue; }
       if (tr.ino === sr.ino) continue;
       const tp = node(m, tr.parent);
@@ -1320,12 +1326,12 @@
       const n = node(m, r.ino); const d = node(m, r.parent);
       if (n.type === "dir" && !rec && !(f.d && !n.entries.size)) { io.err("rm: cannot remove " + q(p) + ": Is a directory\n"); code = 1; continue; }
       if (!canDelete(m, d, n)) { io.err("rm: cannot remove " + q(p) + ": " + (d.mode & 0o1000 && can(m, d, 3) ? "Operation not permitted" : "Permission denied") + "\n"); code = 1; continue; }
-      if (n.type === "dir") { const bad = findUndeletable(m, r.ino); if (bad) { io.err("rm: cannot remove " + q(p + "/" + bad) + ": Permission denied\n"); code = 1; continue; } }
+      if (n.type === "dir") { const bad = findUndeletable(m, r.ino); if (bad) { io.err("rm: cannot remove " + q(childPath(p, bad)) + ": Permission denied\n"); code = 1; continue; } }
       if (f.i && !f.f) {
         if (n.type === "dir") {      // rm -ri asks about each entry, then the directory itself
           let keepAll = false; const walk = (path, ino) => { const nn = node(m, ino); let keep = false;
-            for (const [k, c] of [...nn.entries]) { const cn = node(m, c); if (cn.type === "dir") { if (!ask(io, "rm: descend into directory " + q(path + "/" + k) + "? ")) { keep = true; continue; } if (walk(path + "/" + k, c)) { keep = true; continue; } }
-              if (ask(io, "rm: remove " + kindName(cn, m) + " " + q(path + "/" + k) + "? ")) { nn.entries.delete(k); if (cn.type === "dir") nn.nlink--; removeTree(m, c); if (f.v) io.out("removed " + q(path + "/" + k) + "\n"); } else keep = true; }
+            for (const [k, c] of [...nn.entries]) { const cn = node(m, c); if (cn.type === "dir") { if (!ask(io, "rm: descend into directory " + q(childPath(path, k)) + "? ")) { keep = true; continue; } if (walk(childPath(path, k), c)) { keep = true; continue; } }
+              if (ask(io, "rm: remove " + kindName(cn, m) + " " + q(childPath(path, k)) + "? ")) { nn.entries.delete(k); if (cn.type === "dir") nn.nlink--; removeTree(m, c); if (f.v) io.out("removed " + q(childPath(path, k)) + "\n"); } else keep = true; }
             return keep; };
           if (!ask(io, "rm: descend into directory " + q(p) + "? ")) continue;
           keepAll = walk(p.replace(/\/$/, ""), r.ino);
@@ -1343,7 +1349,7 @@
     if (!rest.length) throw new ShellError("ln: missing file operand\nTry 'ln --help' for more information.", 1);
     const target = rest[0]; let name = rest[1] || basename(target);
     const dr = rest[1] ? tryResolve(m, rest[1]) : { ino: null };
-    if (dr.ino != null && node(m, dr.ino).type === "dir") name = rest[1].replace(/\/$/, "") + "/" + basename(target);
+    if (dr.ino != null && node(m, dr.ino).type === "dir") name = childPath(rest[1], basename(target));
     let r; try { r = resolve(m, name, { follow: false }); } catch (e) { throw new ShellError("ln: failed to create " + (f.s ? "symbolic" : "hard") + " link " + q(name) + ": " + e.message, 1); }
     if (r.ino != null) { if (!f.f) throw new ShellError("ln: failed to create " + (f.s ? "symbolic" : "hard") + " link " + q(name) + ": File exists", 1); const pd0 = node(m, r.parent); pd0.entries.delete(r.name); releaseInode(m, r.ino); }
     const pd = node(m, r.parent);
@@ -1374,13 +1380,13 @@
         const kids = [...n.entries.keys()].filter(k => f.a || k[0] !== ".").filter(k => !f.d || node(m, n.entries.get(k)).type === "dir").sort((x, y) => cmpC(x.toLowerCase().replace(/^\./, ""), y.toLowerCase().replace(/^\./, "")));
         kids.forEach((k, idx) => {
           const c = node(m, n.entries.get(k)); const last = idx === kids.length - 1;
-          const shown = (f.f ? path + "/" + k : k) + (f.F ? (c.type === "dir" ? "/" : c.type === "link" ? "@" : (c.mode & 0o111) ? "*" : "") : "") + (c.type === "link" ? " -> " + c.target : "");
+          const shown = (f.f ? childPath(path, k) : k) + (f.F ? (c.type === "dir" ? "/" : c.type === "link" ? "@" : (c.mode & 0o111) ? "*" : "") : "") + (c.type === "link" ? " -> " + c.target : "");
           io.out((f.i ? "" : prefix + (last ? "└── " : "├── ")) + shown + "\n");
-          if (c.type === "dir") { dirs++; if (f.L == null || depth + 1 < +f.L) walk(path + "/" + k, n.entries.get(k), prefix + (last ? "    " : "│   "), depth + 1); if (!can(m, c, 4)) io.out(prefix + (last ? "    " : "│   ") + "[error opening dir]\n"); }
+          if (c.type === "dir") { dirs++; if (f.L == null || depth + 1 < +f.L) walk(childPath(path, k), n.entries.get(k), prefix + (last ? "    " : "│   "), depth + 1); if (!can(m, c, 4)) io.out(prefix + (last ? "    " : "│   ") + "[error opening dir]\n"); }
           else files++;
         });
       };
-      walk(root.replace(/\/$/, ""), r.ino, "", 0);
+      walk(root.replace(/\/+$/, ""), r.ino, "", 0);
     }
     io.out("\n" + dirs + " director" + (dirs === 1 ? "y" : "ies") + (f.d ? "" : ", " + files + " file" + (files === 1 ? "" : "s")) + "\n");
   };
@@ -1395,7 +1401,7 @@
         const n = node(m, ino); let sum = blocks(n);
         if (n.type === "dir") {
           if (!can(m, n, 4) || !can(m, n, 1)) { io.err("du: cannot read directory " + q(path) + ": Permission denied\n"); code = 1; }
-          else for (const k of [...n.entries.keys()].sort(cmpC)) { const c = n.entries.get(k); const cn = node(m, c); const sub = cn.type === "dir" ? walk(path.replace(/\/$/, "") + "/" + k, c, depth + 1) : blocks(cn); if (cn.type !== "dir" && f.a && !f.s) show(sub, path.replace(/\/$/, "") + "/" + k); sum += sub; }
+          else for (const k of [...n.entries.keys()].sort(cmpC)) { const c = n.entries.get(k); const cn = node(m, c); const sub = cn.type === "dir" ? walk(childPath(path, k), c, depth + 1) : blocks(cn); if (cn.type !== "dir" && f.a && !f.s) show(sub, childPath(path, k)); sum += sub; }
         }
         if (!f.s && (n.type === "dir" || depth === 0) && (f.d == null || depth <= +f.d)) show(sum, path);
         return sum;
@@ -1454,7 +1460,7 @@
       if (tests.every(t => t(n, name))) io.out(path + "\n");
       if (n.type === "dir" && (tests.maxdepth == null || depth < tests.maxdepth)) {
         if (!can(m, n, 4) || !can(m, n, 1)) { io.err("find: " + q(path) + ": Permission denied\n"); code = 1; return; }
-        [...n.entries.keys()].sort(cmpC).forEach(k => walk((path === "/" ? "" : path.replace(/\/$/, "")) + "/" + k, n.entries.get(k), depth + 1));
+        [...n.entries.keys()].sort(cmpC).forEach(k => walk(childPath(path, k), n.entries.get(k), depth + 1));
       }
     };
     for (const s of starts) { const r = tryResolve(m, s, { follow: false }); if (r.ino == null) { io.err("find: " + q(s) + ": No such file or directory\n"); code = 1; continue; } walk(s, r.ino, 0); }
@@ -1642,7 +1648,7 @@
     if (pat == null) throw new ShellError("Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.", 2);
     const re = f.F ? new RegExp((f.w ? "\\b" : "") + pat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + (f.w ? "\\b" : ""), f.i ? "i" : "") : toRegex(pat, f.E, f.i, f.w); let files = rest; let any = false, code = 0;
     if ((f.r || f.R) && !files.length) files = ["."];
-    if (f.r || f.R) { const out = []; files.forEach(p => { const r = tryResolve(m, p); if (r.ino == null) return; const walk = (path, ino) => { const n = node(m, ino); if (n.type === "dir") [...n.entries.keys()].sort(cmpC).forEach(k => walk(path.replace(/\/$/, "") + "/" + k, n.entries.get(k))); else if (n.type === "file") out.push(path); }; walk(p, r.ino); }); files = out; }
+    if (f.r || f.R) { const out = []; files.forEach(p => { const r = tryResolve(m, p); if (r.ino == null) return; const walk = (path, ino) => { const n = node(m, ino); if (n.type === "dir") [...n.entries.keys()].sort(cmpC).forEach(k => walk(childPath(path, k), n.entries.get(k))); else if (n.type === "file") out.push(path); }; walk(p, r.ino); }); files = out; }
     const multi = files.length > 1 || f.r || f.R;
     const handle = (s, name) => {
       let n = 0; const all = lines(s); let lastShown = -1; const shown = new Set();
@@ -1690,7 +1696,7 @@
     for (const p of paths) {
       const r = tryResolve(m, p);
       if (r.ino == null) { io.err(prog + ": cannot access " + q(p) + ": No such file or directory\n"); code = 1; continue; }
-      const visit = (path, ino) => { const res = fn(path, node(m, ino)); if (res) code = res; const n = node(m, ino); if (recursive && n.type === "dir") for (const [k, c] of n.entries) { if (node(m, c).type !== "link") visit(path.replace(/\/$/, "") + "/" + k, c); } };
+      const visit = (path, ino) => { const res = fn(path, node(m, ino)); if (res) code = res; const n = node(m, ino); if (recursive && n.type === "dir") for (const [k, c] of n.entries) { if (node(m, c).type !== "link") visit(childPath(path, k), c); } };
       visit(p, r.ino);
     }
     return code;
@@ -1933,7 +1939,7 @@
     if (!can(m, n, 4)) { io.err("tar: " + path + ": Cannot open: Permission denied\n"); return; }
     out.push({ path: path + (n.type === "dir" ? "/" : ""), type: n.type, mode: n.mode, data: n.data, target: n.target, blob: n.blob });
     if (verbose) io.out(path + (n.type === "dir" ? "/" : "") + "\n");
-    if (n.type === "dir") [...n.entries.keys()].sort(cmpC).forEach(k => packTree(m, path + "/" + k, n.entries.get(k), out, verbose, io));
+    if (n.type === "dir") [...n.entries.keys()].sort(cmpC).forEach(k => packTree(m, childPath(path, k), n.entries.get(k), out, verbose, io));
   }
   function unwrap(blob) { const layers = []; while (blob && blob.kind !== "tar" && blob.kind !== "zip" && blob.inner) { layers.push(blob.kind); blob = blob.inner.blob; } return { layers, blob }; }
   CMDS.tar = (m, args, io) => {
@@ -1992,7 +1998,7 @@
       const path = e.path.replace(/\/$/, "");
       if (want.length && !want.some(w => wmatch(path, w))) continue;
       if (f.v) io.out(e.path + "\n");
-      const full = (base === "/" ? "" : base) + "/" + path;
+      const full = childPath(base, path);
       if (e.type === "dir") { const ino = mkdirPerm(m, full, io); if (ino) node(m, ino).mode = e.mode; continue; }
       mkdirPerm(m, dirname(full), io);
       const res = editorSave(m, full, e.data || ""); if (!res.ok) { io.err("tar: " + path + ": Cannot open: Permission denied\n"); continue; }
@@ -2021,7 +2027,7 @@
         let r; try { r = resolve(m, p); } catch (e) { io.err(prog + ": " + p + ": " + e.message + "\n"); return 1; }
         if (r.ino == null) { io.err(prog + ": " + p + ": No such file or directory\n"); return 1; }
         const n = node(m, r.ino);
-        if (n.type === "dir") { if (f.r) { let c2 = 0; for (const k of [...n.entries.keys()]) { const res = one(p.replace(/\/$/, "") + "/" + k); if (res) c2 = res; } return c2; } io.err(prog + ": " + p + " is a directory -- ignored\n"); return 2; }
+        if (n.type === "dir") { if (f.r) { let c2 = 0; for (const k of [...n.entries.keys()]) { const res = one(childPath(p, k)); if (res) c2 = res; } return c2; } io.err(prog + ": " + p + " is a directory -- ignored\n"); return 2; }
         if (!can(m, n, 4)) { io.err(prog + ": " + p + ": Permission denied\n"); return 1; }
         if (f.t) { if (!n.blob || n.blob.kind !== kind) { io.err(prog + ": " + p + ": not in " + kind + " format\n"); return 1; } return 0; }
         if (decomp) {
@@ -2062,8 +2068,8 @@
       const r = tryResolve(m, p); if (r.ino == null) { io.err("\tzip warning: name not matched: " + p + "\n"); continue; }
       const add = (path, ino) => { const n = node(m, ino); entries.push({ path: path + (n.type === "dir" ? "/" : ""), type: n.type, mode: n.mode, data: n.data, blob: n.blob });
         if (!f.q) io.out("  adding: " + path + (n.type === "dir" ? "/ (stored 0%)" : n.data && !f[0] ? " (deflated " + (f[9] ? 38 : f[1] ? 24 : 32) + "%)" : " (stored 0%)") + "\n");
-        if (n.type === "dir" && f.r) [...n.entries.keys()].sort(cmpC).forEach(k => add(path.replace(/\/$/, "") + "/" + k, n.entries.get(k))); };
-      add(p.replace(/\/$/, ""), r.ino);
+        if (n.type === "dir" && f.r) [...n.entries.keys()].sort(cmpC).forEach(k => add(childPath(path, k), n.entries.get(k))); };
+      add(p.replace(/\/+$/, ""), r.ino);
     }
     if (!entries.length) throw new ShellError("\nzip error: Nothing to do! (" + file + ")", 12);
     const res = editorSave(m, file, ""); if (!res.ok) throw new ShellError("zip I/O error: Permission denied\nzip error: Could not create output file (" + file + ")", 15);
@@ -2078,12 +2084,12 @@
     if (!f.q) io.out("Archive:  " + file + "\n");
     const base = f.d ? normPath(m, f.d) : m.cwd; const us = userById(m, m.uid);
     for (const e of n.blob.entries) {
-      const path = e.path.replace(/\/$/, ""); const full = (base === "/" ? "" : base) + "/" + path;
-      if (e.type === "dir") { mkdirPerm(m, full, io); if (!f.q) io.out("   creating: " + (f.d ? f.d.replace(/\/$/, "") + "/" : "") + e.path + "\n"); continue; }
+      const path = e.path.replace(/\/$/, ""); const full = childPath(base, path);
+      if (e.type === "dir") { mkdirPerm(m, full, io); if (!f.q) io.out("   creating: " + (f.d ? childPath(f.d, e.path) : e.path) + "\n"); continue; }
       mkdirPerm(m, dirname(full), io);
       const res = editorSave(m, full, e.data || ""); if (!res.ok) { io.err("error:  cannot create " + path + "\n        Permission denied\n"); continue; }
       const nn = node(m, resolve(m, full).ino); nn.mode = e.mode & 0o777; nn.blob = e.blob || null; nn.uid = us.uid; nn.gid = us.gid;
-      if (!f.q) io.out("  inflating: " + (f.d ? f.d.replace(/\/$/, "") + "/" : "") + path + "\n");
+      if (!f.q) io.out("  inflating: " + (f.d ? childPath(f.d, path) : path) + "\n");
     }
   };
 
@@ -2630,6 +2636,30 @@
   }
 
   // ================================================================ lab checks (declarative, so a real Linux backend could run them too)
+  /** A directory argument may carry a trailing slash. `/` itself stays. Flags and assignments stay. */
+  function stripArgSlashes(line) {
+    return String(line).split(/(\s+)/).map(tok => {
+      if (!tok || /^\s+$/.test(tok) || tok === "/" || tok.startsWith("-") || tok.includes("=") || !/\/+$/.test(tok)) return tok;
+      const bare = tok.replace(/\/+$/, "");
+      return bare || tok;
+    }).join("");
+  }
+  // A long `ls -l` line from this shell: optional inode, mode, links, owner, group, size, date, name.
+  const LS_LONG = /^(?:\d+\s+)?[-dlcb][r-][w-][xsS-][r-][w-][xsS-][r-][w-][xtT-]\s+\d+\s+\S+\s+\S+\s+\S+\s+[A-Z][a-z]{2}\s+\d+\s+(?:\d{2}:\d{2}|\d{4})\s+(.+)$/;
+  /** `work//q3` becomes `work/q3`. A slash after `:` (as in `http://`) is left alone. */
+  function normalizeSlashes(text) {
+    return String(text).replace(/([^:\s])\/{2,}/g, "$1/").replace(/([^:\s])\/+(?=\s|$)/gm, "$1");
+  }
+  function shortLs(text) {
+    return String(text).split("\n").filter(line => !/^total \S+$/.test(line)).map(line => {
+      const hit = line.match(LS_LONG);
+      return hit ? hit[1] : line;
+    }).join("\n");
+  }
+  function lastCommandIsLs(m) {
+    const h = m.history && m.history.length ? m.history[m.history.length - 1] : "";
+    return /(?:^|[;&|]\s*)(?:sudo\s+)?(?:ls|dir)\b/.test(h);
+  }
   function evalCheck(m, c) {
     const st = p => { const r = tryResolve(m, p, { follow: c.follow !== false && c.type !== "link" }); return r.ino == null ? null : node(m, r.ino); };
     switch (c.type) {
@@ -2641,7 +2671,12 @@
       case "contains": { const n = st(c.path); if (!n || n.type !== "file") return false; const text = contentOf(m, n); return c.regex ? new RegExp(c.regex, c.flags || "").test(text) : text.includes(c.text); }
       case "equals": { const n = st(c.path); return !!n && n.type === "file" && n.data === c.text; }
       case "lines": { const n = st(c.path); return !!n && n.type === "file" && lines(n.data).length === c.count; }
-      case "link": { const r = tryResolve(m, c.path, { follow: false }); if (r.ino == null) return false; const n = node(m, r.ino); return n.type === "link" && (!c.target || n.target === c.target); }
+      case "link": { const r = tryResolve(m, c.path, { follow: false }); if (r.ino == null) return false; const n = node(m, r.ino);
+        if (n.type !== "link") return false;
+        if (!c.target || n.target === c.target) return true;
+        const a = n.target.replace(/\/+$/, ""), b = String(c.target).replace(/\/+$/, "");
+        if (!a || a !== b) return false;                         // same directory, slash or not
+        const t = tryResolve(m, n.target); return t.ino != null && node(m, t.ino).type === "dir"; }
       case "hardlink": { const a = st(c.path), b = st(c.other); const own = tryResolve(m, c.path, { follow: false });   // a symlink to the file isn't a hard link
         return !!a && !!b && a === b && own.ino != null && node(m, own.ino).type !== "link"; }
       case "archive": { const n = st(c.path); if (!n || !n.blob) return false; const { layers, blob } = unwrap(n.blob); if (c.compression && layers[0] !== c.compression) return false; if (c.compression === null && layers.length) return false;
@@ -2663,8 +2698,9 @@
       case "sametime": { const a = st(c.path), b = st(c.other); return !!a && !!b && a.mtime === b.mtime; }
       case "nogroup": return !groupByName(m, c.name);
       case "whoami": return userById(m, m.realUid != null ? m.realUid : m.uid).name === c.name;
-      case "history": { const re = new RegExp(c.regex); return m.history.some(h => re.test(h)); }
-      case "last": return c.regex ? new RegExp(c.regex).test(m.lastOutput || "") : false;
+      case "history": { const re = new RegExp(c.regex); return m.history.some(h => re.test(h) || re.test(stripArgSlashes(h))); }
+      case "last": { if (!c.regex) return false; const re = new RegExp(c.regex); const out = m.lastOutput || ""; if (re.test(out)) return true;
+        let alt = normalizeSlashes(out); if (lastCommandIsLs(m)) alt = shortLs(alt); return alt !== out && re.test(alt); }
       case "script": { const r = tryResolve(m, c.path); if (r.ino == null) return false; const copy = structuredClone(m); if (m.realUid != null) copy.uid = m.realUid; const out = api(copy).exec(c.path + (c.args ? " " + c.args : ""), { noHistory: true }).out; const r2 = api(copy).m.last; if (c.code != null && r2 !== c.code) return false; return c.output != null ? out === c.output : c.regex ? new RegExp(c.regex).test(out) : true; }
       case "proc": return m.procs.some(p => (c.cmd == null || p.cmd === c.cmd || p.comm === c.cmd) && (c.user == null || p.user === c.user) && (c.stat == null || p.stat[0] === c.stat));
       case "noproc": return !m.procs.some(p => p.cmd === c.cmd || p.comm === c.cmd);

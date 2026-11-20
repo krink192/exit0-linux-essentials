@@ -69,6 +69,15 @@ const CASES = [
   `echo "a b" > f; cat -n f; cat -A f`, `mkdir d; cd d; cd ..; cd ~; pwd | grep -c work`,
   // misc builtins
   `type cd; type ls 2>/dev/null | grep -c ls; type nosuch; echo $?`, `GREETING=hi; export GREETING; bash -c 'echo $GREETING'`, `export A=1; unset A; echo "[$A]"`,
+  // a trailing slash stays on the first heading; later headings must not pick up a second slash
+  `mkdir -p work/q3/misc; touch work/top.txt work/q3/misc/x.txt; ls -R work/`,
+  `mkdir -p work/q3/misc; touch work/top.txt work/q3/misc/x.txt; ls -R work//`,
+  `mkdir -p work/q3/misc; touch work/top.txt work/q3/misc/x.txt; find work/ | sort`,
+  `mkdir -p work/q3/misc; echo x > work/q3/misc/x.txt; grep -r x work/`,
+  `mkdir -p work/q3/misc; echo x > work/q3/misc/x.txt; tar -cf t.tar work/; tar -tf t.tar | sort`,
+  `mkdir -p work/q3/misc; touch work/top.txt work/q3/misc/x.txt; du work/; du -sh work/`,
+  `mkdir -p src/sub; echo hi > src/sub/a; mkdir dest; cp -r src/ dest/; ls -R dest`,
+  `mkdir -p gone/sub; echo z > gone/sub/a; rm -r gone/; ls`,
 ];
 
 function both(script) {
@@ -229,6 +238,48 @@ u("name lookups need a nameserver in /etc/resolv.conf; /etc/hosts works without 
   assert.match(sh.exec("ping -c1 example.com").out, /Network is unreachable/);       // ...but nothing leaves without a default route
   sh.exec("sudo ip route add default via 192.168.1.1"); assert.match(sh.exec("ping -c1 example.com").out, /1 received/);
 });
+u("a trailing slash never doubles a path, and a directory link may carry one", () => {
+  const sh = S.createMachine();
+  sh.exec("mkdir -p work/q3/misc clients/2025/misc docs");
+  sh.exec("touch work/top.txt work/q3/misc/x.txt clients/2025/misc/a.txt");
+  sh.exec("echo hi > docs/a.txt");
+  const ls = sh.exec("ls -R work/", { tty: false }).out;
+  assert.ok(ls.startsWith("work/:\n"), ls);
+  assert.ok(ls.includes("\nwork/q3:\n"), ls);
+  assert.ok(ls.includes("\nwork/q3/misc:\n"), ls);
+  assert.ok(!ls.includes("//"), ls);
+  const dbl = sh.exec("ls -R work//", { tty: false }).out;
+  assert.ok(dbl.startsWith("work//:\n"), dbl);
+  assert.ok(dbl.includes("\nwork/q3:\n") && !dbl.includes("work//q3"), dbl);
+  const clients = sh.exec("ls -R clients/", { tty: false }).out;
+  assert.ok(clients.includes("\nclients/2025/misc:\n") && !clients.includes("//"), clients);
+  const found = sh.exec("find clients/", { tty: false }).out;
+  assert.ok(found.startsWith("clients/\n") && found.includes("clients/2025/misc\n") && !found.includes("//"), found);
+  const grepped = sh.exec("grep -r x docs/", { tty: false }).out;
+  assert.strictEqual(grepped, "");
+  sh.exec("echo x > docs/a.txt");
+  assert.strictEqual(sh.exec("grep -r x docs/", { tty: false }).out, "docs/a.txt:x\n");
+  assert.strictEqual(sh.exec("grep -r x docs//", { tty: false }).out, "docs/a.txt:x\n");
+  const usage = sh.exec("du work/", { tty: false }).out;
+  assert.ok(usage.includes("\twork/q3/misc\n") && usage.endsWith("\twork/\n") && !usage.includes("//"), usage);
+  sh.exec("tar -cf t.tar work/");
+  const listed = sh.exec("tar -tf t.tar", { tty: false }).out;
+  assert.ok(listed.includes("work/q3/misc/x.txt\n") && !listed.includes("//"), listed);
+  sh.exec("mkdir dest; cp -r work/ dest/; rm -r work/");
+  const copied = sh.exec("ls -R dest", { tty: false }).out;
+  assert.ok(copied.includes("dest/work/q3/misc:\n") && !copied.includes("//"), copied);
+  assert.strictEqual(sh.stat("/home/student/work"), null);
+  sh.exec("printf '%s\\n' '#!/bin/bash' 'for f in \"$1\"/*.txt; do cp \"$f\" \"$f.bak\"; done' > backup.sh; chmod +x backup.sh");
+  sh.exec("./backup.sh docs/");
+  assert.strictEqual(sh.stat("/home/student/docs/a.txt.bak").data, "x\n");
+  sh.exec("ln -s /var/log/ ~/logs");
+  assert.strictEqual(sh.check({ type: "link", path: "/home/student/logs", target: "/var/log" }), true);
+  sh.exec("echo x > notes.txt; ln -s notes.txt/ bad; ln -s missing/ dang");
+  assert.strictEqual(sh.check({ type: "link", path: "/home/student/bad", target: "notes.txt" }), false);
+  assert.strictEqual(sh.check({ type: "link", path: "/home/student/dang", target: "missing" }), false);
+  sh.exec("ls -ld /etc/");
+  assert.strictEqual(sh.check({ type: "history", regex: "^\\s*ls\\s+-ld\\s+/etc\\s*$" }), true);
+});
 console.log(`units: ${units} passed`);
 
 // ---- every lab: tasks start incomplete, each solution completes its task (typed line by line, like a learner),
@@ -298,4 +349,29 @@ for (const lab of window.LE_LABS) {
         assert.ok(!was.canComplete(x.check, x.solution), `${lab.id}: the correct line '${src}' wrongly flags task ${j + 1} as impossible`); }); } }
 }
 console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length} parts, ${labTasks} tasks, ${ways} other ways and ${mistakes} coaching tips verified`);
+// A trailing slash, or -l beside -R, still does the job. Following /bin with a slash does not.
+{
+  const labOf = id => window.LE_LABS.find(l => l.id === id);
+  const runUpTo = (lab, i, cmd) => {
+    const sh = S.createMachine({ setup: lab.setup });
+    lab.tasks.slice(0, i).forEach(p => runLines(sh, p.solution));
+    runLines(sh, cmd);
+    return sh;
+  };
+  const rec = labOf("2.2.1-d");
+  assert.ok(runUpTo(rec, 2, "ls -R ~/practice/").check(rec.tasks[2].check), "ls -R ~/practice/");
+  assert.ok(runUpTo(rec, 2, "ls -lR ~/practice").check(rec.tasks[2].check), "ls -lR ~/practice");
+  assert.ok(runUpTo(rec, 2, "ls -lR ~/practice/").check(rec.tasks[2].check), "ls -lR ~/practice/");
+  assert.ok(!runUpTo(rec, 2, "ls ~/practice/").check(rec.tasks[2].check), "ls without -R");
+  const space = labOf("2.3.2-c");
+  assert.ok(runUpTo(space, 1, "du -h ~/pics/").check(space.tasks[1].check), "du -h ~/pics/");
+  assert.ok(runUpTo(space, 2, "du -sh ~/pics/").check(space.tasks[2].check), "du -sh ~/pics/");
+  assert.ok(runUpTo(space, 3, "ls -lR ~/pics/").check(space.tasks[3].check), "ls -lR ~/pics/");
+  assert.ok(!runUpTo(space, 3, "ls ~/pics/").check(space.tasks[3].check), "ls ~/pics/ is not recursive");
+  const bin = labOf("4.3.1-a");
+  assert.ok(!runUpTo(bin, 3, "ls -ld /bin/").check(bin.tasks[3].check), "ls -ld /bin/ follows the link");
+  assert.ok(runUpTo(bin, 3, "ls -ld /bin").check(bin.tasks[3].check), "ls -ld /bin");
+  const ln = labOf("5.4.1-c");
+  assert.ok(runUpTo(ln, 4, "ln -s /var/log/ ~/logs\nls ~/logs/").check(ln.tasks[4].check), "ln -s /var/log/");
+}
 process.exit(fail ? 1 : 0);

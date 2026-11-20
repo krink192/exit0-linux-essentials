@@ -30,7 +30,7 @@ The pictures below are the real app with example progress filled in, so the scre
 
 ## You open it and don't know what to study
 
-Today puts one next step first, then the rest of the plan: daily review, the question of the day, a lab, and a full exam. The estimate is a likely range. It stays hidden until there are 40 first attempts, with at least 3 in every topic.
+Today puts one next step first, then the rest of the plan: daily review, the question of the day, a lab, and a full exam. The estimate is a likely range. It stays hidden until there are 40 fresh answers, with at least 3 in every topic.
 
 ![Today, next step first, then the plan](docs/img/readme/today.png)
 

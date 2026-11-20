@@ -21,7 +21,7 @@
   --ink: #2D3631; --ink-2: #3A443F; --muted: #56615A; --line: #E5E7E4; --line-2: #BEC5BF; --track: #D9DDD8; --bar-low: #8A948D; --field-line: #7F8A83;
   --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A; --om-tint: #E6F2EA;
   --warm: #96500D; --warm-soft: #FCEBDA;
-  --good: #14633A; --good-soft: #E6F2EA; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   /* Today's plan, drawn as a shell pipeline */
   --pipe-bg: #12281C; --pipe-ink: #FFFFFF; --pipe-dim: #A9C2B3; --pipe-hover: #1B3828;
@@ -33,6 +33,8 @@
   --shadow-pop: 0 1px 2px rgba(45, 54, 49, .06), 0 8px 24px rgba(45, 54, 49, .10);
   /* Hairline and the inset ring are for card and panel edges. Inputs and buttons keep --line-2 and --field-line (3:1). */
   --hairline: rgba(45, 54, 49, .11);
+  /* Overlays, and the ring on a scheme-picker dot. Dark mode lightens the ring so a dark dot still shows. */
+  --scrim: rgba(0, 0, 0, .45); --veil: rgba(0, 0, 0, .35); --edge: rgba(0, 0, 0, .22);
   --ring: inset 0 0 0 1px var(--hairline);
   --dur-fast: 150ms; --dur: 200ms; --dur-slow: 250ms;
   --ui: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -48,13 +50,14 @@
     --ink: #E7ECE8; --ink-2: #CBD3CE; --muted: #A3AEA7; --line: #2C3430; --line-2: #47524C; --track: #2A322E; --bar-low: #6F7B74; --field-line: #6F7B74;
     --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0; --om-tint: #244535;
     --warm: #F0A45C; --warm-soft: #3A2716;
-    --good: #6AD3A0; --good-soft: #16301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
     --on-solid: #06200F;
     --pipe-bg: #16291E; --pipe-hover: #1E3828; --pipe-next: #4CC38A; --pipe-next-ink: #06200F; --pipe-next-hover: #6AD3A0;
     --term-bg: #040605; --term-line: #46544C; --term-field: #101613; --term-field-line: #3A4840;
     --shadow: 0 1px 2px rgba(0,0,0,.35);
     --shadow-pop: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.35);
     --hairline: rgba(231, 236, 232, .10);
+    --edge: rgba(255, 255, 255, .28);
     color-scheme: dark;
   }
 }
@@ -63,13 +66,14 @@
   --ink: #E7ECE8; --ink-2: #CBD3CE; --muted: #A3AEA7; --line: #2C3430; --line-2: #47524C; --track: #2A322E; --bar-low: #6F7B74; --field-line: #6F7B74;
   --accent: #4CC38A; --accent-2: #6AD3A0; --accent-ink: #06200F; --accent-soft: #16301F; --accent-text: #6AD3A0; --om-tint: #244535;
   --warm: #F0A45C; --warm-soft: #3A2716;
-  --good: #6AD3A0; --good-soft: #16301F; --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F07D73; --bad-soft: #3B1C19; --flag: #E8A94C; --flag-soft: #382912;
   --on-solid: #06200F;
   --pipe-bg: #16291E; --pipe-hover: #1E3828; --pipe-next: #4CC38A; --pipe-next-ink: #06200F; --pipe-next-hover: #6AD3A0;
   --term-bg: #040605; --term-line: #46544C; --term-field: #101613; --term-field-line: #3A4840;
   --shadow: 0 1px 2px rgba(0,0,0,.35);
   --shadow-pop: 0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.35);
   --hairline: rgba(231, 236, 232, .10);
+  --edge: rgba(255, 255, 255, .28);
   color-scheme: dark;
 }
 
@@ -83,6 +87,7 @@
    and hairlines ease back. Dark mode is unchanged. In light mode the plan card uses that
    scheme's dark raised surface, and its done mark is the accent step that still clears 4.5:1
    on that card (Flexoki uses the lighter blue, because the button blue does not).
+   Success (--good) is the accent text, in every scheme: done, right, mastered and the streak.
    The prompt is two colours. The user keeps that palette's accent step. The path is a second swatch
    from the same palette, so it stays readable on the dark terminal:
    github: Primer green #7EE787 (was #79C0FF, the same as the user).
@@ -97,7 +102,7 @@
   --ink: #35383D; --ink-2: #30343A; --muted: #59636E; --line: #DBE1E6; --line-2: #818B98; --track: #E1E6EB; --bar-low: #656D76; --field-line: #818B98;
   --accent: #0969DA; --accent-2: #1D75DD; --accent-ink: #FFFFFF; --accent-soft: #E1EDFB; --accent-text: #0967D6; --om-tint: #E1EDFB;
   --warm: #B44900; --warm-soft: #F6E9E0;
-  --good: #197B35; --good-soft: #E3EFE7; --bad: #CB232E; --bad-soft: #F9E5E6; --flag: #916100; --flag-soft: #F2ECE0;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #CB232E; --bad-soft: #F9E5E6; --flag: #916100; --flag-soft: #F2ECE0;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #161B22; --pipe-ink: #E6EDF3; --pipe-dim: #9198A1; --pipe-hover: #21262D;
   --pipe-next: #E1EDFB; --pipe-next-ink: #0967D6; --pipe-next-hover: #FFFFFF; --pipe-done: #4493F8;
@@ -113,7 +118,7 @@
   --ink: #272624; --ink-2: #333231; --muted: #575653; --line: #E2DFD5; --line-2: #878580; --track: #DCDACF; --bar-low: #6F6E69; --field-line: #878580;
   --accent: #205EA6; --accent-2: #366EAF; --accent-ink: #FFFFFF; --accent-soft: #CED9E0; --accent-text: #205EA6; --om-tint: #CED9E0;
   --warm: #AD4B13; --warm-soft: #F5E7D5;
-  --good: #5B720A; --good-soft: #EBEBD4; --bad: #AF3029; --bad-soft: #EFD3C8; --flag: #856501; --flag-soft: #F0EAD3;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #AF3029; --bad-soft: #EFD3C8; --flag: #856501; --flag-soft: #F0EAD3;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #1C1B1A; --pipe-ink: #CECDC3; --pipe-dim: #9F9D96; --pipe-hover: #282726;
   --pipe-next: #C9D8EA; --pipe-next-ink: #205EA6; --pipe-next-hover: #FFFFFF; --pipe-done: #5B95C6;
@@ -129,7 +134,7 @@
   --ink: #52556E; --ink-2: #60637B; --muted: #60637B; --line: #D7DAE1; --line-2: #838699; --track: #CFD2D8; --bar-low: #6C6F85; --field-line: #838699;
   --accent: #1E66F5; --accent-2: #296EF6; --accent-ink: #FFFFFF; --accent-soft: #D2DEF5; --accent-text: #1A59D5; --om-tint: #D2DEF5;
   --warm: #A84207; --warm-soft: #E6DCD8;
-  --good: #2D701E; --good-soft: #D6E0D9; --bad: #BF0E34; --bad-soft: #E9D6DE; --flag: #8A5812; --flag-soft: #E3DFDA;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #BF0E34; --bad-soft: #E9D6DE; --flag: #8A5812; --flag-soft: #E3DFDA;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #181825; --pipe-ink: #CDD6F4; --pipe-dim: #A6ADC8; --pipe-hover: #313244;
   --pipe-next: #D0DFFD; --pipe-next-ink: #1A59D5; --pipe-next-hover: #FFFFFF; --pipe-done: #89B4FA;
@@ -145,7 +150,7 @@
   --ink: #3358B0; --ink-2: #4D5A8B; --muted: #545B7D; --line: #CFD2DF; --line-2: #6F7EB6; --track: #C8CBDA; --bar-low: #656D95; --field-line: #6F7EB6;
   --accent: #286DCC; --accent-2: #3576CF; --accent-ink: #FFFFFF; --accent-soft: #CBD6E8; --accent-text: #225CAA; --om-tint: #CBD6E8;
   --warm: #914B00; --warm-soft: #DED6D1;
-  --good: #4D6632; --good-soft: #D5D9D7; --bad: #A43838; --bad-soft: #E0D4D7; --flag: #745A33; --flag-soft: #DAD8D7;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #A43838; --bad-soft: #E0D4D7; --flag: #745A33; --flag-soft: #DAD8D7;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #24283B; --pipe-ink: #C0CAF5; --pipe-dim: #A9B1D6; --pipe-hover: #292E42;
   --pipe-next: #C5D8F1; --pipe-next-ink: #225CAA; --pipe-next-hover: #FFFFFF; --pipe-done: #7AA2F7;
@@ -161,7 +166,7 @@
   --ink: #353533; --ink-2: #2B2B2A; --muted: #6C664B; --line: #EBE5CF; --line-2: #7A745A; --track: #E9E4D3; --bar-low: #6C664B; --field-line: #7A745A;
   --accent: #644AC9; --accent-2: #745CCE; --accent-ink: #FFFFFF; --accent-soft: #E2D9E5; --accent-text: #644AC9; --om-tint: #E2D9E5;
   --warm: #A34D14; --warm-soft: #F1E1CB;
-  --good: #14710A; --good-soft: #D5E2C3; --bad: #BD3627; --bad-soft: #F7E3D3; --flag: #7C6714; --flag-soft: #EFE9D1;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #BD3627; --bad-soft: #F7E3D3; --flag: #7C6714; --flag-soft: #EFE9D1;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #282A36; --pipe-ink: #F8F8F2; --pipe-dim: #F8F8F2; --pipe-hover: #363948;
   --pipe-next: #DED9F4; --pipe-next-ink: #644AC9; --pipe-next-hover: #FFFFFF; --pipe-done: #BD93F9;
@@ -178,7 +183,7 @@
     --ink: #E6EDF3; --ink-2: #C9D1D9; --muted: #9198A1; --line: #30363D; --line-2: #6E7681; --track: #21262D; --bar-low: #6E7681; --field-line: #6E7681;
     --accent: #4493F8; --accent-2: #3D84DF; --accent-ink: #000000; --accent-soft: #1C2C40; --accent-text: #4493F8; --om-tint: #1C2C40;
     --warm: #DC702C; --warm-soft: #2E2523;
-    --good: #3FB950; --good-soft: #1F3F2D; --bad: #F85149; --bad-soft: #312127; --flag: #D29922; --flag-soft: #433922;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F85149; --bad-soft: #312127; --flag: #D29922; --flag-soft: #433922;
     --on-solid: #000000; --knob: #FFFFFF;
     --pipe-bg: #010409; --pipe-ink: #E6EDF3; --pipe-dim: #9198A1; --pipe-hover: #161B22;
     --pipe-next: #4493F8; --pipe-next-ink: #000000; --pipe-next-hover: #3D84DF; --pipe-done: #4493F8;
@@ -195,7 +200,7 @@
     --ink: #CECDC3; --ink-2: #B7B5AC; --muted: #9F9D96; --line: #343331; --line-2: #6F6E69; --track: #282726; --bar-low: #878580; --field-line: #6F6E69;
     --accent: #3E7AAF; --accent-2: #3E7AAF; --accent-ink: #FFFFFF; --accent-soft: #212A32; --accent-text: #5B95C6; --om-tint: #212A32;
     --warm: #DB7330; --warm-soft: #33261D;
-    --good: #879A39; --good-soft: #2A2C1E; --bad: #DA6F65; --bad-soft: #332523; --flag: #D0A215; --flag-soft: #493D19;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #DA6F65; --bad-soft: #332523; --flag: #D0A215; --flag-soft: #493D19;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #100F0F; --pipe-ink: #CECDC3; --pipe-dim: #9F9D96; --pipe-hover: #1C1B1A;
     --pipe-next: #3E7AAF; --pipe-next-ink: #FFFFFF; --pipe-next-hover: #3E7AAF; --pipe-done: #5B95C6;
@@ -212,7 +217,7 @@
     --ink: #CDD6F4; --ink-2: #BAC2DE; --muted: #A6ADC8; --line: #313244; --line-2: #6C7086; --track: #313244; --bar-low: #7F849C; --field-line: #6C7086;
     --accent: #89B4FA; --accent-2: #7BA2E1; --accent-ink: #000000; --accent-soft: #394563; --accent-text: #89B4FA; --om-tint: #394563;
     --warm: #FAB387; --warm-soft: #634B45;
-    --good: #A6E3A1; --good-soft: #4B6152; --bad: #F38BA8; --bad-soft: #533748; --flag: #F9E2AF; --flag-soft: #696157;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F38BA8; --bad-soft: #533748; --flag: #F9E2AF; --flag-soft: #696157;
     --on-solid: #000000; --knob: #000000;
     --pipe-bg: #11111B; --pipe-ink: #CDD6F4; --pipe-dim: #A6ADC8; --pipe-hover: #1E1E2E;
     --pipe-next: #89B4FA; --pipe-next-ink: #000000; --pipe-next-hover: #7BA2E1; --pipe-done: #89B4FA;
@@ -229,7 +234,7 @@
     --ink: #C0CAF5; --ink-2: #A9B1D6; --muted: #898FB1; --line: #3B4261; --line-2: #737AA2; --track: #292E42; --bar-low: #737AA2; --field-line: #737AA2;
     --accent: #7AA2F7; --accent-2: #6E92DE; --accent-ink: #000000; --accent-soft: #303955; --accent-text: #7AA2F7; --om-tint: #303955;
     --warm: #FF9E64; --warm-soft: #564344;
-    --good: #9ECE6A; --good-soft: #435247; --bad: #F7768E; --bad-soft: #3F3246; --flag: #E0AF68; --flag-soft: #4F4745;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F7768E; --bad-soft: #3F3246; --flag: #E0AF68; --flag-soft: #4F4745;
     --on-solid: #000000; --knob: #000000;
     --pipe-bg: #16161E; --pipe-ink: #C0CAF5; --pipe-dim: #A9B1D6; --pipe-hover: #1A1B26;
     --pipe-next: #7AA2F7; --pipe-next-ink: #000000; --pipe-next-hover: #6E92DE; --pipe-done: #7AA2F7;
@@ -246,7 +251,7 @@
     --ink: #F8F8F2; --ink-2: #F8F8F2; --muted: #8390B8; --line: #44475A; --line-2: #6272A4; --track: #44475A; --bar-low: #F8F8F2; --field-line: #6272A4;
     --accent: #BD93F9; --accent-2: #AA84E0; --accent-ink: #000000; --accent-soft: #3D3951; --accent-text: #BD93F9; --om-tint: #3D3951;
     --warm: #FFB86C; --warm-soft: #604F44;
-    --good: #50FA7B; --good-soft: #346A4B; --bad: #FF7474; --bad-soft: #42333D; --flag: #F1FA8C; --flag-soft: #6C7153;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #FF7474; --bad-soft: #42333D; --flag: #F1FA8C; --flag-soft: #6C7153;
     --on-solid: #000000; --knob: #000000;
     --pipe-bg: #21222C; --pipe-ink: #F8F8F2; --pipe-dim: #F8F8F2; --pipe-hover: #282A36;
     --pipe-next: #BD93F9; --pipe-next-ink: #000000; --pipe-next-hover: #AA84E0; --pipe-done: #BD93F9;
@@ -264,7 +269,7 @@
   --ink: #E6EDF3; --ink-2: #C9D1D9; --muted: #9198A1; --line: #30363D; --line-2: #6E7681; --track: #21262D; --bar-low: #6E7681; --field-line: #6E7681;
   --accent: #4493F8; --accent-2: #3D84DF; --accent-ink: #000000; --accent-soft: #1C2C40; --accent-text: #4493F8; --om-tint: #1C2C40;
   --warm: #DC702C; --warm-soft: #2E2523;
-  --good: #3FB950; --good-soft: #1F3F2D; --bad: #F85149; --bad-soft: #312127; --flag: #D29922; --flag-soft: #433922;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F85149; --bad-soft: #312127; --flag: #D29922; --flag-soft: #433922;
   --on-solid: #000000; --knob: #FFFFFF;
   --pipe-bg: #010409; --pipe-ink: #E6EDF3; --pipe-dim: #9198A1; --pipe-hover: #161B22;
   --pipe-next: #4493F8; --pipe-next-ink: #000000; --pipe-next-hover: #3D84DF; --pipe-done: #4493F8;
@@ -281,7 +286,7 @@
   --ink: #CECDC3; --ink-2: #B7B5AC; --muted: #9F9D96; --line: #343331; --line-2: #6F6E69; --track: #282726; --bar-low: #878580; --field-line: #6F6E69;
   --accent: #3E7AAF; --accent-2: #3E7AAF; --accent-ink: #FFFFFF; --accent-soft: #212A32; --accent-text: #5B95C6; --om-tint: #212A32;
   --warm: #DB7330; --warm-soft: #33261D;
-  --good: #879A39; --good-soft: #2A2C1E; --bad: #DA6F65; --bad-soft: #332523; --flag: #D0A215; --flag-soft: #493D19;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #DA6F65; --bad-soft: #332523; --flag: #D0A215; --flag-soft: #493D19;
   --on-solid: #FFFFFF; --knob: #FFFFFF;
   --pipe-bg: #100F0F; --pipe-ink: #CECDC3; --pipe-dim: #9F9D96; --pipe-hover: #1C1B1A;
   --pipe-next: #3E7AAF; --pipe-next-ink: #FFFFFF; --pipe-next-hover: #3E7AAF; --pipe-done: #5B95C6;
@@ -298,7 +303,7 @@
   --ink: #CDD6F4; --ink-2: #BAC2DE; --muted: #A6ADC8; --line: #313244; --line-2: #6C7086; --track: #313244; --bar-low: #7F849C; --field-line: #6C7086;
   --accent: #89B4FA; --accent-2: #7BA2E1; --accent-ink: #000000; --accent-soft: #394563; --accent-text: #89B4FA; --om-tint: #394563;
   --warm: #FAB387; --warm-soft: #634B45;
-  --good: #A6E3A1; --good-soft: #4B6152; --bad: #F38BA8; --bad-soft: #533748; --flag: #F9E2AF; --flag-soft: #696157;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F38BA8; --bad-soft: #533748; --flag: #F9E2AF; --flag-soft: #696157;
   --on-solid: #000000; --knob: #000000;
   --pipe-bg: #11111B; --pipe-ink: #CDD6F4; --pipe-dim: #A6ADC8; --pipe-hover: #1E1E2E;
   --pipe-next: #89B4FA; --pipe-next-ink: #000000; --pipe-next-hover: #7BA2E1; --pipe-done: #89B4FA;
@@ -315,7 +320,7 @@
   --ink: #C0CAF5; --ink-2: #A9B1D6; --muted: #898FB1; --line: #3B4261; --line-2: #737AA2; --track: #292E42; --bar-low: #737AA2; --field-line: #737AA2;
   --accent: #7AA2F7; --accent-2: #6E92DE; --accent-ink: #000000; --accent-soft: #303955; --accent-text: #7AA2F7; --om-tint: #303955;
   --warm: #FF9E64; --warm-soft: #564344;
-  --good: #9ECE6A; --good-soft: #435247; --bad: #F7768E; --bad-soft: #3F3246; --flag: #E0AF68; --flag-soft: #4F4745;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #F7768E; --bad-soft: #3F3246; --flag: #E0AF68; --flag-soft: #4F4745;
   --on-solid: #000000; --knob: #000000;
   --pipe-bg: #16161E; --pipe-ink: #C0CAF5; --pipe-dim: #A9B1D6; --pipe-hover: #1A1B26;
   --pipe-next: #7AA2F7; --pipe-next-ink: #000000; --pipe-next-hover: #6E92DE; --pipe-done: #7AA2F7;
@@ -332,7 +337,7 @@
   --ink: #F8F8F2; --ink-2: #F8F8F2; --muted: #8390B8; --line: #44475A; --line-2: #6272A4; --track: #44475A; --bar-low: #F8F8F2; --field-line: #6272A4;
   --accent: #BD93F9; --accent-2: #AA84E0; --accent-ink: #000000; --accent-soft: #3D3951; --accent-text: #BD93F9; --om-tint: #3D3951;
   --warm: #FFB86C; --warm-soft: #604F44;
-  --good: #50FA7B; --good-soft: #346A4B; --bad: #FF7474; --bad-soft: #42333D; --flag: #F1FA8C; --flag-soft: #6C7153;
+  --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #FF7474; --bad-soft: #42333D; --flag: #F1FA8C; --flag-soft: #6C7153;
   --on-solid: #000000; --knob: #000000;
   --pipe-bg: #21222C; --pipe-ink: #F8F8F2; --pipe-dim: #F8F8F2; --pipe-hover: #282A36;
   --pipe-next: #BD93F9; --pipe-next-ink: #000000; --pipe-next-hover: #AA84E0; --pipe-done: #BD93F9;
@@ -431,7 +436,7 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .today { color: inherit; text-decoration: none; background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--r); padding: 12px; display: flex; gap: 12px; align-items: center; }
 .today .t1 { font-weight: 700; font-size: var(--fs-body); display: flex; align-items: center; gap: 5px; }
 .today .t2 { font-size: var(--fs-xs); color: var(--muted); }
-.flame { color: var(--warm); }
+.flame { color: var(--good); }
 .flame.cold { color: var(--line-2); }
 .theme-row { display: flex; justify-content: space-between; align-items: center; padding: 0 4px; }
 .schemes { display: flex; flex-direction: column; gap: 8px; }
@@ -440,7 +445,7 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .swatch { width: 100%; justify-content: flex-start; gap: 10px; padding: 8px 12px; border-color: var(--field-line); text-align: left; white-space: nowrap; }
 .swatch.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .dots { display: flex; align-items: center; flex: none; }
-.dot { width: 14px; height: 14px; border-radius: 50%; margin-right: -4px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.22); }
+.dot { width: 14px; height: 14px; border-radius: 50%; margin-right: -4px; box-shadow: inset 0 0 0 1px var(--edge); }
 .dot:last-child { margin-right: 0; }
 .swatch[data-v="green"] .dot-bg { background: #ECEDEB; }
 .swatch[data-v="green"] .dot-surface { background: #F8F8F7; }
@@ -467,7 +472,6 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 .swatch[data-v="dracula"] .dot-ink { background: #353533; }
 .swatch[data-v="dracula"] .dot-accent { background: #644AC9; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .dot { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); }
   :root:not([data-theme="light"]) .swatch[data-v="green"] .dot-bg { background: #101412; }
   :root:not([data-theme="light"]) .swatch[data-v="green"] .dot-surface { background: #181D1A; }
   :root:not([data-theme="light"]) .swatch[data-v="green"] .dot-ink { background: #E7ECE8; }
@@ -493,7 +497,6 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
   :root:not([data-theme="light"]) .swatch[data-v="dracula"] .dot-ink { background: #F8F8F2; }
   :root:not([data-theme="light"]) .swatch[data-v="dracula"] .dot-accent { background: #BD93F9; }
 }
-:root[data-theme="dark"] .dot { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28); }
 :root[data-theme="dark"] .swatch[data-v="green"] .dot-bg { background: #101412; }
 :root[data-theme="dark"] .swatch[data-v="green"] .dot-surface { background: #181D1A; }
 :root[data-theme="dark"] .swatch[data-v="green"] .dot-ink { background: #E7ECE8; }
@@ -562,9 +565,9 @@ select { max-width: 100%; min-width: 0; min-height: var(--tap); font: 500 var(--
 
 /* chips / badges */
 .chip { display: inline-flex; align-items: center; gap: 6px; font: 600 var(--fs-xs)/1 var(--ui); padding: 5px 8px; border-radius: 999px; white-space: nowrap; }
-/* Mastery is a ladder of one green, each step visibly different and always labelled:
-   Not started (outline) - Attempted (grey) - Familiar/Learning (light green) - Proficient (mid green) - Mastered (solid green).
-   Needs work stays red: it is a warning. */
+/* Mastery is a ladder of the scheme accent, each step visibly different and always labelled:
+   Not started (outline) - Attempted (neutral) - Familiar/Learning (soft accent) - Proficient (mid accent) - Mastered (solid accent).
+   A miss stays the scheme's wrong colour (--bad), and it is always labelled. Command "Needs work" uses --warm. */
 .lv-new { background: transparent; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); }
 .lv-attempted { background: var(--sunk); color: var(--ink-2); }
 .lv-familiar, .lv-learning { background: var(--accent-soft); color: var(--accent-text); }
@@ -806,7 +809,7 @@ textarea { width: 100%; min-height: 140px; font: 400 var(--fs-sm)/1.5 var(--mono
 @media (max-width: 900px) {
   .shell { grid-template-columns: 1fr; }
   .side { position: fixed; z-index: 40; left: 0; top: 0; bottom: 0; width: 280px; transform: translateX(-100%); transition: transform var(--dur); height: 100%; }
-  .shell.open .side { transform: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35); }
+  .shell.open .side { transform: none; box-shadow: 0 0 0 100vmax var(--veil); }
   .top { display: flex; position: sticky; top: 0; z-index: 30; align-items: center; gap: 10px; padding: 6px 20px 6px 10px; background: var(--side);
     border-bottom: 1px solid var(--line); }
   .top .brand { padding: 0; font-size: var(--fs-body); }
@@ -915,12 +918,12 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #2D3631; --ink-2: #3A443F; --muted: #56615A; --line: #E5E7E4; --line-2: #BEC5BF; --track: #D9DDD8; --bar-low: #8A948D; --field-line: #7F8A83;
     --accent: #1B7F4B; --accent-2: #14633A; --accent-ink: #FFFFFF; --accent-soft: #E6F2EA; --accent-text: #14633A; --om-tint: #E6F2EA;
     --warm: #96500D; --warm-soft: #FCEBDA;
-    --good: #14633A; --good-soft: #E6F2EA; --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #B4352D; --bad-soft: #FAE3E1; --flag: #8A5200; --flag-soft: #FBEEDB;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --shadow: none; --shadow-pop: none; --hairline: rgba(45, 54, 49, .11);
     color-scheme: light;
   }
-  body { background: #fff; color: #2D3631; font-size: 11px; }
+  body { background: var(--bg); color: var(--ink); font-size: 11px; }
   .side, .top, .sheet-tools, .page-head, .toast, .bottomnav, .tabs { display: none !important; }
   .shell { display: block; } .main, .page { padding: 0 !important; max-width: none; }
   .sheet { break-after: page; gap: 8px; color: var(--ink); } .sheet:last-child { break-after: auto; }
@@ -939,7 +942,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #35383D; --ink-2: #30343A; --muted: #59636E; --line: #DBE1E6; --line-2: #818B98; --track: #E1E6EB; --bar-low: #656D76; --field-line: #818B98;
     --accent: #0969DA; --accent-2: #1D75DD; --accent-ink: #FFFFFF; --accent-soft: #E1EDFB; --accent-text: #0967D6; --om-tint: #E1EDFB;
     --warm: #B44900; --warm-soft: #F6E9E0;
-    --good: #197B35; --good-soft: #E3EFE7; --bad: #CB232E; --bad-soft: #F9E5E6; --flag: #916100; --flag-soft: #F2ECE0;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #CB232E; --bad-soft: #F9E5E6; --flag: #916100; --flag-soft: #F2ECE0;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #161B22; --pipe-ink: #E6EDF3; --pipe-dim: #9198A1; --pipe-hover: #21262D;
     --pipe-next: #E1EDFB; --pipe-next-ink: #0967D6; --pipe-next-hover: #FFFFFF; --pipe-done: #4493F8;
@@ -957,7 +960,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #272624; --ink-2: #333231; --muted: #575653; --line: #E2DFD5; --line-2: #878580; --track: #DCDACF; --bar-low: #6F6E69; --field-line: #878580;
     --accent: #205EA6; --accent-2: #366EAF; --accent-ink: #FFFFFF; --accent-soft: #CED9E0; --accent-text: #205EA6; --om-tint: #CED9E0;
     --warm: #AD4B13; --warm-soft: #F5E7D5;
-    --good: #5B720A; --good-soft: #EBEBD4; --bad: #AF3029; --bad-soft: #EFD3C8; --flag: #856501; --flag-soft: #F0EAD3;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #AF3029; --bad-soft: #EFD3C8; --flag: #856501; --flag-soft: #F0EAD3;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #1C1B1A; --pipe-ink: #CECDC3; --pipe-dim: #9F9D96; --pipe-hover: #282726;
     --pipe-next: #C9D8EA; --pipe-next-ink: #205EA6; --pipe-next-hover: #FFFFFF; --pipe-done: #5B95C6;
@@ -975,7 +978,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #52556E; --ink-2: #60637B; --muted: #60637B; --line: #D7DAE1; --line-2: #838699; --track: #CFD2D8; --bar-low: #6C6F85; --field-line: #838699;
     --accent: #1E66F5; --accent-2: #296EF6; --accent-ink: #FFFFFF; --accent-soft: #D2DEF5; --accent-text: #1A59D5; --om-tint: #D2DEF5;
     --warm: #A84207; --warm-soft: #E6DCD8;
-    --good: #2D701E; --good-soft: #D6E0D9; --bad: #BF0E34; --bad-soft: #E9D6DE; --flag: #8A5812; --flag-soft: #E3DFDA;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #BF0E34; --bad-soft: #E9D6DE; --flag: #8A5812; --flag-soft: #E3DFDA;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #181825; --pipe-ink: #CDD6F4; --pipe-dim: #A6ADC8; --pipe-hover: #313244;
     --pipe-next: #D0DFFD; --pipe-next-ink: #1A59D5; --pipe-next-hover: #FFFFFF; --pipe-done: #89B4FA;
@@ -993,7 +996,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #3358B0; --ink-2: #4D5A8B; --muted: #545B7D; --line: #CFD2DF; --line-2: #6F7EB6; --track: #C8CBDA; --bar-low: #656D95; --field-line: #6F7EB6;
     --accent: #286DCC; --accent-2: #3576CF; --accent-ink: #FFFFFF; --accent-soft: #CBD6E8; --accent-text: #225CAA; --om-tint: #CBD6E8;
     --warm: #914B00; --warm-soft: #DED6D1;
-    --good: #4D6632; --good-soft: #D5D9D7; --bad: #A43838; --bad-soft: #E0D4D7; --flag: #745A33; --flag-soft: #DAD8D7;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #A43838; --bad-soft: #E0D4D7; --flag: #745A33; --flag-soft: #DAD8D7;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #24283B; --pipe-ink: #C0CAF5; --pipe-dim: #A9B1D6; --pipe-hover: #292E42;
     --pipe-next: #C5D8F1; --pipe-next-ink: #225CAA; --pipe-next-hover: #FFFFFF; --pipe-done: #7AA2F7;
@@ -1011,7 +1014,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
     --ink: #353533; --ink-2: #2B2B2A; --muted: #6C664B; --line: #EBE5CF; --line-2: #7A745A; --track: #E9E4D3; --bar-low: #6C664B; --field-line: #7A745A;
     --accent: #644AC9; --accent-2: #745CCE; --accent-ink: #FFFFFF; --accent-soft: #E2D9E5; --accent-text: #644AC9; --om-tint: #E2D9E5;
     --warm: #A34D14; --warm-soft: #F1E1CB;
-    --good: #14710A; --good-soft: #D5E2C3; --bad: #BD3627; --bad-soft: #F7E3D3; --flag: #7C6714; --flag-soft: #EFE9D1;
+    --good: var(--accent-text); --good-soft: var(--accent-soft); --bad: #BD3627; --bad-soft: #F7E3D3; --flag: #7C6714; --flag-soft: #EFE9D1;
     --on-solid: #FFFFFF; --knob: #FFFFFF;
     --pipe-bg: #282A36; --pipe-ink: #F8F8F2; --pipe-dim: #F8F8F2; --pipe-hover: #363948;
     --pipe-next: #DED9F4; --pipe-next-ink: #644AC9; --pipe-next-hover: #FFFFFF; --pipe-done: #BD93F9;
@@ -1054,12 +1057,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .task.done { background: var(--surface); border-color: var(--line); }
 .task.done .grow > :first-child { color: var(--muted); }
 .tnum { width: 24px; height: 24px; border-radius: 50%; background: var(--sunk); display: grid; place-items: center; font: 700 var(--fs-xs) var(--ui); flex: none; }
-.task.done .tnum { background: var(--accent-text); color: var(--on-solid); } .task.done .tnum svg.i { width: 14px; height: 14px; stroke-width: 3; }
-/* Flexoki's dark accent text is too light for a white check. The solid chip uses the button pair, which clears 4.5:1. */
-@media (prefers-color-scheme: dark) {
-  :root[data-scheme="flexoki"]:not([data-theme="light"]) .task.done .tnum { background: var(--accent); color: var(--accent-ink); }
-}
-:root[data-scheme="flexoki"][data-theme="dark"] .task.done .tnum { background: var(--accent); color: var(--accent-ink); }
+.task.done .tnum { background: var(--accent); color: var(--accent-ink); } .task.done .tnum svg.i { width: 14px; height: 14px; stroke-width: 3; }
 .task.next .tnum { background: var(--accent); color: var(--accent-ink); }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--accent-text); font: 600 var(--fs-sm) var(--ui); display: inline-flex; gap: 4px; align-items: center; min-height: 0; }
 .linkbtn:hover { background: none; text-decoration: underline; } .linkbtn svg.i { width: 14px; height: 14px; }
@@ -1082,7 +1080,7 @@ code.exitcode { background: transparent !important; border: 0 !important; font-w
 .pager-bar .ghost { color: var(--term-ink); }
 @media (max-width: 600px) { .pager-bar #pgPrev, .pager-bar #pgNext { display: none; } .pager-find { flex: 1; width: auto; min-width: 6em; } .pager-bar > b { width: 100%; } .pager-bar .grow { display: none; } }
 .pager-status { color: var(--term-dim); border-top: 1px solid var(--term-line); padding-top: 6px; min-height: 1.4em; }
-.editor-wrap { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; display: grid; place-items: center; padding: 16px; }
+.editor-wrap { position: fixed; inset: 0; background: var(--scrim); z-index: 60; display: grid; place-items: center; padding: 16px; }
 .editor { width: min(820px, 100%); display: flex; flex-direction: column; gap: 10px; }
 .editor textarea { width: 100%; min-height: 50vh; font: var(--fs-sm)/1.5 var(--mono); background: var(--term-bg); color: var(--term-ink); border-radius: var(--r-sm); padding: 12px; border: 1px solid var(--term-line); resize: vertical; }
 @media (max-width: 900px) { .labwrap { grid-template-columns: 1fr; } .term { position: static; height: 60vh; } }
@@ -1429,11 +1427,11 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 @media (max-width: 900px) {
   .cpanel { display: none; }
   .cmdlayout.has-open .cpanel { display: block; position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 40; max-height: 82vh; border-radius: var(--r) var(--r) 0 0;
-    padding-bottom: calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px rgba(0,0,0,.35); }
+    padding-bottom: calc(20px + env(safe-area-inset-bottom)); box-shadow: 0 -12px 40px var(--veil); }
   .cselbar { position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); }
 }
 @media (min-width: 901px) { .cclose, .cbackdrop { display: none; } }
-.cbackdrop { position: fixed; inset: 0; z-index: 39; background: rgba(0,0,0,.45); border: 0; border-radius: 0; padding: 0; }
+.cbackdrop { position: fixed; inset: 0; z-index: 39; background: var(--scrim); border: 0; border-radius: 0; padding: 0; }
 @media (max-width: 560px) {
   .cquick { overflow-x: auto; grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); gap: 0; overflow: hidden; padding-bottom: 0; border: 1px solid var(--line); border-radius: var(--r); scroll-snap-type: none; }
   .cq { scroll-snap-align: start; }

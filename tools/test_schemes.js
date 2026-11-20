@@ -141,8 +141,15 @@ function blocks(mark) {
   return out;
 }
 function hexOf(toks) {
+  const raw = {};
+  for (const k of Object.keys(toks)) raw[k] = String(toks[k]).trim();
   const o = {};
-  for (const k of Object.keys(toks)) if (/^#[0-9A-F]{6}$/i.test(toks[k])) o[k] = toks[k].toUpperCase();
+  for (const k of Object.keys(raw)) {
+    let v = raw[k];
+    const ref = /^var\((--[\w-]+)\)$/.exec(v);
+    if (ref) v = raw[ref[1]] || "";
+    if (/^#[0-9A-F]{6}$/i.test(v)) o[k] = v.toUpperCase();
+  }
   return o;
 }
 function dump(o) { return Object.keys(o).sort().map(k => k + " " + o[k]).join("\n"); }
@@ -161,7 +168,7 @@ function pairs(t) {
     ["right on card", "--good", "--surface"], ["right on soft", "--good", "--good-soft"],
     ["wrong on card", "--bad", "--surface"], ["wrong on soft", "--bad", "--bad-soft"],
     ["flag on card", "--flag", "--surface"], ["flag on soft", "--flag", "--flag-soft"],
-    ["streak on card", "--warm", "--surface"], ["streak on soft", "--warm", "--warm-soft"],
+    ["needs-work on card", "--warm", "--surface"], ["needs-work on soft", "--warm", "--warm-soft"],
     ["terminal text", "--term-ink", "--term-bg"], ["terminal dim", "--term-dim", "--term-bg"],
     ["terminal user", "--term-user", "--term-bg"], ["terminal path", "--term-path", "--term-bg"],
     ["terminal text on field", "--term-ink", "--term-field"],
@@ -288,6 +295,152 @@ if (JSON.stringify(choiceIds) !== JSON.stringify(["green"].concat(IDS))) fail("p
 const html = fs.readFileSync(path.join(root, "docs/index.html"), "utf8");
 if (!html.includes('content="#ECEDEB"') || !html.includes('content="#111413"')) fail("Green browser chrome is not the light page and the unchanged dark chrome");
 if (!/GREEN_CHROME = \["#ECEDEB", "#111413"\]/.test(themeJs) || !/GREEN_CHROME = \["#ECEDEB", "#111413"\]/.test(appJs)) fail("Green chrome constants changed");
+
+// Success is the accent. --good is the success token (right answers, the streak, "Got it").
+// It has to be var(--accent-text), and --good-soft var(--accent-soft), so a scheme cannot keep a
+// green "right" that ignores the palette. A scheme that truly needs red/green meaning (a signal
+// the accent cannot carry) is named in DISTINCT_SUCCESS with a reason, and sets --good to a hex.
+// None do today.
+const DISTINCT_SUCCESS = new Set();
+function assertSuccess(name, raw) {
+  if (!raw) { fail(name + " success block missing"); return; }
+  if (DISTINCT_SUCCESS.has(name.split(" ")[0])) {
+    if (!/^#[0-9A-F]{6}$/i.test(raw["--good"] || "")) fail(name + " distinct success is not a hex");
+    return;
+  }
+  if (raw["--good"] !== "var(--accent-text)") fail(name + " --good is " + raw["--good"] + ", not the accent text");
+  if (raw["--good-soft"] !== "var(--accent-soft)") fail(name + " --good-soft is " + raw["--good-soft"] + ", not the accent soft");
+}
+assertSuccess("green light", tokensOf(braceAt(css.indexOf(":root {"))));
+assertSuccess("green dark", tokensOf(braceAt(css.indexOf(':root[data-theme="dark"]'))));
+assertSuccess("green dark media", tokensOf(braceAt(css.indexOf(':root:not([data-theme="light"])'))));
+assertSuccess("green print", tokensOf(braceAt(css.indexOf("Always print with the light tokens"))));
+for (const id of IDS) {
+  assertSuccess(id + " light", blocks("@scheme " + id + " light")[0]);
+  const darks = blocks("@scheme " + id + " dark");
+  assertSuccess(id + " dark", darks[0]);
+  assertSuccess(id + " dark copy", darks[1]);
+  assertSuccess(id + " print", blocks("@scheme " + id + " print")[0]);
+}
+const doneRules = css.split("\n").filter(l => /\.task\.done \.tnum \{/.test(l));
+if (doneRules.length !== 1 || !/^\.task\.done \.tnum \{ background: var\(--accent\); color: var\(--accent-ink\); \}/.test(doneRules[0].trim())) fail("done check is not the accent button pair for every scheme");
+if (!/\.flame \{ color: var\(--good\); \}/.test(css)) fail("streak colour is not the success token");
+
+// A literal colour outside a custom-property declaration has to be on this list. Each pattern is one
+// reason, and it matches the whole line so a new colour on another line still fails.
+// Scheme picker dots paint every palette at once, so they cannot be var(--bg). checkDots requires
+// each dot to equal that scheme's token.
+// Browser chrome is read before CSS (boot script and the theme-color metas). The checks above require
+// those values to match the page, except green's dark chrome, which stays #111413.
+// The tab icon is the product mark ($?), not a surface of the theme.
+// The manifest is the installed-app fallback before JS. It is asserted to match the light page.
+const ALLOW_LINE = [
+  /\.swatch\[data-v="[a-z]+"\] \.dot-(?:bg|surface|ink|accent) \{ background: #[0-9A-Fa-f]{6}; \}/,
+  /SCHEME_BG = \{/,
+  /GREEN_CHROME = \[/,
+  /name="theme-color"/,
+  /rel="icon"/,
+  /"background_color"/,
+  /"theme_color"/,
+];
+const NAMED_OK = new Set(["transparent", "currentcolor"]);
+const NAMED = new Set(("black silver gray grey white maroon red purple fuchsia magenta green lime olive yellow navy blue teal aqua cyan orange orangered gold pink brown tan beige ivory azure coral crimson tomato chocolate peru sienna wheat khaki lavender plum violet orchid indigo rebeccapurple chartreuse lawngreen limegreen forestgreen seagreen springgreen aquamarine turquoise skyblue dodgerblue royalblue midnightblue linen snow dimgray darkgray lightgray gainsboro whitesmoke").split(" "));
+function lineAt(text, index) { return text.slice(0, index).split("\n").length; }
+function allowed(fileLines, lineNo) {
+  const line = fileLines[lineNo - 1] || "";
+  return ALLOW_LINE.some(re => re.test(line));
+}
+function reportLiteral(file, text, index, colour) {
+  const n = lineAt(text, index);
+  if (allowed(text.split("\n"), n)) return;
+  fail(file + ":" + n + " literal colour " + colour.trim());
+}
+function scanValue(file, text, value, abs) {
+  const re = /#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b|rgba?\([^)]*\)|hsla?\([^)]*\)/gi;
+  let m;
+  while ((m = re.exec(value))) reportLiteral(file, text, abs + m.index, m[0]);
+  const named = /(?:^|[^A-Za-z-])([A-Za-z]+)(?![A-Za-z-])/g;
+  while ((m = named.exec(value))) {
+    const word = m[1].toLowerCase();
+    if (!NAMED.has(word) || NAMED_OK.has(word)) continue;
+    reportLiteral(file, text, abs + m.index + (m[0].length - m[1].length), m[1]);
+  }
+}
+function scanCss(file, src) {
+  const text = src.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, " "));
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "{") continue;
+    let j = i + 1, depth = 1, nested = false;
+    for (; j < text.length && depth; j++) {
+      if (text[j] === "{") { depth++; nested = true; }
+      else if (text[j] === "}") depth--;
+    }
+    if (nested) continue;
+    const body = text.slice(i + 1, j - 1);
+    const parts = body.split(";");
+    let offset = i + 1;
+    for (const decl of parts) {
+      const colon = decl.indexOf(":");
+      if (colon >= 0) {
+        const prop = decl.slice(0, colon).trim();
+        if (prop && !prop.startsWith("--") && !prop.startsWith("@")) scanValue(file, text, decl.slice(colon + 1), offset + colon + 1);
+      }
+      offset += decl.length + 1;
+    }
+  }
+}
+function stripCodeComments(src) {
+  let out = "", i = 0, mode = "code";
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (mode === "code") {
+      if (c === "/" && n === "/") { out += "  "; i += 2; mode = "line"; continue; }
+      if (c === "/" && n === "*") { out += "  "; i += 2; mode = "block"; continue; }
+      if (c === "<" && src.slice(i, i + 4) === "<!--") { out += "    "; i += 4; mode = "html"; continue; }
+      if (c === '"' || c === "'" || c === "`") { mode = c; out += c; i++; continue; }
+      out += c; i++; continue;
+    }
+    if (mode === "line") { if (c === "\n") { mode = "code"; out += "\n"; } else out += " "; i++; continue; }
+    if (mode === "block") {
+      if (c === "*" && n === "/") { mode = "code"; out += "  "; i += 2; continue; }
+      out += c === "\n" ? "\n" : " "; i++; continue;
+    }
+    if (mode === "html") {
+      if (src.slice(i, i + 3) === "-->") { mode = "code"; out += "   "; i += 3; continue; }
+      out += c === "\n" ? "\n" : " "; i++; continue;
+    }
+    out += c;
+    if (c === "\\") { if (n) out += n; i += n ? 2 : 1; continue; }
+    if (c === mode) mode = "code";
+    i++;
+  }
+  return out;
+}
+function scanText(file, src) {
+  const text = stripCodeComments(src);
+  const re = /#(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b|rgba?\([^)]*\)|hsla?\([^)]*\)|%23(?:[0-9A-Fa-f]{8}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b/gi;
+  let m;
+  while ((m = re.exec(text))) reportLiteral(file, text, m.index, m[0]);
+  const styleRe = /(?:style|fill|stroke)\s*=\s*("([^"]*)"|'([^']*)')/gi;
+  while ((m = styleRe.exec(text))) {
+    const value = m[2] != null ? m[2] : m[3];
+    const abs = m.index + m[0].indexOf(value);
+    scanValue(file, text, value, abs);
+  }
+}
+scanCss("docs/css/styles.css", css);
+for (const name of fs.readdirSync(path.join(root, "docs/js"))) {
+  if (!name.endsWith(".js")) continue;
+  const rel = "docs/js/" + name;
+  scanText(rel, fs.readFileSync(path.join(root, rel), "utf8"));
+}
+scanText("docs/index.html", html);
+const manifestPath = path.join(root, "docs/manifest.webmanifest");
+const manifestSrc = fs.readFileSync(manifestPath, "utf8");
+scanText("docs/manifest.webmanifest", manifestSrc);
+const manifest = JSON.parse(manifestSrc);
+if (String(manifest.background_color).toUpperCase() !== greenLight["--bg"]) fail("manifest background is not the light page");
+if (String(manifest.theme_color).toUpperCase() !== greenLight["--bg"]) fail("manifest theme colour is not the light page");
 
 if (failed) { console.error(failed + " scheme check(s) failed"); process.exit(1); }
 console.log("schemes ok: green, " + IDS.join(", ") + " (light and dark)");

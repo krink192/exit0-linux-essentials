@@ -275,7 +275,7 @@
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
-          <div><div class="t1">${sk.count ? icon("flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
+          <div><div class="t1">${sk.count ? icon("flame", "flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
             <div class="t2">${sk.metToday ? `Today's goal of ${st.settings.goal} done` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
             <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
@@ -296,7 +296,7 @@
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
-        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame") + sk.count : "Pick up where you left off"}</div></header>
+        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame", "flame") + sk.count : "Pick up where you left off"}</div></header>
       <main class="page${opts && opts.wide ? " wide" : ""}${opts && opts.cls ? " " + opts.cls : ""}" id="page">${tabs}${body}</main>
       <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
         return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;

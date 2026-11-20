@@ -838,7 +838,7 @@
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
       const hinted = !!(s.hints && s.hints[id]);
       if (!untimed) {
-        if (cold && !hinted) st.ev = ok ? 1 : 0;
+        if (cold && !hinted) { st.ev = ok ? 1 : 0; st.evAt = now; }   // evAt: when this evidence was given (sync keeps the newest)
         else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       } else if (st.ev == null) {
         // Block legacy coldFromHistory from treating this practice answer as readiness evidence.
@@ -1436,6 +1436,57 @@
     for (let i = 0; i < p.length; i++) for (let j = 0; j < q.length; j++) out[i + j] += p[i] * q[j];
     return out;
   }
+  /** Rebuild cold evidence (qstats ev) under the current COLD_DAYS by replaying the saved records that still hold their
+   *  answers, oldest first, with the same rules as recordResult (blanks skipped, hints and untimed exams not evidence,
+   *  "Don't know yet" a miss, a fact's wordings sharing one clock). Each rebuilt ev is stamped with evAt, the time of
+   *  the answer it came from, so sync keeps the newest evidence whatever order devices merge in (see mergeSched).
+   *  Answers in records without detail (older than the last KEEP_DETAIL) can't be replayed: they only bound when the
+   *  last unseen answer could have been, and a fact with nothing left to replay keeps its ev. Runs once per device:
+   *  state.evRule notes the rule it was built with. Returns { ran, rebuilt, changed, kept } (counts of facts). */
+  function rebuildEvidence(bank, state, force) {
+    const out = { ran: false, rebuilt: 0, changed: 0, kept: 0 };
+    if (!state || (!force && state.evRule === COLD_DAYS)) return out;
+    out.ran = true;
+    const qstats = state.qstats || {}, gap = COLD_DAYS * DAY_MS;
+    const tests = (state.tests || []).slice().sort((a, b) => ((a.date || 0) - (b.date || 0)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    let hiddenUpTo = null;          // date of the newest record whose answers are gone
+    const tries = {};               // family key -> answers in order
+    for (const t of tests) {
+      if (!t.qids) { hiddenUpTo = Math.max(hiddenUpTo || 0, t.date || 0); continue; }
+      const untimed = t.mode === "test" && !t.study && t.timed === false;
+      const hints = {}, dk = {};
+      for (const id of t.hints || []) hints[id] = 1;
+      if (t.mode === "placement") for (const id of t.dontKnow || []) dk[id] = 1;
+      for (const id of t.qids) {
+        const q = bank.byId[id], a = (t.answers || {})[id]; if (!q) continue;
+        if (!dk[id] && !answered(q, a)) continue;
+        const key = q.variantOf || q.id;
+        (tries[key] = tries[key] || []).push({ id, at: t.date || 0, ok: !dk[id] && isCorrect(q, a), counts: !untimed && !hints[id] });
+      }
+    }
+    for (const key in bank.family || {}) {
+      const fam = bank.family[key], list = tries[key] || [];
+      const seen = fam.reduce((n, f) => n + ((qstats[f] && qstats[f].seen) || 0), 0);
+      if (!list.length) { if (seen) out.kept++; continue; }
+      // Answers we can't see happened by hiddenUpTo (or, with no date at all, count the first answer we can see as a repeat).
+      let last = seen > list.length ? (hiddenUpTo != null ? hiddenUpTo : list[0].at) : null;
+      const found = {};
+      for (const a of list) {
+        if ((last == null || a.at - last >= gap) && a.counts) found[a.id] = { ev: a.ok ? 1 : 0, at: a.at };
+        last = a.at;
+      }
+      let any = false, diff = false;
+      for (const id in found) {
+        const s = qstats[id]; if (!s || !s.seen) continue;
+        any = true; if (s.ev !== found[id].ev) diff = true;
+        s.ev = found[id].ev; s.evAt = found[id].at;
+      }
+      if (any) out.rebuilt++; else if (seen) out.kept++;
+      if (diff) out.changed++;
+    }
+    state.evRule = COLD_DAYS;
+    return out;
+  }
   /** For progress saved before cold evidence was tracked: the first attempt when it can be known (seen once, always right,
    *  always wrong), otherwise the share of answers that were right. Dropping the mixed ones instead would keep exactly the
    *  questions that were never missed and push the estimate up. */
@@ -1711,6 +1762,11 @@
     if (!o) { map[id] = Object.assign({}, s); return; }
     const newer = (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && (s.box || 0) > (o.box || 0));
     const m = newer ? Object.assign({}, o, s) : Object.assign({}, s, o);
+    // Cold evidence: the copy with the newer evAt (when that evidence was given) wins, so a device whose ev predates a
+    // rebuild (no evAt) can't overwrite rebuilt evidence. Same evAt: the newer copy, as above; a full tie takes the lower ev.
+    const ea = o.evAt || 0, eb = s.evAt || 0;
+    if (ea !== eb) { const w = ea > eb ? o : s; m.ev = w.ev; m.evAt = w.evAt; }
+    else if ((s.at || 0) === (o.at || 0) && (s.box || 0) === (o.box || 0) && typeof o.ev === "number" && typeof s.ev === "number") m.ev = Math.min(o.ev, s.ev);
     m.seen = (o.seen || 0) + (s.seen || 0); m.right = (o.right || 0) + (s.right || 0);
     const cw = (o.cw || 0) + (s.cw || 0);
     if (cw || o.cw != null || s.cw != null) m.cw = cw; else delete m.cw;
@@ -1774,7 +1830,7 @@
         const s = view[key][id], o = (others[key] || {})[id];
         const seen = Math.max(0, (s.seen || 0) - (o ? o.seen || 0 : 0));
         const right = Math.max(0, Math.min(seen, (s.right || 0) - (o ? o.right || 0 : 0)));
-        const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last]) !== JSON.stringify([o.box, o.due, o.last]));
+        const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last, s.ev, s.evAt]) !== JSON.stringify([o.box, o.due, o.last, o.ev, o.evAt]));
         if (seen > 0 || newer) own[key][id] = Object.assign({}, s, { seen, right });
       }
     }
@@ -1843,7 +1899,7 @@
   }
   const SCHED = { seen: count, right: count, last: v => v === true || v === false ? v : null, at: numOr(undefined),
                   box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined,
-                  ev: v => v === 1 || v === 0 || v === -1 ? v : undefined,
+                  ev: v => v === 1 || v === 0 || v === -1 ? v : undefined, evAt: numOr(undefined),
                   conf: v => v === 1 || v === 0 ? v : undefined,
                   cw: count,
                   cdays: v => {
@@ -1913,7 +1969,8 @@
   function importState(state, d) {
     if (!isObj(d) || d.app !== "le010" || !Array.isArray(d.tests)) return null;
     const p = cleanDoc(d);
-    return migrate(Object.assign({}, state, { tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
+    // evRule is cleared so the imported progress gets its cold evidence rebuilt (rebuildEvidence).
+    return migrate(Object.assign({}, state, { evRule: undefined, tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
       labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
   }
 
@@ -1963,7 +2020,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN, missTyped, missChoice, closestAccepted,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

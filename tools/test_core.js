@@ -753,6 +753,78 @@ t("recording: first attempts and answers after a long gap are cold evidence; hin
   assert.strictEqual(run(q.answer, t0, true).ev, -1, "a hinted first attempt is not evidence");
   assert.strictEqual(C.coldOutcome(st.qstats[q.id]), -1);
 });
+// A learner like Jacob, saved under the old 30-day rule: every fact answered once on day 0 at 70%, then fixed exams A-F
+// on days 10-15 at 90%. Under the old rule the exams were repeats, so ev still holds the day-0 result and has no evAt.
+function jacobOld(t0, native) {
+  const day = 86400000, st = C.freshState();
+  const right = q => q.type === "fill" ? q.accept[0] : q.answer, wrong = q => q.type === "fill" ? "zzz" : [q.options.findIndex((_, i) => !q.answer.includes(i))];
+  const leads = bank.questions.filter(q => !q.variantOf).map(q => q.id);
+  for (let i = 0; i < leads.length; i += 40) {
+    const ids = leads.slice(i, i + 40), at = t0 + i * 60e3, s = C.newSession(bank, "study", "Study", ids, { study: true, now: at });
+    ids.forEach(id => { s.answers[id] = leads.indexOf(id) % 10 < 7 ? right(bank.byId[id]) : wrong(bank.byId[id]); });
+    C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+  }
+  const first = {}; for (const id in st.qstats) first[id] = st.qstats[id].ev;
+  "ABCDEF".split("").forEach((f, k) => {
+    const at = t0 + (10 + k) * day, s = C.buildTest(bank, {}, { form: f, seed: k + 1, now: at - 3000e3 });
+    s.qids.forEach((id, j) => { s.answers[id] = j % 10 === 0 ? wrong(bank.byId[id]) : right(bank.byId[id]); });
+    C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+  });
+  if (!native) for (const id in st.qstats) { st.qstats[id].ev = first[id]; delete st.qstats[id].evAt; }
+  return st;
+}
+const estMean = st => { const p = C.passPrediction(bank, st.qstats); return Math.round(100 * p.mean / p.total); };
+t("evidence rebuild: Jacob's exam repeats from 9-4 days ago become cold and the estimate rises; it runs once", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = jacobOld(t0);
+  const exam = st.tests.filter(x => x.form === "A")[0], id = exam.qids.find((x, j) => C.isCorrect(bank.byId[x], exam.answers[x]) && st.qstats[x].ev === 0);
+  assert(id, "an exam question first missed on day 0, right in the exam");
+  const before = estMean(st);
+  const r = C.rebuildEvidence(bank, st);
+  assert(r.ran && r.rebuilt === 400 && r.kept === 0, JSON.stringify(r));
+  assert(r.changed > 0);
+  assert.strictEqual(st.evRule, C.COLD_DAYS);
+  assert.strictEqual(st.qstats[id].ev, 1, "the exam answer, 10 days after the first, is cold"); assert.strictEqual(st.qstats[id].evAt, exam.date);
+  const after = estMean(st);
+  assert(after > before + 5, `estimate ${before} -> ${after}`);
+  // idempotent: once per device, and a forced re-run changes nothing
+  const snap = JSON.stringify(st.qstats);
+  assert.strictEqual(C.rebuildEvidence(bank, st).ran, false);
+  C.rebuildEvidence(bank, st, true); assert.strictEqual(JSON.stringify(st.qstats), snap);
+  // the rebuild gives exactly what recording under the 4-day rule gives
+  assert.deepStrictEqual(st.qstats, jacobOld(t0, true).qstats);
+  // imported progress is rebuilt again
+  assert.strictEqual(C.importState(st, C.exportDoc(st)).evRule, undefined);
+});
+t("evidence rebuild: answers in records without detail can't be replayed and keep their ev", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = C.freshState();
+  const single = bank.questions.filter(q => q.type === "single" && C.familyOf(bank, q.id).length === 1);
+  const [q1, q2, q3] = single, fill = single.slice(3, 33);
+  const run = (ids, at, ok) => { const s = C.newSession(bank, "study", "Study", ids, { study: true, now: at });
+    ids.forEach(id => { const q = bank.byId[id]; s.answers[id] = ok ? q.answer : [q.answer[0] === 0 ? 1 : 0]; }); C.recordResult(st, bank, s, C.grade(bank, s, at), at); };
+  run([q1.id, q2.id, q3.id], t0, false);                       // first attempts, all wrong: soon without detail
+  fill.forEach((q, i) => run([q.id], t0 + day + i * 1000, true));   // 30 more records push it out
+  run([q1.id], t0 + 3 * day, true);                            // 3 days after the hidden attempt: a repeat
+  run([q2.id], t0 + 6 * day, true);                            // 5+ days after the last hidden record: cold
+  assert(!st.tests[0].qids && !st.tests[2].qids && st.tests[3].qids, "the three oldest records lost their detail");
+  for (const q of [q1, q2, q3]) { st.qstats[q.id].ev = 0; delete st.qstats[q.id].evAt; }
+  const r = C.rebuildEvidence(bank, st);
+  assert.strictEqual(st.qstats[q1.id].ev, 0, "not 4 days after the newest record without detail: stays a repeat");
+  assert.strictEqual(st.qstats[q2.id].ev, 1, "4+ days after any hidden answer could have been: cold");
+  assert.strictEqual(st.qstats[q3.id].ev, 0); assert.strictEqual(st.qstats[q3.id].evAt, undefined, "nothing left to replay: kept as it was");
+  assert(r.kept >= 2, JSON.stringify(r));   // q1 and q3 (and the first filler, whose only answer lost its detail)
+});
+t("evidence rebuild: hinted answers and untimed exams are not evidence; Don't know yet is a miss", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = C.freshState();
+  const [a, b] = bank.questions.filter(q => q.type === "single" && C.familyOf(bank, q.id).length === 1);
+  let s = C.newSession(bank, "study", "Study", [a.id, b.id], { study: true, now: t0 });
+  s.answers[a.id] = a.answer; s.answers[b.id] = b.answer; s.hints[a.id] = 1; C.recordResult(st, bank, s, C.grade(bank, s, t0), t0);
+  s = C.newSession(bank, "placement", "Placement", [a.id, b.id], { now: t0 + 5 * day }); s.dontKnow = { [b.id]: true }; s.answers[a.id] = a.answer;
+  C.recordResult(st, bank, s, C.grade(bank, s, t0 + 5 * day), t0 + 5 * day);
+  const snap = JSON.stringify(st.qstats);
+  C.rebuildEvidence(bank, st, true);
+  assert.strictEqual(JSON.stringify(st.qstats), snap, "replay gives what recording gave");
+  assert.strictEqual(st.qstats[a.id].ev, 1); assert.strictEqual(st.qstats[b.id].ev, 0);
+});
 t("cold window is 4 days: day 3 is a repeat, day 4 is cold, and the latest cold result wins", () => {
   assert.strictEqual(C.COLD_DAYS, 4);
   const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();

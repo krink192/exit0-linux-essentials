@@ -236,6 +236,95 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     assert.strictEqual(a.st.settings.examDate, "2027-01-20"); assert.strictEqual(a.changes, was + 2);
   });
 
+  await t("merge: the newest evidence (evAt) wins in any order; an unstamped copy never replaces a stamped one", () => {
+    const stamped = { seen: 2, right: 2, last: true, at: 20, box: 2, ev: 1, evAt: 20 }, stale = { seen: 2, right: 1, last: true, at: 30, box: 1, ev: 0 };
+    for (const docs of [[stamped, stale], [stale, stamped]]) {
+      const m = C.mergeStates(docs.map(x => ({ qstats: { x } }))).qstats.x;
+      assert.deepStrictEqual([m.ev, m.evAt, m.at, m.seen], [1, 20, 30, 4], "stamped ev, newest schedule, counts add");
+    }
+    const later = { seen: 1, right: 0, last: false, at: 40, box: 0, ev: 0, evAt: 40 };
+    assert.strictEqual(C.mergeStates([{ qstats: { x: stamped } }, { qstats: { x: later } }]).qstats.x.ev, 0, "a later cold miss wins");
+    const same = { seen: 1, right: 1, last: true, at: 50, box: 1, ev: 1, evAt: 20 };   // an old app answered later and kept evAt
+    assert.strictEqual(C.mergeStates([{ qstats: { x: same } }, { qstats: { x: stamped } }]).qstats.x.at, 50);
+    const tieA = { seen: 1, at: 5, box: 1, ev: 1 }, tieB = { seen: 1, at: 5, box: 1, ev: 0 };
+    assert.deepStrictEqual(C.mergeStates([{ qstats: { x: tieA } }, { qstats: { x: tieB } }]), C.mergeStates([{ qstats: { x: tieB } }, { qstats: { x: tieA } }]));
+  });
+
+  // A learner like Jacob saved by the old 30-day app: all but 8 facts once on day 0 at 70%, fixed exams A-F on days 10-15 at 90%
+  // that the old rule called repeats (ev still from day 0, no evAt).
+  const jacobOld = () => {
+    const st = C.freshState(), day = 86400000;
+    const right = q => q.type === "fill" ? q.accept[0] : q.answer, wrong = q => q.type === "fill" ? "zzz" : [q.options.findIndex((_, i) => !q.answer.includes(i))];
+    let skip = 8; const leads = bank.questions.filter(q => !q.variantOf && ("ABCDEF".includes(q.form || "-") || skip-- <= 0)).map(q => q.id);
+    for (let i = 0; i < leads.length; i += 40) {
+      const ids = leads.slice(i, i + 40), at = T0 + i * 60e3, s = C.newSession(bank, "study", "Study", ids, { study: true, now: at });
+      ids.forEach(id => { s.answers[id] = leads.indexOf(id) % 10 < 7 ? right(bank.byId[id]) : wrong(bank.byId[id]); });
+      C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+    }
+    const first = {}; for (const id in st.qstats) first[id] = st.qstats[id].ev;
+    "ABCDEF".split("").forEach((f, k) => {
+      const at = T0 + (10 + k) * day, s = C.buildTest(bank, {}, { form: f, seed: k + 1, now: at - 3000e3 });
+      s.qids.forEach((id, j) => { s.answers[id] = j % 10 === 0 ? wrong(bank.byId[id]) : right(bank.byId[id]); });
+      C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+    });
+    for (const id in st.qstats) { st.qstats[id].ev = first[id]; delete st.qstats[id].evAt; }
+    return st;
+  };
+  const mean = st => { const p = C.passPrediction(bank, st.qstats); return Math.round(100 * p.mean / p.total); };
+  const evOf = st => JSON.stringify(canon(Object.keys(st.qstats).reduce((o, id) => (o[id] = [st.qstats[id].ev, st.qstats[id].evAt], o), {})));
+  // Two linked devices sharing Jacob's old progress; `order` says which one runs the evidence rebuild (updates) first.
+  const rebuildRun = async order => {
+    const srv = fakeServer(), laptop = device(srv, "Laptop"), phone = device(srv, "Phone");
+    laptop.st = jacobOld();
+    await laptop.sync.signIn(URL0, "jacob", "correct horse battery"); await phone.sync.signIn(URL0, "jacob", "correct horse battery");
+    const before = mean(phone.st);
+    for (const d of order === "laptop" ? [laptop, phone] : [phone, laptop]) { C.rebuildEvidence(bank, d.st); await d.sync.syncNow(); }
+    for (let i = 0; i < 2; i++) { await laptop.sync.syncNow(); await phone.sync.syncNow(); }
+    return { before, laptop, phone };
+  };
+
+  await t("evidence rebuild: two devices converge whichever updates first, and the estimate rises on both", async () => {
+    const a = await rebuildRun("laptop"), b = await rebuildRun("phone");
+    for (const r of [a, b]) {
+      assert.strictEqual(progressOf(r.laptop.st), progressOf(r.phone.st));
+      assert.strictEqual(evOf(r.laptop.st), evOf(r.phone.st));
+      assert(mean(r.phone.st) > r.before + 5, `estimate ${r.before} -> ${mean(r.phone.st)}`);
+    }
+    assert.strictEqual(evOf(a.laptop.st), evOf(b.laptop.st), "same evidence whichever device went first");
+    assert.deepStrictEqual(totals(a.laptop.st), totals(jacobOld()), "nothing double-counted");
+  });
+
+  await t("evidence rebuild: an old app can't overwrite rebuilt evidence, and its own first attempts still arrive", async () => {
+    const srv = fakeServer(), laptop = device(srv, "Laptop"), phone = device(srv, "Phone");
+    laptop.st = jacobOld();
+    await laptop.sync.signIn(URL0, "jacob", "correct horse battery"); await phone.sync.signIn(URL0, "jacob", "correct horse battery");
+    C.rebuildEvidence(bank, laptop.st); await laptop.sync.syncNow();   // the laptop updates; the phone still runs the old app
+    const rebuilt = mean(laptop.st);
+    // Offline, the old phone answers an exam question again (a repeat under its 30-day rule: ev untouched, no evAt) and a new one.
+    const exam = phone.st.tests.find(x => x.form === "A"), q = exam.qids.find(id => phone.st.qstats[id].ev === 0 && C.isCorrect(bank.byId[id], exam.answers[id]));
+    const fresh = Q.find(id => !C.familyOf(bank, id).some(f => phone.st.qstats[f]));
+    assert(fresh, "a fact the learner hasn't seen");
+    const at = T0 + 20 * 86400000, keep = phone.st.qstats[q].ev;
+    phone.answer([q], true, at); phone.st.qstats[q].ev = keep; delete phone.st.qstats[q].evAt;
+    phone.answer([fresh], true, at + 1); delete phone.st.qstats[fresh].evAt;
+    for (let i = 0; i < 2; i++) { await phone.sync.syncNow(); await laptop.sync.syncNow(); }
+    for (const d of [laptop, phone]) {
+      assert.strictEqual(d.st.qstats[q].ev, 1, "the rebuilt cold answer from the exam stands");
+      assert.strictEqual(d.st.qstats[q].at, at, "while the schedule follows the phone's later answer");
+      assert.strictEqual(d.st.qstats[fresh].ev, 1, "the old app's first attempt counts");
+    }
+    assert.strictEqual(progressOf(laptop.st), progressOf(phone.st));
+    assert(mean(phone.st) >= rebuilt, "the old phone sees the rebuilt estimate too");
+    // When the phone updates, its rebuild also picks up the answer its old rule called a repeat (10 days after the exam),
+    // stamps it, and both devices agree again.
+    C.rebuildEvidence(bank, phone.st); await phone.sync.syncNow(); await laptop.sync.syncNow(); await phone.sync.syncNow();
+    for (const d of [laptop, phone]) {
+      assert.deepStrictEqual([d.st.qstats[q].ev, d.st.qstats[q].evAt], [1, at]);
+      assert.deepStrictEqual([d.st.qstats[fresh].ev, d.st.qstats[fresh].evAt], [1, at + 1]);
+    }
+    assert.strictEqual(evOf(laptop.st), evOf(phone.st)); assert.strictEqual(progressOf(laptop.st), progressOf(phone.st));
+  });
+
   await t("revoked token: sync stops quietly and asks to sign in again", async () => {
     const srv = fakeServer(), a = device(srv, "A");
     await a.sync.signIn(URL0, "jacob", "correct horse battery");

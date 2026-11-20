@@ -950,9 +950,11 @@
     const c = cs.queue[cs.i];
     C.reviewCard(st.cards, c.id, knew, C.dayNum(), Date.now(), C.examDayNum(st));
     C.addActivity(st, 1); save();
-    if (cs.i + 1 >= cs.queue.length) celebrate();
     cs.done++; if (knew) cs.knew++;
-    cs.i++; cs.flipped = false; renderCardSession();
+    if (knew) cs.i++;
+    else { cs.again = cs.again || {}; cs.i = C.requeueMiss(cs.queue, cs.i, cs.again); }
+    if (cs.i >= cs.queue.length) celebrate();
+    cs.flipped = false; renderCardSession();
   }
 
   // ================================================================== EXAM GUIDE

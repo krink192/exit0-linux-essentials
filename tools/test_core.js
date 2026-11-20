@@ -592,6 +592,68 @@ t("flashcards: unique ids, both decks, Leitner scheduling", () => {
   assert.strictEqual(q2[0].id, q[1].id, "missed card comes back first");
   assert(!q2.some(c => c.id === q[0].id), "known card not due today");
 });
+t("new flashcards rotate across objectives, weakest first, in a seeded order", () => {
+  const today = 20000, seed = 7;
+  const deck = [{ id: "s-weak", obj: "2.1" }, { id: "s-strong", obj: "1.1" }];
+  for (const obj of ["1.1", "1.2", "2.1"]) for (let i = 0; i < 3; i++) deck.push({ id: obj + "-" + i, obj });
+  const cs = { "s-weak": { box: 1, seen: 2, right: 0, due: today + 4 }, "s-strong": { box: 2, seen: 2, right: 2, due: today + 4 } };
+  const q = C.cardQueue(deck, cs, null, today, 20, seed);
+  assert.deepStrictEqual(q.map(c => c.obj), ["2.1", "1.2", "1.1", "2.1", "1.2", "1.1", "2.1", "1.2", "1.1"]);
+  assert.ok(!q.some(c => c.id === "s-weak" || c.id === "s-strong"), "a card that is not due stays out");
+  const rand = C.rng(seed), g = {};
+  for (const obj of ["1.1", "1.2", "2.1"]) g[obj] = C.shuffle([0, 1, 2].map(i => obj + "-" + i), rand);
+  const expect = []; for (let i = 0; i < 3; i++) expect.push(g["2.1"][i], g["1.2"][i], g["1.1"][i]);
+  assert.deepStrictEqual(q.map(c => c.id), expect);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 20, seed).map(c => c.id), expect, "same seed, same order");
+  const other = C.cardQueue(deck, cs, null, today, 20, seed + 1);
+  assert.notDeepStrictEqual(other.map(c => c.id), expect, "a different seed shuffles within the objective");
+  assert.deepStrictEqual(other.map(c => c.obj), q.map(c => c.obj));
+  const plain = [];
+  for (const obj of ["1.1", "1.2"]) for (let i = 0; i < 3; i++) plain.push({ id: obj + "-" + i, obj });
+  const p = C.cardQueue(plain, {}, null, today, 6, 1);
+  assert.deepStrictEqual(p.map(c => c.obj), ["1.1", "1.2", "1.1", "1.2", "1.1", "1.2"]);
+  assert.notDeepStrictEqual(p.map(c => c.id), plain.map(c => c.id), "not deck order");
+});
+t("a missed flashcard returns once later in the same session, after five other cards", () => {
+  const q = ["a", "b", "c", "d", "e", "f", "g"].map(id => ({ id })), again = {};
+  assert.strictEqual(C.requeueMiss(q, 0, again), 1);
+  assert.deepStrictEqual(q.map(c => c.id), ["a", "b", "c", "d", "e", "f", "a", "g"]);
+  assert.strictEqual(C.requeueMiss(q, 6, again), 7, "the second miss is not queued again");
+  assert.strictEqual(q.length, 8);
+  const exact = ["a", "b", "c", "d", "e", "f"].map(id => ({ id }));
+  assert.strictEqual(C.requeueMiss(exact, 0, {}), 1);
+  assert.deepStrictEqual(exact.map(c => c.id), ["a", "b", "c", "d", "e", "f", "a"]);
+  const short = ["a", "b", "c", "d", "e"].map(id => ({ id }));
+  assert.strictEqual(C.requeueMiss(short, 0, {}), 1);
+  assert.deepStrictEqual(short.map(c => c.id), ["a", "b", "c", "d", "e"], "fewer than five cards left, so it waits for the next session");
+});
+t("at most five cards missed today lead the next session; the rest mix in", () => {
+  const today = 20000, seed = 3, deck = [];
+  for (let i = 0; i < 8; i++) deck.push({ id: "m" + i, obj: "1.1" });
+  for (let i = 0; i < 4; i++) deck.push({ id: "o" + i, obj: "1.1" });
+  deck.push({ id: "y", obj: "1.1" });
+  for (let i = 0; i < 4; i++) deck.push({ id: "n" + i, obj: "1.2" });
+  const cs = { y: { box: 0, seen: 1, right: 0, due: today - 1 } };
+  for (let i = 0; i < 8; i++) cs["m" + i] = { box: 0, seen: 1, right: 0, due: today };
+  for (let i = 0; i < 4; i++) cs["o" + i] = { box: 2, seen: 2, right: 2, due: today - 1 };
+  const ids = C.cardQueue(deck, cs, null, today, 40, seed).map(c => c.id);
+  const lead = C.shuffle(deck.filter(c => c.id[0] === "m"), C.rng(seed)).slice(0, 5).map(c => c.id);
+  assert.deepStrictEqual(ids.slice(0, 5), lead);
+  assert.ok(ids.indexOf("y") > 4, "a miss from yesterday is not one of the five");
+  assert.deepStrictEqual(ids.slice(5).map(id => id[0] === "n" ? "n" : id[0] === "m" ? "m" : "d"),
+    ["d", "d", "m", "n", "d", "m", "d", "n", "m", "d", "n", "n"]);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 40, seed).map(c => c.id), ids);
+});
+t("due and new flashcards alternate about three to one", () => {
+  const today = 20000, deck = [];
+  for (let i = 0; i < 6; i++) deck.push({ id: "d" + i, obj: "1.1" });
+  for (let i = 0; i < 3; i++) deck.push({ id: "n" + i, obj: "1.2" });
+  const cs = {};
+  for (let i = 0; i < 6; i++) cs["d" + i] = { box: 2, seen: 1, right: 1, due: today };
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 20, 4).map(c => c.id[0]), ["d", "d", "d", "n", "d", "d", "d", "n", "n"]);
+  const older = { a: { box: 2, seen: 1, right: 1, due: today }, b: { box: 1, seen: 1, right: 1, due: today - 3 } };
+  assert.deepStrictEqual(C.cardQueue([{ id: "a", obj: "1.1" }, { id: "b", obj: "1.1" }], older, null, today, 5, 1).map(c => c.id), ["b", "a"]);
+});
 t("streak counts consecutive goal days", () => {
   const days = {}; const now = new Date(2026, 9, 10, 12);
   for (let i = 0; i < 4; i++) { const d = new Date(now); d.setDate(d.getDate() - i); days[C.dayKey(d)] = 25; }

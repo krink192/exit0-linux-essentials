@@ -1439,13 +1439,74 @@
   }
 
   // ------------------------------------------------------------- flashcards (Leitner)
-  function cardQueue(cards, cstate, filter, today, limit) {
+  const MISS_LEAD = 5;   // missed-today cards that may open the next session
+  const MISS_GAP = 5;    // other cards before a miss returns in this session
+  const missedToday = (s, today) => !!(s && s.box === 0 && s.due === today);
+  /** Weave `extra` through `base` so the extras are not a second block at the front. */
+  function spreadList(base, extra) {
+    if (!extra.length) return base.slice();
+    if (!base.length) return extra.slice();
+    const out = [], gaps = extra.length + 1, per = Math.floor(base.length / gaps);
+    let rem = base.length % gaps, b = 0, e = 0;
+    for (let g = 0; g < gaps; g++) {
+      let n = per; if (rem) { n++; rem--; }
+      for (let k = 0; k < n; k++) out.push(base[b++]);
+      if (e < extra.length) out.push(extra[e++]);
+    }
+    return out;
+  }
+  /** About three due cards, then one new card, until one side runs out. */
+  function mixDueNew(due, fresh) {
+    const out = []; let d = 0, f = 0;
+    while (d < due.length || f < fresh.length) {
+      let n = 0;
+      for (let k = 0; k < 3 && d < due.length; k++) { out.push(due[d++]); n++; }
+      if (f < fresh.length) out.push(fresh[f++]);
+      else if (!n) break;
+    }
+    return out;
+  }
+  /**
+   * New cards, one objective at a time. Weakest objective first (fewest right answers; a topic with no
+   * reviews counts as half right, so a topic the learner is missing comes before one they have not
+   * touched). Ties break by objective id. Cards inside an objective are shuffled with `rand`.
+   */
+  function freshCards(pool, cstate, rand) {
+    const groups = {}, stat = {};
+    for (const c of pool) {
+      const o = c.obj || "", g = stat[o] || (stat[o] = { seen: 0, right: 0 }), s = cstate[c.id];
+      if (s) { g.seen += s.seen || 0; g.right += s.right || 0; }
+      else (groups[o] || (groups[o] = [])).push(c);
+    }
+    const objs = Object.keys(groups).sort();
+    for (const o of objs) groups[o] = shuffle(groups[o], rand);
+    const acc = o => { const g = stat[o] || { seen: 0, right: 0 }; return g.seen ? [g.right, g.seen] : [1, 2]; };
+    objs.sort((a, b) => { const [ar, an] = acc(a), [br, bn] = acc(b); return ar * bn - br * an || (a < b ? -1 : a > b ? 1 : 0); });
+    const out = [];
+    for (let more = true; more;) {
+      more = false;
+      for (const o of objs) if (groups[o].length) { out.push(groups[o].shift()); more = true; }
+    }
+    return out;
+  }
+  function cardQueue(cards, cstate, filter, today, limit, seed) {
     today = today == null ? dayNum() : today; limit = limit || 20;
     const pool = cards.filter(filter || (() => true));
-    const due = pool.filter(c => cstate[c.id] && cstate[c.id].due <= today)
-      .sort((a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box);
-    const fresh = pool.filter(c => !cstate[c.id]);
-    return due.concat(fresh).slice(0, limit);
+    const rand = rng(seed);
+    const dueAll = pool.filter(c => cstate[c.id] && cstate[c.id].due <= today);
+    const byDue = (a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const missed = shuffle(dueAll.filter(c => missedToday(cstate[c.id], today)), rand);
+    const other = dueAll.filter(c => !missedToday(cstate[c.id], today)).sort(byDue);
+    return missed.slice(0, MISS_LEAD).concat(mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand))).slice(0, limit);
+  }
+  /** A card missed at `index` comes back once, after at least 5 other cards. Returns the next index to show. */
+  function requeueMiss(queue, index, again) {
+    again = again || {};
+    const card = queue[index];
+    if (!card || Object.prototype.hasOwnProperty.call(again, card.id) || queue.length - index - 1 < MISS_GAP) return index + 1;
+    queue.splice(index + 1 + MISS_GAP, 0, card);
+    again[card.id] = 1;
+    return index + 1;
   }
   function reviewCard(cstate, id, knew, today, now, examDay) {
     today = today == null ? dayNum() : today;
@@ -1767,7 +1828,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

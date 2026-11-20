@@ -222,9 +222,9 @@
   }
   celebrate.lv = C.xpInfo(st).level;
 
-  const SCHEME_BG = { github: ["#F6F8FA", "#0D1117"], flexoki: ["#F2F0E5", "#100F0F"], catppuccin: ["#E6E9EF", "#1E1E2E"], tokyo: ["#E1E2E7", "#1A1B26"], dracula: ["#FFFBEB", "#282A36"] };
+  const SCHEME_BG = { github: ["#EDEFF1", "#0D1117"], flexoki: ["#E8E6DB", "#100F0F"], catppuccin: ["#E9EBED", "#1E1E2E"], tokyo: ["#E5E5E7", "#1A1B26"], dracula: ["#F5F1E2", "#282A36"] };
   const SCHEME_CHOICES = [["green", "Green"], ["github", "GitHub"], ["flexoki", "Flexoki"], ["catppuccin", "Catppuccin"], ["tokyo", "Tokyo Night"], ["dracula", "Dracula"]];
-  const GREEN_CHROME = ["#F6F7F5", "#111413"];
+  const GREEN_CHROME = ["#ECEDEB", "#111413"];
   function applyTheme() {
     const t = st.settings.theme, scheme = st.settings.scheme, root = document.documentElement;
     if (t === "light" || t === "dark") root.setAttribute("data-theme", t);
@@ -275,7 +275,7 @@
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
-          <div><div class="t1">${sk.count ? icon("flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
+          <div><div class="t1">${sk.count ? icon("flame", "flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
             <div class="t2">${sk.metToday ? `Today's goal of ${st.settings.goal} done` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
             <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
@@ -296,7 +296,7 @@
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
-        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame") + sk.count : "Pick up where you left off"}</div></header>
+        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame", "flame") + sk.count : "Pick up where you left off"}</div></header>
       <main class="page${opts && opts.wide ? " wide" : ""}${opts && opts.cls ? " " + opts.cls : ""}" id="page">${tabs}${body}</main>
       <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
         return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;
@@ -305,6 +305,7 @@
     $$("[data-theme-set]").forEach(b => b.onclick = () => { st.settings.theme = b.dataset.themeSet; save(); applyTheme(); render(); });
     if ($("#installSide")) $("#installSide").onclick = promptInstall;
     window.scrollTo(0, 0);
+    watchTermBars();
   }
 
   // ------------------------------------------------------------------ router
@@ -460,27 +461,114 @@
     if (mean === T) return "at the " + T + "% pass mark";
     return n + " " + pointWord(n) + " above the " + T + "% pass mark";
   }
-  // One character is one cell. Cell k (1..n) is k*(100/n) percent, so 50 cells are 2% and 25 cells are 4%.
-  // The mean rounds to the nearest cell. The pass mark always owns its own cell, drawn as | even when the fill has gone past it.
-  function termGlyphs(n, mean, T) {
+  // Cell k (1..n) is k*(100/n) percent, so 50 cells are 2% and 25 cells are 4%.
+  // The mean rounds to the nearest cell. The pass mark always owns its own cell, drawn as a solid bar, even when the fill has gone past it.
+  function termCells(n, mean, T) {
     const step = 100 / n;
     const passCell = Math.round(T / step);
     const filled = mean == null ? 0 : Math.max(0, Math.min(n, Math.round(mean / step)));
-    let cells = "";
+    let html = "";
     for (let k = 1; k <= n; k++) {
-      if (k === passCell) cells += `<span class="mk">|</span>`;
-      else if (k <= filled) cells += `<span class="on">█</span>`;
-      else cells += `<span class="off">░</span>`;
+      if (k === passCell) html += `<span class="cell mk"><span class="mark"></span></span>`;
+      else html += `<span class="cell ${k <= filled ? "on" : "off"}"></span>`;
     }
-    return { cells, passCell };
+    return html;
   }
   function termSize(n, mean, T) {
-    const g = termGlyphs(n, mean, T);
-    return `<div class="term-size term-${n}" aria-hidden="true"><div class="term-line"><span class="br">[</span><span class="cells">${g.cells}</span><span class="br">]</span></div><div class="term-under"><span class="passspot" style="--i:${g.passCell}"><span class="passlab">${T}% to pass</span></span></div></div>`;
+    return `<div class="term-size term-${n}" data-n="${n}" aria-hidden="true"><div class="term-line"><span class="br">[</span><span class="cells">${termCells(n, mean, T)}</span><span class="br">]</span></div><div class="term-under"><span class="passspot"><span class="passlab">${T}% to pass</span></span></div></div>`;
   }
   function termBar(mean, T, text) {
     const now = mean == null ? "" : ` aria-valuenow="${mean}"`;
     return `<div class="termbar" role="progressbar" aria-labelledby="est-score" aria-valuemin="0" aria-valuemax="100"${now} aria-valuetext="${esc(text)}">${termSize(25, mean, T)}${termSize(50, mean, T)}</div>`;
+  }
+  // Cell edges have to land on device pixels. A fractional width anti-aliases and puts a coloured seam in the gap.
+  let termObserver = null, termWatching = false;
+  const cssFromDev = (dev, dpr) => (Math.round((dev / dpr) * 10000) / 10000) + "px";
+  function pipeInk(el) {
+    const cs = getComputedStyle(el);
+    const canvas = pipeInk.canvas || (pipeInk.canvas = document.createElement("canvas"));
+    const ctx = canvas.getContext("2d");
+    ctx.font = cs.fontWeight + " " + cs.fontSize + " " + cs.fontFamily;
+    const m = ctx.measureText("|");
+    const w = (m.actualBoundingBoxLeft || 0) + (m.actualBoundingBoxRight || 0);
+    return w > 0.5 ? w : 2;
+  }
+  function cellGeometry(n, chCss, availCss, pipeCss, dpr) {
+    const chDev = Math.max(1, Math.round(chCss * dpr));
+    let gapDev = Math.max(2, Math.round(chDev * 0.22));
+    let cellDev = chDev - gapDev;
+    if (cellDev < 3) cellDev = Math.max(2, chDev - 2);
+    const availDev = Math.max(0, Math.floor(availCss * dpr));
+    if (availDev > 0 && n * cellDev + (n - 1) * gapDev > availDev) {
+      gapDev = Math.min(gapDev, 2);
+      cellDev = Math.floor((availDev - (n - 1) * gapDev) / n);
+      if (cellDev < 2) {
+        gapDev = 1;
+        cellDev = Math.max(1, Math.floor((availDev - (n - 1) * gapDev) / n));
+      }
+    }
+    let markDev = Math.max(2, Math.round(pipeCss * dpr));
+    if (markDev > cellDev) markDev = Math.max(1, cellDev);
+    if (((cellDev - markDev) & 1) && markDev > 1) markDev -= 1;
+    return { cellDev, gapDev, markDev, markXDev: Math.floor((cellDev - markDev) / 2) };
+  }
+  // Nudge by less than a device pixel so this edge sits on the pixel grid. No transform: that blurs the fill.
+  function snapEdge(el, dpr, edge) {
+    const prop = edge === "left" ? "marginLeft" : "marginTop";
+    const r = el.getBoundingClientRect();
+    const pos = (edge === "left" ? r.left : r.top) * dpr;
+    const target = Math.round(pos);
+    const delta = target - pos;
+    if (Math.abs(delta) < 0.001) return;
+    const cur = parseFloat(el.style[prop]) || 0;
+    el.style[prop] = cssFromDev(cur * dpr + delta, dpr);
+  }
+  function layoutTermBars() {
+    const dpr = window.devicePixelRatio || 1;
+    document.querySelectorAll(".score-slot").forEach(slot => {
+      const slotW = slot.getBoundingClientRect().width;
+      slot.querySelectorAll(".term-size").forEach(size => {
+        if (getComputedStyle(size).display === "none") return;
+        const n = +size.dataset.n || 0;
+        const line = size.querySelector(".term-line");
+        const cells = size.querySelector(".cells");
+        const br = size.querySelector(".br");
+        const under = size.querySelector(".term-under");
+        const spot = size.querySelector(".passspot");
+        if (!n || !line || !cells || !br || slotW < 1) return;
+        const brBox = br.getBoundingClientRect();
+        if (brBox.width < 1 || brBox.height < 1) return;
+        const g = cellGeometry(n, brBox.width, slotW - brBox.width * 2 - 1 / dpr, pipeInk(br), dpr);
+        const hDev = Math.max(1, Math.round(brBox.height * dpr));
+        size.style.setProperty("--cell-w", cssFromDev(g.cellDev, dpr));
+        size.style.setProperty("--gap", cssFromDev(g.gapDev, dpr));
+        size.style.setProperty("--cell-h", cssFromDev(hDev, dpr));
+        size.style.setProperty("--mark-w", cssFromDev(g.markDev, dpr));
+        size.style.setProperty("--mark-x", cssFromDev(g.markXDev, dpr));
+        snapEdge(size, dpr, "top");
+        snapEdge(cells, dpr, "left");
+        const mark = size.querySelector(".mark");
+        if (mark && spot && under) {
+          const mr = mark.getBoundingClientRect();
+          const ur = under.getBoundingClientRect();
+          spot.style.left = ((mr.left + mr.width / 2) - ur.left) + "px";
+        }
+      });
+    });
+  }
+  function watchTermBars() {
+    layoutTermBars();
+    if (termObserver) { termObserver.disconnect(); termObserver = null; }
+    const slot = document.querySelector(".score-slot");
+    if (slot && window.ResizeObserver) {
+      termObserver = new ResizeObserver(() => layoutTermBars());
+      termObserver.observe(slot);
+    }
+    if (!termWatching) {
+      termWatching = true;
+      window.addEventListener("resize", () => layoutTermBars());
+      if (document.fonts) document.fonts.ready.then(() => layoutTermBars());
+    }
   }
   // Same block on Today, Exam and Progress. aside is extra markup in the top row (Progress: pass chance).
   // The slot is the full column, so the 25/50 switch sees a real width. The fit then shrinks to the bar.
@@ -850,7 +938,7 @@
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
   const ocol = col;
-  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), green outline (attempted),
+  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), accent outline (attempted),
   // tint (familiar, proficient), solid (mastered). Pips show mastery days; the legend names both.
   const omFill = lv => lv === "mastered" ? "om-f2" : lv === "familiar" || lv === "proficient" ? "om-f1" : lv === "attempted" ? "om-fa" : "om-f0";
   const omPips = n => `<span class="om-pips" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
@@ -1168,7 +1256,7 @@
         const parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(p => labState(p.id).completedAt).length;
         const all = pd === parts.length;
         return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${t}. ${esc(TOP[t])}</span>
-          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--accent-text)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
           <div class="tbody">${shown.map(row).join("")}</div></details>`; }).join("");
     // Challenges: every lab of a track is one row with its type, difficulty and status; opening a row shows what is
     // checked, the commands it may need and the way in. Levels of the chain open in order.
@@ -1187,7 +1275,7 @@
     const group = tr => { const ls = LESSONS.filter(L => L.track === tr); if (!ls.length) return "";
       const shown = ls.filter(keep), parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(q => labState(q.id).completedAt).length, all = pd === parts.length;
       return `<details class="trow"${nextL && nextL.track === tr ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${esc(C.LAB_TRACKS[tr][0])}</span>
-          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--accent-text)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
           <div class="tbody clist"><p class="small muted cintro">${esc(C.LAB_TRACKS[tr][1])}</p>${shown.map(crow).join("") || `<p class="muted small">All finished. Switch to All to run one again.</p>`}</div></details>`; };
     const challenges = `<section class="card stack objcard labscard"><div class="row spread"><h2>Challenges</h2><span class="small muted">A goal and a check of the result, no recipe</span></div>
         <div>${["chain", "oneliner", "scenario", TROUBLE].map(group).join("")}</div></section>`;

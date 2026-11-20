@@ -205,4 +205,25 @@ const box = S.createMachine({ setup: D.sandbox });
 assert.ok(box.stat("/home/student/app.log") && box.stat("/home/student/projects/scripts/hello.sh"), "sandbox files exist");
 assert.ok(/ERROR/.test(box.exec("grep ERROR app.log", { tty: false }).out), "sandbox log has errors to find");
 
+// A directory argument may end in / and ls may add -l. The listing still has to be recursive.
+{
+  const sk = D.skills.find(s => s.id === "ls-recursive");
+  const inst = C.instantiateDrill(sk, 0, () => 0);
+  const dir = inst.vals.d;
+  const attempt = cmd => {
+    const sh = S.createMachine({ setup: inst.setup });
+    const r = sh.exec(cmd, { tty: false });
+    return { ok: sh.check(inst.check), out: r.out };
+  };
+  for (const cmd of ["ls -R " + dir + "/", "ls -lR " + dir + "/", "ls -lR " + dir]) {
+    const r = attempt(cmd);
+    assert.ok(r.ok, cmd + " should pass List recursively.\n" + r.out);
+    assert.ok(!r.out.includes("//"), cmd + " printed a double slash:\n" + r.out);
+  }
+  for (const w of ["ls " + dir + "/", "ls -r " + dir + "/", "ls -d " + dir + "/", "ls -l " + dir + "/"]) {
+    const r = attempt(w);
+    assert.ok(!r.ok, w + " should not pass List recursively.\n" + r.out);
+  }
+}
+
 console.log(`drills: ${D.skills.length} skills, ${instances} instances solved, ${wrongs} wrong commands rejected; core practice logic ok`);

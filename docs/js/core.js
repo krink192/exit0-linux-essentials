@@ -2074,7 +2074,7 @@
   // ------------------------------------------------------------- sync (merging progress from several devices)
   // Each device uploads only its own progress (its "replica"). Merging all replicas gives the same result on
   // every device, in any order: counts add up, schedules come from the device that answered last, lists are unions.
-  const LOCAL_SETTINGS = ["theme", "study", "cmd"];   // per-device: look and the last Study / command practice choices
+  const LOCAL_SETTINGS = ["theme", "study", "cmd"];   // per-device: Light, Dark or System, and the last Study / command practice choices. The colour scheme syncs.
   const TEST_DETAIL = ["qids", "answers", "optOrder", "flags", "hints", "conf"];
   const KEEP_DETAIL = 30;
   const clone = x => x == null ? x : JSON.parse(JSON.stringify(x));
@@ -2304,7 +2304,9 @@
                   source: oneOf(["mix", "unseen", "missed", "marked", "unsure"], "mix"), count: v => Math.min(400, count(v)) };
   const CMD = { source: oneOf(["recommended", "due", "new", "pick"], "recommended"), cmds: v => Array.isArray(v) ? v.filter(x => typeof x === "string" && x.length <= 40) : [],
                 count: v => Math.max(1, Math.min(50, count(v))), mode: oneOf(["guided", "recall", "timed"], "guided") };
-  const SETTINGS = { theme: oneOf(["system", "light", "dark"], "system"), goal: v => clampGoal(v), review: v => clampReview(isObj(v) ? v : {}),
+  const SETTINGS = { theme: oneOf(["system", "light", "dark"], "system"),
+                     scheme: oneOf(["green", "github", "flexoki", "catppuccin", "tokyo", "dracula"], "green"),
+                     goal: v => clampGoal(v), review: v => clampReview(isObj(v) ? v : {}),
                      examDate: v => typeof v === "string" && parseDate(v) ? v : null, remindAt: v => typeof v === "string" && TIME_RE.test(v) ? v : "19:00",
                      deck: oneOf(["concepts", "commands"], "concepts"), study: v => isObj(v) ? shape(v, STUDY) : undefined, cmd: v => isObj(v) ? shape(v, CMD) : undefined };
   const cleanSettings = s => isObj(s) ? shape(s, SETTINGS) : {};
@@ -2352,7 +2354,7 @@
   /** Daily goal: a whole number of answers, cards, lab tasks or command drills, 1 to 200. */
   function clampGoal(n) { n = Math.round(Number(n)); return isFinite(n) ? Math.max(GOAL_MIN, Math.min(GOAL_MAX, n)) : 10; }
   function freshState() {
-    return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
+    return { v: 3, settings: { theme: "system", scheme: "green", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
              tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, estWeeks: {}, current: null };
   }

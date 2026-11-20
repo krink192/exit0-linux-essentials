@@ -22,8 +22,8 @@ CHAIN, ONELINER, SCENARIO = "chain", "oneliner", "scenario"
 UNLOCKED = {"type": "unlocked"}
 
 
-def G(text, hints, solution, check, explain, goal, ways=None):
-    t = T(text, hints, solution, check, explain)
+def G(text, hints, solution, check, explain, goal, ways=None, mistakes=None):
+    t = T(text, hints, solution, check, explain, mistakes)
     t["goal"] = goal
     if ways:
         t["ways"] = [{"cmd": c, "note": n} for c, n in ways]
@@ -41,11 +41,11 @@ def game(code, track, obj, lesson_num, title, blurb, kind, level, commands, intr
     return L
 
 
-def level(n, obj, lesson_num, title, blurb, difficulty, commands, intro, where, hints, solution, explain, key, setup):
+def level(n, obj, lesson_num, title, blurb, difficulty, commands, intro, where, hints, solution, explain, key, setup, mistakes=None):
     setup = dict(setup, key=key)
     return game("V%d" % n, CHAIN, obj, lesson_num, title, blurb, "find", difficulty, commands, intro,
                 G("Find the key %s, then hand it in with `unlock KEY`." % where, hints, solution + "\nunlock " + key, UNLOCKED, explain,
-                  "you have handed in this level's key with `unlock`."), setup)
+                  "you have handed in this level's key with `unlock`.", mistakes=mistakes), setup)
 
 
 # One-line descriptions for the troubleshooting labs (tools/trouble_labs.py), shown in the catalogue rows.
@@ -100,7 +100,12 @@ GAMES = [
     "in the file `key.txt` somewhere under `~/maze`",
     ["`ls` has an option that lists directories recursively.", "`ls -R maze` prints every directory with its contents. Then `cat` the file by its path."],
     "ls -R maze\ncat maze/south/b/key.txt", "`ls -R` lists a whole tree, one directory after the other. A relative path such as `maze/south/b/key.txt` then reaches the file from where you are.",
-    "tidal-wren-33", {"files": MAZE}),
+    "tidal-wren-33", {"files": MAZE},
+    [{"cmd": r"\bls\b[^|]*(-\w*R|--recursive)[^|]*\|\s*grep\b", "out": r"key\.txt",
+      "say": "`grep` kept the `key.txt` line but dropped the heading above it: the line ending in `:` that names the folder. "
+             "That heading is the only place `ls -R` says where the file is. Run `ls -R maze` on its own and read the heading "
+             "above `key.txt`, or let `find` print the whole path: `find maze -name key.txt`.",
+      "try": "ls -R maze | grep key.txt"}]),
 
   level(5, "3.2", 1, "One line in four hundred", "A long file and a single line that matters.", 2, ["grep"],
     "`ledger.txt` has 400 lines. Exactly one of them contains the word `key`.",

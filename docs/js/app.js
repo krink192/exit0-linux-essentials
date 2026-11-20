@@ -179,7 +179,7 @@
     fetch: (url, o) => fetch(url, o),
     getState: () => st,
     resetProgress: () => { const keep = st.settings; st = C.freshState(); st.settings = keep; save(true); },
-    onChange: () => { C.migrateLabs(st, LABS); save(true); C.awardBadges(st, BANK, CARDS, null, LABS.length); save(true); rerenderIfIdle(); },
+    onChange: () => { applyTheme(); C.migrateLabs(st, LABS); save(true); C.awardBadges(st, BANK, CARDS, null, LABS.length); save(true); rerenderIfIdle(); },
   }) : null;
   let syncTimer = null;
   function scheduleSync(delay) {
@@ -222,12 +222,27 @@
   }
   celebrate.lv = C.xpInfo(st).level;
 
+  const SCHEME_BG = { github: ["#F6F8FA", "#0D1117"], flexoki: ["#F2F0E5", "#100F0F"], catppuccin: ["#E6E9EF", "#1E1E2E"], tokyo: ["#E1E2E7", "#1A1B26"], dracula: ["#FFFBEB", "#282A36"] };
+  const SCHEME_CHOICES = [["green", "Green"], ["github", "GitHub"], ["flexoki", "Flexoki"], ["catppuccin", "Catppuccin"], ["tokyo", "Tokyo Night"], ["dracula", "Dracula"]];
+  const GREEN_CHROME = ["#F6F7F5", "#111413"];
   function applyTheme() {
-    const t = st.settings.theme;
-    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
-    else document.documentElement.removeAttribute("data-theme");
+    const t = st.settings.theme, scheme = st.settings.scheme, root = document.documentElement;
+    if (t === "light" || t === "dark") root.setAttribute("data-theme", t);
+    else root.removeAttribute("data-theme");
+    if (SCHEME_BG[scheme]) root.setAttribute("data-scheme", scheme);
+    else root.removeAttribute("data-scheme");
+    const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    if (!SCHEME_BG[scheme]) metas.forEach(m => m.setAttribute("content", (m.getAttribute("media") || "").indexOf("dark") >= 0 ? GREEN_CHROME[1] : GREEN_CHROME[0]));
+    else { const c = SCHEME_BG[scheme][dark ? 1 : 0]; metas.forEach(m => m.setAttribute("content", c)); }
   }
   applyTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  function schemePickerHTML(current) {
+    const cur = SCHEME_CHOICES.some(([id]) => id === current) ? current : "green";
+    const buttons = SCHEME_CHOICES.map(([id, name]) => `<button type="button" class="swatch${id === cur ? " on" : ""}" data-v="${id}" aria-pressed="${id === cur}"><span class="dots" aria-hidden="true"><i class="dot dot-bg"></i><i class="dot dot-surface"></i><i class="dot dot-ink"></i><i class="dot dot-accent"></i></span>${name}</button>`).join("");
+    return `<div class="schemes"><span id="schemeLabel">Color scheme</span><div class="swatch-grid" id="schemes" role="group" aria-labelledby="schemeLabel">${buttons}</div><p class="small muted">Light, Dark and System use this.</p></div>`;
+  }
 
   let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, finishing = false, discardOpen = false, navKind = "all", warned5 = null;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
@@ -295,6 +310,7 @@
   // ------------------------------------------------------------------ router
   function go(h) { if (location.hash === "#" + h) render(); else location.hash = h; }
   function render() {
+    applyTheme();
     const h = (location.hash || "#today").slice(1);
     if (h === "practice") return go(lastPractice || (qLeft() + C.deckStats(CARDS, st.cards).due ? "review" : "test"));
     if (h === "learn") return go("guide");
@@ -428,20 +444,56 @@
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
-  const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
-    : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
-  const estimateBasis = pp => `From ${plural(pp.seen, "fresh answer")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
-  // Likely range is the main mark; the mean is a thin tick; the target line is labelled for contrast (not colour alone).
-  function scoreBand(est, T, label) {
-    const span = Math.max(1, est.high - est.low);
-    return `<div class="scorebar band" role="img" aria-label="${label} if you sat it today: likely ${est.low} to ${est.high} percent. Point estimate ${est.mean} percent. The target is ${T} percent. An estimate, not a guarantee.">
-      <b class="range" style="left:${est.low}%;width:${span}%"></b>
-      <span class="tick" style="left:${est.mean}%" title="Point estimate ${est.mean}%"></span>
-      <span class="mark" style="left:${T}%"><span class="mark-label">${T}%</span></span></div>`;
+  const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more new question")} to get an estimate`
+    : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate`;
+  const pointWord = n => n === 1 ? "point" : "points";
+  // Right-hand status. Below the pass mark it's the gap still to cover. On the mark, say so. Above it, how far past.
+  function gapPhrase(mean, T) {
+    const n = Math.abs(mean - T);
+    if (mean < T) return n + " " + pointWord(n) + " to go";
+    if (mean === T) return "At the pass mark";
+    return "Passing by " + n + " " + pointWord(n);
   }
-  function scoreBandSkeleton(T) {
-    return `<div class="scorebar band skeleton" role="img" aria-label="Estimated score not ready yet. The target is ${T} percent.">
-      <span class="mark" style="left:${T}%"><span class="mark-label">${T}%</span></span></div>`;
+  function gapValueText(mean, T) {
+    const n = Math.abs(mean - T);
+    if (mean < T) return n + " " + pointWord(n) + " below the " + T + "% pass mark";
+    if (mean === T) return "at the " + T + "% pass mark";
+    return n + " " + pointWord(n) + " above the " + T + "% pass mark";
+  }
+  // One character is one cell. Cell k (1..n) is k*(100/n) percent, so 50 cells are 2% and 25 cells are 4%.
+  // The mean rounds to the nearest cell. The pass mark always owns its own cell, drawn as | even when the fill has gone past it.
+  function termGlyphs(n, mean, T) {
+    const step = 100 / n;
+    const passCell = Math.round(T / step);
+    const filled = mean == null ? 0 : Math.max(0, Math.min(n, Math.round(mean / step)));
+    let cells = "";
+    for (let k = 1; k <= n; k++) {
+      if (k === passCell) cells += `<span class="mk">|</span>`;
+      else if (k <= filled) cells += `<span class="on">█</span>`;
+      else cells += `<span class="off">░</span>`;
+    }
+    return { cells, passCell };
+  }
+  function termSize(n, mean, T) {
+    const g = termGlyphs(n, mean, T);
+    return `<div class="term-size term-${n}" aria-hidden="true"><div class="term-line"><span class="br">[</span><span class="cells">${g.cells}</span><span class="br">]</span></div><div class="term-under"><span class="passspot" style="--i:${g.passCell}"><span class="passlab">${T}% to pass</span></span></div></div>`;
+  }
+  function termBar(mean, T, text) {
+    const now = mean == null ? "" : ` aria-valuenow="${mean}"`;
+    return `<div class="termbar" role="progressbar" aria-labelledby="est-score" aria-valuemin="0" aria-valuemax="100"${now} aria-valuetext="${esc(text)}">${termSize(25, mean, T)}${termSize(50, mean, T)}</div>`;
+  }
+  // Same block on Today, Exam and Progress. aside is extra markup in the top row (Progress: pass chance).
+  // The slot is the full column, so the 25/50 switch sees a real width. The fit then shrinks to the bar.
+  function scoreSection(est, pp, T, aside) {
+    aside = aside || "";
+    const name = `<div class="score-name"><h2 id="est-score">Estimated score</h2>${est ? `<b class="score-pct">${est.mean}%</b>` : ""}</div>`;
+    const gap = est ? `<p class="score-gap">${esc(gapPhrase(est.mean, T))}</p>` : "";
+    const wait = est ? "" : estimateWait(pp);
+    const text = est ? "Estimated " + est.mean + "%, " + gapValueText(est.mean, T) + ", likely " + est.low + " to " + est.high : wait;
+    const note = est ? "Likely " + est.low + "–" + est.high + "% · from " + plural(pp.seen, "fresh answer") : wait;
+    // Pass chance is a sibling of the score, so a narrow card can put it on its own row. Today and Exam have no aside.
+    const head = aside ? name + gap + aside : `<div class="score-top">${name}${gap}</div>`;
+    return `<section class="score-block"><div class="score-slot"><div class="score-fit">${head}${termBar(est ? est.mean : null, T, text)}<p class="small muted band-note">${esc(note)}</p></div></div></section>`;
   }
   function renderToday() {
     const sk = C.streak(st.days, st.settings.goal), pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80;
@@ -452,17 +504,15 @@
       <div class="goalline"><span>${sk.metToday ? `Today's goal is done${sk.count > 1 ? ` and your streak is ${sk.count} days` : ""}. Anything more is a bonus.` : `${Math.max(0, st.settings.goal - sk.today)} more to reach today's goal of ${st.settings.goal}.`}</span>
         <button class="ghost" id="goalEdit" aria-expanded="${goalOpen}">${goalOpen ? "Done" : "Change goal"}</button></div>
       ${goalOpen ? `<div class="card stack goalcard"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div>` : ""}
-      <div class="today-grid">${pipelineHTML(todaySteps())}
+      <div class="today-grid">
+        <div class="today-main">${pipelineHTML(todaySteps())}</div>
         <div class="today-side">
-          <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>Likely ${est.low}–${est.high}%</b><span class="score-mean">mean ${est.mean}% · ${T}% target</span></span>`}</div>
-            ${est == null
-              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only fresh answers: a question counts again once ${C.COLD_DAYS} days have passed since you last saw it, so quick repeats can't inflate it.</p>`
-              : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">If you sat it today: likely ${est.low}–${est.high}%. Mean about ${est.mean}%. An estimate, not a guarantee. ${estimateBasis(pp)}</p>`}</section>
+          ${scoreSection(est, pp, T)}
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
               : `<p class="u-pad-x muted small">Nothing is below ${T}% yet. Once you've answered a few questions, the objectives you score lowest on are listed here.</p>`}</section>
-        </div></div>
-      <div id="plan">${planCard()}</div>`, { cls: "today-page" });
+        </div>
+        <div class="today-plan" id="plan">${planCard()}</div></div>`, { cls: "today-page" });
     $("#goalEdit").onclick = () => { goalOpen = !goalOpen; renderToday(); };
     wireGoalPicker(renderToday);
     wirePlan(renderToday);
@@ -565,6 +615,7 @@
   }
   function renderTest() {
     const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set the exam average uses
+    const pp = C.passPrediction(BANK, st.qstats), T = C.TARGET || 80, est = estimateOf(pp);
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
@@ -597,6 +648,7 @@
         <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward your exam average.</p>
           <button data-start="test" data-untimed="1">${icon("clock")}Start an untimed run</button></div>
       </section>
+      ${scoreSection(est, pp, T)}
       ${stats}${next}${formsCard()}${tips}`);
     wireResume();
     wireStarts($("#page"));
@@ -682,45 +734,43 @@
   }
 
   // ================================================================== PROGRESS
-  function historyFacts(h) {
-    const bits = [];
-    if (h.examCount) bits.push("Full exams: " + h.examCount + ", latest " + h.latestExam + "%.");
-    if (h.estimateNow != null) bits.push("Estimate this week " + h.estimateNow + "%.");
-    else if (h.estimatePoints.length) bits.push("Latest weekly estimate " + h.estimatePoints[h.estimatePoints.length - 1].mean + "%.");
-    return bits.join(" ");
+  // One series for the chart: each week's full-exam average. With no full exams yet, the weekly estimates stand in.
+  function historySeries(h) {
+    const exams = h.weeks.map((w, i) => w.examMean == null ? null : { week: i, pct: Math.round(w.examMean), n: w.exams.length }).filter(Boolean);
+    if (exams.length) return { kind: "exam", points: exams };
+    return { kind: "estimate", points: h.estimatePoints.map(e => ({ week: e.week, pct: e.mean, n: 0 })) };
+  }
+  function historyFacts(h, series) {
+    const last = series.points[series.points.length - 1];
+    if (!last) return "";
+    if (series.kind === "estimate") return "Weekly estimate, latest " + last.pct + "%. Full exams will replace it.";
+    return "Weekly average of your full exams. Latest week " + last.pct + "%" + (last.n > 1 ? " (" + last.n + " exams)" : "") + ".";
   }
   function scoreChart(h, W, H) {
     W = W || 640; H = H || 210;
-    const weeks = h.weeks, n = weeks.length, pl = 36, pr = 14, pt = 16, pb = 28;
+    const series = historySeries(h), pts = series.points;
+    // The axis starts at the first plotted week, so weeks before it don't leave an empty stretch on the left.
+    const i0 = pts.length ? pts[0].week : 0, weeks = h.weeks, n = weeks.length - i0, pl = 36, pr = 34, pt = 16, pb = 28;
     const plot = W - pl - pr;
-    const xAt = i => pl + (n === 1 ? plot / 2 : (i + 0.5) * plot / n);
+    const xAt = i => pl + (n === 1 ? plot / 2 : (i - i0 + 0.5) * plot / n);
     const y = v => pt + (100 - v) * (H - pt - pb) / 100;
-    const examX = (i, j, count, hasEst) => {
-      const c = xAt(i), slot = n === 1 ? plot * 0.4 : plot / n, room = Math.min(slot * 0.5, 26);
-      if (count <= 1) return hasEst ? c - Math.min(11, room * 0.45) : c;
-      const left = c - room / 2, span = hasEst ? room * 0.55 : room;
-      return left + j * span / (count - 1);
-    };
     const grid = [0, 50, 100].map(v => `<line class="axis" x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${pl - 8}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join("");
-    const lines = h.segments.filter(run => run.length >= 2).map(run =>
-      `<polyline class="mean" points="${run.map(p => xAt(p.week).toFixed(1) + "," + y(p.mean).toFixed(1)).join(" ")}"/>`).join("");
-    const exams = h.examPoints.map(e => {
-      const hasEst = weeks[e.week].estimate != null;
-      return `<circle class="exam" cx="${examX(e.week, e.index, e.n, hasEst).toFixed(1)}" cy="${y(e.pct).toFixed(1)}" r="4"><title>${esc(fmtDate(e.date))}: ${e.pct}%</title></circle>`;
-    }).join("");
-    const estimates = h.estimatePoints.map(e =>
-      `<circle class="est" cx="${xAt(e.week).toFixed(1)}" cy="${y(e.mean).toFixed(1)}" r="4"><title>Week of ${esc(fmtDate(C.parseDate(weeks[e.week].key).getTime()).split(",")[0])}: estimate ${e.mean}%</title></circle>`).join("");
+    const line = pts.length >= 2 ? `<polyline class="mean" points="${pts.map(p => xAt(p.week).toFixed(1) + "," + y(p.pct).toFixed(1)).join(" ")}"/>` : "";
+    const weekName = i => fmtDate(C.parseDate(weeks[i].key).getTime()).split(",")[0];
+    const dots = pts.map(p => `<circle class="exam" cx="${xAt(p.week).toFixed(1)}" cy="${y(p.pct).toFixed(1)}" r="4"><title>Week of ${esc(weekName(p.week))}: ${p.pct}%${p.n > 1 ? " (" + p.n + " exams)" : ""}</title></circle>`).join("");
+    const last = pts[pts.length - 1];
+    const tag = last ? `<text class="last" x="${(xAt(last.week) + 8).toFixed(1)}" y="${(y(last.pct) + 4).toFixed(1)}">${last.pct}%</text>` : "";
     const labels = weeks.map((w, i) => {
-      const d = C.parseDate(w.key), show = i === 0 || i === n - 1 || (n <= 6 && i % 2 === 0) || (n > 6 && d.getDate() <= 7);
+      if (i < i0) return "";
+      const k = i - i0, d = C.parseDate(w.key), show = k === 0 || k === n - 1 || (n <= 6 && k % 2 === 0) || (n > 6 && d.getDate() <= 7);
       return show ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${d.toLocaleDateString([], { month: "short", day: "numeric" })}</text>` : "";
     }).join("");
-    const facts = historyFacts(h);
+    const facts = historyFacts(h, series);
     return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(facts)}">
       ${grid}<line class="target" x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}"/>
       <text x="${pl + 6}" y="${y(80) - 6}" style="fill:var(--good)">80% target</text>
-      ${lines}${estimates}${exams}${labels}</svg>
-      <p class="chart-key"><span><i class="fill" aria-hidden="true"></i>full exam</span><span class="sep" aria-hidden="true">·</span><span><i class="hole" aria-hidden="true"></i>weekly estimate</span></p>
+      ${line}${dots}${tag}${labels}</svg>
       <p class="small muted">${esc(facts)}</p></div>`;
   }
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -774,40 +824,27 @@
   const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
+  // One "am I ready?" card at the top of Progress: the estimate, pass chance, and the single most useful next step.
   const passWhy = p => `The estimate uses only fresh answers: your first attempt at each question, and any answer given ${C.COLD_DAYS} or more days after you last saw it.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
-      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.`;
+      LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.${p.repeats ? " " + plural(p.repeats, "repeated question") + " left out." : ""}`;
   const andList = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
   function heroCard() {
-    const ready = C.readiness(st.tests), p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
+    const p = C.passPrediction(BANK, st.qstats), est = estimateOf(p);
     const pct = p.chance == null ? null : Math.round(p.chance * 100);
     const focus = p.focus.map(f => f.obj);
     const T = C.TARGET || 80;
-    const head = est == null ? "Not enough fresh answers for an estimate yet."
-      : est.mean >= 80 ? "You're in the ready range."
-      : est.mean >= 65 ? "Close." : "Keep building.";
-    const sub = est == null ? estimateWait(p)
+    const advice = est == null ? ""
       : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
-      : est.low >= 80 ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above 80%.";
-    const nums = est == null
-      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "fresh answer")} so far</span></div>`
-      : `<div class="u-g2 stack"><span class="small muted">If you sat it today</span><b class="big">Likely ${est.low}–${est.high}%</b><span class="small muted">Mean ${est.mean}% · an estimate, not a guarantee</span></div>
-        <div class="u-g2 stack"><span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Need ${p.need} of ${p.total} right</span></div>`;
+      : est.low >= T ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above the goal.";
     const btns = focus.length
       ? `<button class="primary" data-study="${focus.join(",")}">${focus.length === 1 ? "Study " + focus[0] : "Study those " + focus.length}</button><button data-start="test">Take an exam</button>`
       : est == null ? `<button class="primary" data-start="unseen">Answer new questions</button><button data-start="test">Take an exam</button>`
       : `<button class="primary" data-start="test">Take an exam</button>`;
-    const band = est == null
-      ? `<div class="hero-band">${scoreBandSkeleton(T)}<p class="small muted band-note">${estimateWait(p)}</p></div>`
-      : `<div class="hero-band">${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">${estimateBasis(p)}</p></div>`;
-    return `<section class="card readyhero">
-      <div class="hero-nums">${nums}
-        <div class="u-g2 stack"><span class="small muted">Exam average</span><b class="big">${ready == null ? "—" : ready + "%"}</b><span class="small muted">${ready == null ? "No full exams yet" : "Last 3 full exams"}</span></div></div>
-      ${band}
-      <div class="stack grow hero-text"><p class="hero-head">${head}</p><p class="muted">${sub}</p><div class="row">${btns}</div>
-        <details class="small muted"><summary>How are these worked out?</summary><p>${passWhy(p)} Exam average is the plain average of your last three full exams, including questions you'd seen before, so it can read higher than the estimate.</p></details></div></section>`;
+    const how = `<details class="small muted"><summary>How are these worked out?</summary><p>${passWhy(p)} Exam average is the plain average of your last three full exams, including questions you'd seen before, so it can read higher than the estimate.</p></details>`;
+    const aside = est && pct != null ? `<div class="hero-fig"><span class="small muted">Pass chance</span><b class="score-pct">${pct}%</b></div>` : "";
+    return `<section class="card readyhero">${scoreSection(est, p, T, aside)}${advice ? `<p class="muted">${advice}</p>` : ""}<div class="row">${btns}</div>${how}</section>`;
   }
 
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
@@ -927,14 +964,14 @@
     const os = C.objectiveStats(BANK, st.qstats);
     const exams = st.tests.filter(C.isReadinessExam);
     const hist = C.scoreHistory(st.tests, st.estWeeks, Date.now());
-    const points = hist.examPoints.length + hist.estimatePoints.length;
+    const points = historySeries(hist).points.length;
     shell("progress", `${head}
       ${heroCard()}
       ${objectivesCard(os)}
       ${studyCard(sk)}
       <div class="grid2">
         <section class="card stack"><div class="row spread"><h2>Score history</h2><span class="small muted">${exams.length ? "best " + Math.max(...exams.map(t => t.pct)) + "% · " + plural(exams.length, "exam") : "no exams yet"}</span></div>
-          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take ${points ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
+          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take exams in ${points ? "one more week" : "two different weeks"} to see a trend. The dashed line is the 80% target.</p>`}</section>
         <section class="card stack"><div class="row spread"><h2>By difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
           <p class="small muted">The real exam leans on exact syntax. If Apply or Analyze trails Recall, study those levels.</p></section>
       </div>
@@ -1491,7 +1528,7 @@
         ${lab.track ? "" : `<div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>`}
         <div class="u-g16 u-wrap row"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
+      ${KEYS_HELP}`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
@@ -1660,7 +1697,7 @@
   }
 
   // ================================================================== TERMINAL (shared by command practice and the sandbox)
-  const KEYS_HELP = `<span class="kbd">${icon("up")}</span> <span class="kbd">${icon("down")}</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line<br>Stuck? <code>man NAME</code> · <code>NAME --help</code> · <code>apropos WORD</code> finds a command for a task · <code>help NAME</code> for builtins like cd and if · <code>man bash</code> for pipes and redirection`;
+  const KEYS_HELP = `<div class="termhelp"><p class="termhelp-row"><span class="termhelp-k">Keys</span><span class="termhelp-bits"><span class="bit"><span class="kpair"><span class="kbd">${icon("up")}</span><span class="kbd">${icon("down")}</span></span> history</span><span class="bit"><span class="kbd">Tab</span> complete</span><span class="bit"><span class="kpair"><span class="kbd">Ctrl</span><span class="kbd">L</span></span> clear</span><span class="bit"><span class="kpair"><span class="kbd">Ctrl</span><span class="kbd">C</span></span> cancel the line</span></span></p><p class="termhelp-row"><span class="termhelp-k">Stuck?</span><span class="termhelp-bits"><span class="bit"><code>man NAME</code></span><span class="bit"><code>NAME --help</code></span><span class="bit"><code>apropos WORD</code> finds a command for a task</span><span class="bit"><code>help NAME</code> for builtins like cd and if</span><span class="bit"><code>man bash</code> for pipes and redirection</span></span></p></div>`;
   const termHTML = cls => `<div class="term ${cls || ""}" id="term"><div class="term-out" id="termOut"></div>
     <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
   /** Wire the terminal markup to a machine. onRun(line, result) runs after every finished command; return true if it re-rendered the page.
@@ -1888,7 +1925,7 @@
         </div>
         ${termHTML()}
       </div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
+      ${KEYS_HELP}`, { noTabs: true });
     const record = () => { if (r.recorded) return; r.ok = C.cmdTaskOk(r); r.recorded = true; C.recordDrill(st, t.skill, r.ok); save(); celebrate(); };
     const next = () => { record(); cp.i++; cp.sh = null; keepScroll(renderCmdRun); };
     mountTerm(sh, (line, res) => {
@@ -1944,7 +1981,7 @@
         ${termHTML()}
       </div>
       <div class="labfoot stack small"><div class="cmdrow"><span class="muted">Look one up:</span> ${cmds.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div></div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`);
+      ${KEYS_HELP}`);
     mountTerm(sh, () => false);
     $$("[data-man]").forEach(b => b.onclick = () => { const i = $("#termIn"); i.value = "man " + b.dataset.man; i.focus(); });
     $("#sbReset").onclick = () => { sandboxSh = null; renderSandbox(); toast("Sandbox reset"); };
@@ -2050,7 +2087,8 @@
     const data = exportOpen ? JSON.stringify(C.exportDoc(st)) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
-        <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
+        <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div>
+        ${schemePickerHTML(s.scheme)}</div>
       <div class="card stack"><h2>Daily goal</h2>
         <div class="u-g10 stack"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
       <div class="card stack"><h2>Daily review</h2>${reviewPickerHTML()}</div>
@@ -2075,6 +2113,10 @@
       <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU AGPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
+    $$("#schemes button").forEach(b => b.onclick = () => {
+      if (!SCHEME_CHOICES.some(([id]) => id === b.dataset.v)) return;
+      s.scheme = b.dataset.v; save(); applyTheme(); renderSettings();
+    });
     wireGoalPicker(renderSettings);
     wireReviewPicker(renderSettings);
     $("#exp").onclick = () => {

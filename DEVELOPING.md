@@ -21,7 +21,7 @@ Dockerfile, docker/   App-only container image (nginx serving docs/). exit0-sync
 bank.json             The question bank
 tools/                Questions t1.py–t8.py (t8 = variants), hints.py, whys.py, cards.py, sheets.py, labs.py, trouble_labs.py, game_labs.py (level chain, one-liners, scenarios), drills.py,
                       build.py, verify.py, test_core.js, test_shell.js, test_sync.js, test_questions.js, test_drills.js,
-                      test_man.js
+                      test_man.js, test_schemes.js
 ```
 
 ## How the content is checked
@@ -46,6 +46,8 @@ tools/                Questions t1.py–t8.py (t8 = variants), hints.py, whys.py
   command page has examples, and each example runs in the lab shell without a usage error.
 - `node tools/test_core.js` tests the exam and study logic, including 200 randomly generated exams checked against
   the blueprint, Study sets of every size checked against the exam weights, and that no hint gives away a typed answer.
+- `node tools/test_schemes.js` checks every colour scheme in light and dark: text at least 4.5:1, field borders
+  and focus rings at least 3:1, and a white label on the accent button at least 4.5:1. Green keeps the borders it ships with.
 - Every release installs the `.deb` on Ubuntu and the `.rpm` on Fedora before publishing, checks the `.rpm`
   signature, then installs both again from the live signed repositories.
 

@@ -132,6 +132,8 @@ Copyright (C) 2026 krink192 and contributors. Free software under the [GNU Affer
 
 The bundled fonts, Figtree and JetBrains Mono, are under the [SIL Open Font License 1.1](docs/fonts/). The app loads nothing from other sites.
 
+The default Green palette is original. The other colour schemes use published palette values, each under the MIT license: [GitHub Primer](https://github.com/primer/primitives) (GitHub Inc.), [Flexoki](https://stephango.com/flexoki) (Steph Ango), [Catppuccin](https://github.com/catppuccin/palette), [Tokyo Night](https://github.com/folke/tokyonight.nvim) and [Dracula](https://github.com/dracula/dracula-theme). The prompt's path colour is a second swatch from the same palette.
+
 Linux Essentials stays free. Practice packs for other certifications may be offered later as a separate paid product; see the [contributor license grant](CONTRIBUTING.md#contributor-license-grant). The name *exit 0* and the `$?` logo identify this project, so please rename forks.
 
 Linux Essentials and LPI are trademarks of the Linux Professional Institute. This project is not affiliated with or endorsed by LPI. Linux is a registered trademark of Linus Torvalds.

@@ -83,7 +83,7 @@ t("progress from storage, an export code or a sync server is rebuilt with safe t
   bad.tests[0].conf = { "1.1-01": X, "bad": true, [X]: false };
   bad.qstats["__proto__x"] = X; bad.cards = X; bad.days = { "2026-11-10": X, [X]: 3, "2026-11-09": 4 }; bad.badges = { ready: X, [X]: 1 };
   bad.labs = { "2.1.1-a": { done: [X, 1, 1, -2, 1.5], completedAt: X }, p2: X };
-  bad.settings = { theme: X, goal: 0, review: X, examDate: X, remindAt: X, deck: X, study: { objMode: X, objs: X, levels: [X, 9, 2], source: X, count: X }, cmd: { mode: X, cmds: [X, 5], count: X, source: X }, junk: X };
+  bad.settings = { theme: X, scheme: X, goal: 0, review: X, examDate: X, remindAt: X, deck: X, study: { objMode: X, objs: X, levels: [X, 9, 2], source: X, count: X }, cmd: { mode: X, cmds: [X, 5], count: X, source: X }, junk: X };
   bad.current = { qids: [X], start: X };
   const m = C.migrate(JSON.parse(JSON.stringify(bad)));
   const t0 = m.tests.find(t => t.label === X.slice(0, 200));     // the label stays text; the app escapes it when shown
@@ -94,7 +94,7 @@ t("progress from storage, an export code or a sync server is rebuilt with safe t
   assert.deepStrictEqual((m.tests.find(t => t.conf) || { conf: {} }).conf, {});   // non-boolean conf values dropped
   assert.deepStrictEqual(m.days, { "2026-11-09": 4 }); assert.deepStrictEqual(m.badges, {}); assert.deepStrictEqual(m.labs, { "2.1.1-a": { done: [1] } });
   assert.deepStrictEqual(m.cards, {}); assert.strictEqual(m.current, null);
-  assert.deepStrictEqual([m.settings.theme, m.settings.goal, m.settings.examDate, m.settings.remindAt, m.settings.deck], ["system", 1, null, "19:00", "concepts"]);
+  assert.deepStrictEqual([m.settings.theme, m.settings.scheme, m.settings.goal, m.settings.examDate, m.settings.remindAt, m.settings.deck], ["system", "green", 1, null, "19:00", "concepts"]);
   assert.deepStrictEqual(m.settings.review, { on: false, size: 20, fresh: 5 });
   assert.deepStrictEqual(m.settings.study, { objMode: "all", objs: [], levels: [], source: "mix", count: 0 });
   assert.deepStrictEqual(m.settings.cmd, { source: "recommended", cmds: [X], count: 1, mode: "guided" });   // command names are text, escaped when shown
@@ -424,6 +424,20 @@ t("old settings migrate: exam is always timed with answers hidden", () => {
   const st2 = C.migrate({ settings: { study: { objs: ["2.1"], levels: [1, 2], source: "mix", count: 10 } } });
   assert.strictEqual(st2.settings.study.objMode, "pick"); assert.deepStrictEqual(st2.settings.study.levels, []);
   const s = C.buildTest(bank, {}, { seed: 1 }); assert(s.deadline && !s.study); assert.strictEqual(s.label, "Exam");
+  assert.strictEqual(st.settings.scheme, "green");
+});
+t("colour scheme syncs like the daily goal; Light, Dark and System stay on the device", () => {
+  const fresh = C.freshState();
+  assert.strictEqual(fresh.settings.scheme, "green");
+  assert.strictEqual(C.syncedSettings(fresh.settings).scheme, "green");
+  assert.strictEqual(C.syncedSettings(fresh.settings).theme, undefined);
+  const bad = C.migrate({ settings: { scheme: "<b>", theme: "dark", goal: 12 } });
+  assert.strictEqual(bad.settings.scheme, "green"); assert.strictEqual(bad.settings.theme, "dark"); assert.strictEqual(bad.settings.goal, 12);
+  const old = C.migrate({ settings: { theme: "light", goal: 8 } });
+  assert.strictEqual(old.settings.scheme, "green"); assert.strictEqual(old.settings.goal, 8); assert.strictEqual(old.settings.theme, "light");
+  const target = C.freshState();
+  C.applyMerged(target, { settings: { scheme: "dracula", theme: "light" }, settingsTs: { scheme: 9, theme: 9 } });
+  assert.strictEqual(target.settings.scheme, "dracula"); assert.strictEqual(target.settings.theme, "system");
 });
 t("daily review: misses return tomorrow, right answers space out", () => {
   const s = {}; const day = 20000;

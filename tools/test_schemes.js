@@ -3,8 +3,9 @@
 // see a control (field border, focus ring, and on the added schemes the button border) at 3:1.
 // The label on the accent button must clear 4.5:1. It is white when that passes, and near-black when
 // the accent is too light for white (GitHub, Catppuccin, Tokyo Night and Dracula in dark).
-// Green keeps the borders it already ships with. Those sit under 3:1 on purpose; changing them would
-// change the default look for anyone who never opens the picker.
+// Green's button border still sits under 3:1 on purpose. Light mode's ink, page and card are a step
+// softer than the old near-black on white; dark mode is unchanged. The plan card in a light scheme
+// uses that scheme's dark raised surface, and the done mark is an accent step that clears 4.5:1.
 "use strict";
 const fs = require("fs");
 const path = require("path");
@@ -27,18 +28,18 @@ const SNAP_LIGHT = `--accent #1B7F4B
 --bad #B4352D
 --bad-soft #FAE3E1
 --bar-low #8A948D
---bg #F6F7F5
+--bg #ECEDEB
 --field-line #7F8A83
 --flag #8A5200
 --flag-soft #FBEEDB
 --good #14633A
 --good-soft #E6F2EA
---hover #E9EDE8
---ink #17201B
---ink-2 #2F3A34
+--hover #DFE3DE
+--ink #2D3631
+--ink-2 #3A443F
 --knob #FFFFFF
---line #DDE1DC
---line-2 #B9C1BA
+--line #E5E7E4
+--line-2 #BEC5BF
 --muted #56615A
 --om-tint #E6F2EA
 --on-solid #FFFFFF
@@ -50,9 +51,9 @@ const SNAP_LIGHT = `--accent #1B7F4B
 --pipe-next #E6F2EA
 --pipe-next-hover #FFFFFF
 --pipe-next-ink #0E3B22
---side #EEF1EE
---sunk #F0F2EF
---surface #FFFFFF
+--side #E4E7E4
+--sunk #E6E8E5
+--surface #F8F8F7
 --term-bg #0F1412
 --term-dim #9FB3AA
 --term-field #18201C
@@ -63,7 +64,7 @@ const SNAP_LIGHT = `--accent #1B7F4B
 --term-mark-on #E0B84A
 --term-path #79B8FF
 --term-user #5FD7A8
---track #E3E7E2
+--track #D9DDD8
 --warm #96500D
 --warm-soft #FCEBDA`;
 const SNAP_DARK = `--accent #4CC38A
@@ -154,8 +155,9 @@ function pairs(t) {
     ["accent text on soft", "--accent-text", "--accent-soft"], ["accent text on objective tint", "--accent-text", "--om-tint"],
     ["ink on objective tint", "--ink", "--om-tint"],
     ["pipe text", "--pipe-ink", "--pipe-bg"], ["pipe secondary", "--pipe-dim", "--pipe-bg"],
+    ["pipe text on hover", "--pipe-ink", "--pipe-hover"], ["pipe secondary on hover", "--pipe-dim", "--pipe-hover"],
     ["pipe next label", "--pipe-next-ink", "--pipe-next"], ["pipe next label on hover", "--pipe-next-ink", "--pipe-next-hover"],
-    ["pipe done", "--pipe-done", "--pipe-bg"],
+    ["pipe done", "--pipe-done", "--pipe-bg"], ["pipe done on hover", "--pipe-done", "--pipe-hover"],
     ["right on card", "--good", "--surface"], ["right on soft", "--good", "--good-soft"],
     ["wrong on card", "--bad", "--surface"], ["wrong on soft", "--bad", "--bad-soft"],
     ["flag on card", "--flag", "--surface"], ["flag on soft", "--flag", "--flag-soft"],
@@ -220,6 +222,9 @@ for (const id of IDS) {
   if (dump(dark) !== dump(hexOf(darkBlocks[1] || {}))) fail(id + " dark copies differ");
   for (const k of Object.keys(greenLight)) if (!light[k] || !dark[k]) fail(id + " missing " + k);
   if (dump(printed) !== dump(light)) fail(id + " print does not use the light pack");
+  if (light["--pipe-bg"] !== dark["--surface"]) fail(id + " light plan card is not the dark raised surface");
+  const accentStep = new Set([dark["--accent"], dark["--accent-2"], dark["--accent-text"]]);
+  if (!accentStep.has(light["--pipe-done"]) || !accentStep.has(dark["--pipe-done"])) fail(id + " plan done mark is not the accent");
   for (const k of TERM) if (light[k] !== dark[k]) fail(id + " " + k + " changes between light and dark");
   if (!light["--term-user"] || light["--term-user"] === light["--term-path"]) fail(id + " prompt is not two colours");
   if (!/^rgba\(/.test(lightBlocks[0]["--hairline"] || "") || !/^rgba\(/.test(darkBlocks[0]["--hairline"] || "")) fail(id + " hairline is not translucent");
@@ -281,8 +286,8 @@ const choice = appJs.match(/SCHEME_CHOICES = (\[[\s\S]*?\]);/);
 const choiceIds = choice ? (choice[1].match(/"([^"]+)"/g) || []).filter((_, i) => i % 2 === 0).map(s => s.slice(1, -1)) : [];
 if (JSON.stringify(choiceIds) !== JSON.stringify(["green"].concat(IDS))) fail("picker ids are " + choiceIds.join(","));
 const html = fs.readFileSync(path.join(root, "docs/index.html"), "utf8");
-if (!html.includes('content="#F6F7F5"') || !html.includes('content="#111413"')) fail("Green browser chrome changed");
-if (!/GREEN_CHROME = \["#F6F7F5", "#111413"\]/.test(themeJs) || !/GREEN_CHROME = \["#F6F7F5", "#111413"\]/.test(appJs)) fail("Green chrome constants changed");
+if (!html.includes('content="#ECEDEB"') || !html.includes('content="#111413"')) fail("Green browser chrome is not the light page and the unchanged dark chrome");
+if (!/GREEN_CHROME = \["#ECEDEB", "#111413"\]/.test(themeJs) || !/GREEN_CHROME = \["#ECEDEB", "#111413"\]/.test(appJs)) fail("Green chrome constants changed");
 
 if (failed) { console.error(failed + " scheme check(s) failed"); process.exit(1); }
 console.log("schemes ok: green, " + IDS.join(", ") + " (light and dark)");

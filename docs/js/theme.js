@@ -2,8 +2,8 @@
 // Applies the saved theme and colour scheme before the first paint. A file of its own, because the page's
 // Content-Security-Policy allows no inline scripts. Green is the default and sets no data-scheme attribute,
 // so the palette in styles.css is unchanged for anyone who never picks another scheme.
-var SCHEME_BG = { github: ["#F6F8FA", "#0D1117"], flexoki: ["#F2F0E5", "#100F0F"], catppuccin: ["#E6E9EF", "#1E1E2E"], tokyo: ["#E1E2E7", "#1A1B26"], dracula: ["#FFFBEB", "#282A36"] };
-var GREEN_CHROME = ["#F6F7F5", "#111413"];
+var SCHEME_BG = { github: ["#EDEFF1", "#0D1117"], flexoki: ["#E8E6DB", "#100F0F"], catppuccin: ["#E9EBED", "#1E1E2E"], tokyo: ["#E5E5E7", "#1A1B26"], dracula: ["#F5F1E2", "#282A36"] };
+var GREEN_CHROME = ["#ECEDEB", "#111413"];
 try {
   var saved = JSON.parse(localStorage.getItem("le010.v3")).settings || {};
   var t = saved.theme, scheme = saved.scheme, root = document.documentElement;

@@ -222,9 +222,9 @@
   }
   celebrate.lv = C.xpInfo(st).level;
 
-  const SCHEME_BG = { github: ["#F6F8FA", "#0D1117"], flexoki: ["#F2F0E5", "#100F0F"], catppuccin: ["#E6E9EF", "#1E1E2E"], tokyo: ["#E1E2E7", "#1A1B26"], dracula: ["#FFFBEB", "#282A36"] };
+  const SCHEME_BG = { github: ["#EDEFF1", "#0D1117"], flexoki: ["#E8E6DB", "#100F0F"], catppuccin: ["#E9EBED", "#1E1E2E"], tokyo: ["#E5E5E7", "#1A1B26"], dracula: ["#F5F1E2", "#282A36"] };
   const SCHEME_CHOICES = [["green", "Green"], ["github", "GitHub"], ["flexoki", "Flexoki"], ["catppuccin", "Catppuccin"], ["tokyo", "Tokyo Night"], ["dracula", "Dracula"]];
-  const GREEN_CHROME = ["#F6F7F5", "#111413"];
+  const GREEN_CHROME = ["#ECEDEB", "#111413"];
   function applyTheme() {
     const t = st.settings.theme, scheme = st.settings.scheme, root = document.documentElement;
     if (t === "light" || t === "dark") root.setAttribute("data-theme", t);
@@ -850,7 +850,7 @@
   // Every objective in one place: grouped by topic (collapsed, the weakest topic open) or as one list, weakest first.
   let objView = "topic";
   const ocol = col;
-  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), green outline (attempted),
+  // One cell per objective in a strip, topic by topic. Four looks: faint outline (not started), accent outline (attempted),
   // tint (familiar, proficient), solid (mastered). Pips show mastery days; the legend names both.
   const omFill = lv => lv === "mastered" ? "om-f2" : lv === "familiar" || lv === "proficient" ? "om-f1" : lv === "attempted" ? "om-fa" : "om-f0";
   const omPips = n => `<span class="om-pips" aria-hidden="true">${[0, 1, 2].map(i => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>`;
@@ -1168,7 +1168,7 @@
         const parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(p => labState(p.id).completedAt).length;
         const all = pd === parts.length;
         return `<details class="trow"${t === openT ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${t}. ${esc(TOP[t])}</span>
-          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--accent-text)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
           <div class="tbody">${shown.map(row).join("")}</div></details>`; }).join("");
     // Challenges: every lab of a track is one row with its type, difficulty and status; opening a row shows what is
     // checked, the commands it may need and the way in. Levels of the chain open in order.
@@ -1187,7 +1187,7 @@
     const group = tr => { const ls = LESSONS.filter(L => L.track === tr); if (!ls.length) return "";
       const shown = ls.filter(keep), parts = ls.reduce((a, L) => a.concat(partsOf(L.lesson)), []), pd = parts.filter(q => labState(q.id).completedAt).length, all = pd === parts.length;
       return `<details class="trow"${nextL && nextL.track === tr ? " open" : ""}><summary><span class="tname">${all ? `<span class="okmark">${icon("check")}</span> ` : ""}${esc(C.LAB_TRACKS[tr][0])}</span>
-          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--good)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
+          <div class="track2 slim" aria-hidden="true"><i style="width:${parts.length ? 100 * pd / parts.length : 0}%;background:${all ? "var(--accent-text)" : "var(--muted)"}"></i></div><span class="pct">${pd}/${parts.length}</span></summary>
           <div class="tbody clist"><p class="small muted cintro">${esc(C.LAB_TRACKS[tr][1])}</p>${shown.map(crow).join("") || `<p class="muted small">All finished. Switch to All to run one again.</p>`}</div></details>`; };
     const challenges = `<section class="card stack objcard labscard"><div class="row spread"><h2>Challenges</h2><span class="small muted">A goal and a check of the result, no recipe</span></div>
         <div>${["chain", "oneliner", "scenario", TROUBLE].map(group).join("")}</div></section>`;

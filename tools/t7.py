@@ -39,7 +39,7 @@ S("1.2-19", "On Ubuntu, `sudo dpkg -i app.deb` stops with \"dependency problems\
    "Install the same file again with `sudo rpm -i app.deb` instead",
    "Run `sudo yum install app.deb` to resolve the dependencies",
    "Delete the /var/lib/dpkg directory and then run dpkg -i once more"],
-  "dpkg installs a single package file but doesn't download anything. apt works with the repositories: `apt-get install -f` (fix broken) "
+  "`dpkg` installs a single package file but doesn't download anything. apt works with the repositories: `apt-get install -f` (fix broken) "
   "installs the missing dependencies and finishes the setup. Installing the file with `sudo apt install ./app.deb` avoids the problem in the first place.",
   hint="dpkg is the low-level tool. Which tool knows about repositories?",
   why={"Install the same file again with `sudo rpm -i app.deb` instead": "rpm handles .rpm packages on Red Hat-family systems, not .deb files.",
@@ -240,7 +240,7 @@ S("3.2-28", "users.csv contains the four lines shown. What does the command prin
 
 F("3.2-29", "Save every line of /var/log/app.log that contains ERROR into the file errors.txt in your current directory, replacing any old errors.txt. Type the full command.",
   ["grep ERROR /var/log/app.log > errors.txt", "grep 'ERROR' /var/log/app.log > errors.txt", 'grep "ERROR" /var/log/app.log > errors.txt'],
-  "grep prints the matching lines and `>` redirects standard output into a file, creating it or replacing its contents. "
+  "`grep` prints the matching lines and `>` redirects standard output into a file, creating it or replacing its contents. "
   "`>>` would append instead, and `cat file | grep ERROR > errors.txt` works too, with one extra process.",
   hint="grep finds the lines; a redirection operator saves them.",
   lab=lab({"files": [{"path": "/var/log/app.log", "data": "09:00 INFO start\n09:01 ERROR disk full\n09:02 INFO retry\n09:03 ERROR disk full\n", "owner": "root"}]},
@@ -350,7 +350,7 @@ S("4.3-28", "What can you conclude from these kernel messages, which appeared ri
    "The drive was mounted automatically on /media/sdc by the kernel",
    "The drive failed its checks and the kernel disconnected it again",
    "This is the fourth USB disk, so it's named /dev/sd4"],
-  "dmesg shows the kernel ring buffer: the USB device was found, recognised as mass storage, named sdc with its size, and the partition "
+  "`dmesg` shows the kernel ring buffer: the USB device was found, recognised as mass storage, named sdc with its size, and the partition "
   "table lists sdc1 and sdc2. Mounting is a separate step and doesn't show up here.",
   code="$ sudo dmesg | tail -4\n[ 9120.44] usb 2-1: new high-speed USB device number 4 using xhci_hcd\n[ 9120.61] usb-storage 2-1:1.0: USB Mass Storage device detected\n"
        "[ 9121.65] sd 3:0:0:0: [sdc] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)\n[ 9121.68]  sdc: sdc1 sdc2",
@@ -374,7 +374,7 @@ S("4.3-29", "An administrator wants to change the SSH server's settings, and the
 S("4.3-30", "Which statements about this output are true? (Choose TWO.)",
   ["✔ana is logged in remotely from 192.168.1.20", "✔root's session ended because the system went down without a clean shutdown",
    "ana is logged in at the physical console", "root is still logged in on tty1"],
-  "last reads the login records in /var/log/wtmp. A host address in the third column means a remote (network) login, and `pts/0` is a "
+  "`last` reads the login records in /var/log/wtmp. A host address in the third column means a remote (network) login, and `pts/0` is a "
   "pseudo-terminal, as used by SSH. `- crash` means the session was still open when the system went down without logging it out; the reboot line follows.",
   code="$ last -n 3\nana      pts/0        192.168.1.20     Fri Oct  9 08:58   still logged in\n"
        "reboot   system boot  6.8.0-45-generic Fri Oct  9 08:55   still running\nroot     tty1                          Thu Oct  8 23:41 - crash  (00:02)",
@@ -424,7 +424,7 @@ S("5.1-19", "Which accounts in this part of /etc/passwd belong to people rather 
 S("5.1-20", "On an Ubuntu system, which statements follow from this output? (Choose TWO.)",
   ["✔ana may run commands as root with sudo", "✔ana can read many log files in /var/log through the adm group",
    "ana is the root user", "ana's primary group is sudo"],
-  "id shows the user, the primary group (gid) and all groups. On Debian and Ubuntu, members of the sudo group may use sudo, and the adm "
+  "`id` shows the user, the primary group (gid) and all groups. On Debian and Ubuntu, members of the sudo group may use sudo, and the adm "
   "group may read most system logs. The UID is 1000, not 0, and the primary group is ana.",
   code="$ id\nuid=1000(ana) gid=1000(ana) groups=1000(ana),4(adm),27(sudo)",
   hint="Read uid, gid and groups separately.",
@@ -448,7 +448,7 @@ S("5.2-20", "An employee has left, and an administrator ran `sudo userdel sam`. 
    "Nothing: userdel always removes the account, the home directory and every file sam owned",
    "Only sam's entry in /etc/passwd",
    "The account, which is now locked but can be unlocked with passwd"],
-  "userdel removes the account from /etc/passwd, /etc/shadow and /etc/group. Without `-r` it leaves /home/sam alone; files elsewhere still "
+  "`userdel` removes the account from /etc/passwd, /etc/shadow and /etc/group. Without `-r` it leaves /home/sam alone; files elsewhere still "
   "belong to sam's old UID number and show it in ls -l, until they're removed or given to someone else.",
   hint="Which userdel option also removes the home directory?",
   why={"Nothing: userdel always removes the account, the home directory and every file sam owned": "Without -r the home directory stays, and userdel never searches for files elsewhere.",
@@ -459,7 +459,7 @@ S("5.2-20", "An employee has left, and an administrator ran `sudo userdel sam`. 
 # ------------------------------------------------------------------------------------------ 5.3 (2)
 F("5.3-19", "Give the directory site and everything inside it to the user www-data and the group www-data, using one command. You have sudo.",
   ["sudo chown -R www-data:www-data site", "sudo chown -R www-data:www-data site/", "sudo chown --recursive www-data:www-data site"],
-  "chown sets the owner and, after a colon, the group; `-R` applies it to the directory and everything below it.",
+  "`chown` sets the owner and, after a colon, the group; `-R` applies it to the directory and everything below it.",
   hint="chown takes OWNER:GROUP, and one option makes it recursive.",
   lab=lab({"files": [{"path": "~/site/index.html", "data": "<h1>Hi</h1>\n"}, {"path": "~/site/css/style.css", "data": "body{}\n"}]},
           {"type": "all", "checks": [{"type": "owner", "path": HOME + "/site", "user": "www-data", "group": "www-data"},
@@ -482,7 +482,7 @@ S("5.3-20", "bob doesn't own the directory shared and isn't in the group staff. 
 # ------------------------------------------------------------------------------------------ 5.4 (1)
 F("5.4-10", "In the current directory, create a hard link named copy.txt for the file data.txt. Type the full command.",
   ["ln data.txt copy.txt"],
-  "Without -s, ln makes a hard link: a second name for the same inode, so both names show the same data and `ls -li` shows the same inode "
+  "`ln` without `-s` makes a hard link: a second name for the same inode, so both names show the same data and `ls -li` shows the same inode "
   "number and a link count of 2. `ln -s` would make a symbolic link instead.",
   hint="ln TARGET LINKNAME, without the option for symbolic links.",
   lab=lab({"files": [{"path": "~/data.txt", "data": "42\n"}]},

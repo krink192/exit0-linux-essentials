@@ -25,7 +25,7 @@ F("3.1-04", "Type the complete command that extracts the contents of photos.zip 
           ["zip photos.zip", "unzip -l photos.zip", "gunzip photos.zip", "tar -xf photos.zip"]))
 S("3.1-05", "After running `gzip report.txt`, what is left in the directory?",
   ["✔Only report.txt.gz", "report.txt and report.txt.gz", "report.tar.gz", "report.zip"],
-  "gzip, bzip2 and xz replace the original file with the compressed one by default. Use `-k` to keep the original, or `gzip -c report.txt > report.txt.gz` to write to standard output. gunzip reverses the process and removes the .gz file.",
+  "`gzip`, `bzip2` and `xz` replace the original file with the compressed one by default. Use `-k` to keep the original, or `gzip -c report.txt > report.txt.gz` to write to standard output. gunzip reverses the process and removes the .gz file.",
   run="echo x > report.txt; gzip report.txt; ls", expect="report.txt.gz")
 S("3.1-06", "Which tar option compresses or decompresses the archive with xz?",
   ["✔-J", "-j", "-z", "-x"],
@@ -105,7 +105,7 @@ S("3.2-09", "Which command counts the words in essay.txt?",
   run="echo 'one two three' > essay.txt; wc -w essay.txt | cut -d' ' -f1", expect="3")
 S("3.2-10", "How many lines does `head file.txt` show by default?",
   ["✔10", "5", "20", "One full screen"],
-  "head and tail both default to 10 lines. Use `-n N` (or `-N`) to change the count. A pager like less shows a screen at a time.",
+  "`head` and `tail` both default to 10 lines. Use `-n N` (or `-N`) to change the count. A pager like less shows a screen at a time.",
   run="seq 1 50 | head | wc -l", expect="10")
 S("3.2-11", "Which command shows the lines in config.ini that do NOT contain the word debug?",
   ["✔grep -v debug config.ini", "grep -i debug config.ini", "grep -c debug config.ini", "grep -n debug config.ini"],
@@ -194,16 +194,16 @@ S("3.3-12", "What does this script print when run as `./list.sh a b c`?",
   run="printf '#!/bin/bash\\nfor x in \"$@\"; do echo \"[$x]\"; done\\n' > list.sh; chmod +x list.sh; ./list.sh a b c", expect="[a]\n[b]\n[c]")
 S("3.3-13", "In nano, which key combination writes (saves) the file?",
   ["✔Ctrl+O", "Ctrl+X", "Ctrl+W", "Ctrl+K"],
-  "nano lists its shortcuts at the bottom of the screen with ^ meaning Ctrl. ^O is Write Out (save), ^X exits (and offers to save), ^W searches (Where Is), and ^K cuts the current line. Unlike vi, nano has no separate modes.")
+  "`nano` lists its shortcuts at the bottom of the screen with ^ meaning Ctrl. ^O is Write Out (save), ^X exits (and offers to save), ^W searches (Where Is), and ^K cuts the current line. Unlike vi, nano has no separate modes.")
 S("3.3-14", "You open a file in vi and start typing, but the text doesn't appear. Which key switches to insert mode so you can type?",
   ["✔i", ":", "Esc", "q"],
-  "vi starts in normal (command) mode, where keys are commands. `i` enters insert mode, Esc returns to normal mode, and `:` opens the command line for commands such as :w and :q.")
+  "`vi` starts in normal (command) mode, where keys are commands. `i` enters insert mode, Esc returns to normal mode, and `:` opens the command line for commands such as :w and :q.")
 F("3.3-15", "Type the vi command (starting with a colon) that quits WITHOUT saving your changes.",
   [":q!"],
   "`:q!` discards changes and quits. `:q` refuses to quit if there are unsaved changes, `:w` saves, and `:wq` saves and quits.")
 S("3.3-16", "What exit status does grep return when no lines match?",
   ["✔1", "0", "2", "127"],
-  "grep returns 0 when it finds a match, 1 when nothing matches, and 2 on an error such as a missing file. Scripts often use this as `if grep -q pattern file; then ...`. Status 127 means \"command not found\".",
+  "`grep` returns 0 when it finds a match, 1 when nothing matches, and 2 on an error such as a missing file. Scripts often use this as `if grep -q pattern file; then ...`. Status 127 means \"command not found\".",
   run="echo a | grep zzz; echo $?", expect="1")
 S("3.3-17", "What does this script print when it is run with no arguments?",
   ["✔usage", "ok", "usage, then ok", "Nothing at all"],

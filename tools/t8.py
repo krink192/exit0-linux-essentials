@@ -205,7 +205,7 @@ F("2.4-21", "None of the directories projects, projects/2026 and projects/2026/r
 S("2.4-22", "No file named notes.txt exists in the current directory. What does `touch notes.txt` do?",
   ["✔Creates an empty file named notes.txt", "Fails with \"No such file or directory\"",
    "Creates a directory named notes.txt", "Opens notes.txt in the default text editor"],
-  "touch updates a file's timestamps, and creates the file, empty, when it doesn't exist yet. That makes it the usual way to create an empty file.",
+  "`touch` updates a file's timestamps, and creates the file, empty, when it doesn't exist yet. That makes it the usual way to create an empty file.",
   hint="touch is often used just to make a file appear.",
   why={"Fails with \"No such file or directory\"": "touch creates a missing file instead of reporting an error.",
        "Creates a directory named notes.txt": "Directories are made with mkdir; touch makes regular files.",
@@ -214,7 +214,7 @@ S("2.4-22", "No file named notes.txt exists in the current directory. What does 
 
 S("2.4-23", "Which command removes the directory projects only when it is empty, and otherwise reports an error and deletes nothing?",
   ["✔rmdir projects", "rm -r projects", "rm -rf projects", "rm -ri projects"],
-  "rmdir removes empty directories only, which makes it the safe choice: if anything is still inside, it fails with "
+  "`rmdir` removes empty directories only, which makes it the safe choice: if anything is still inside, it fails with "
   "\"Directory not empty\". `rm -r` deletes a directory together with all of its contents.",
   hint="One command exists only for removing empty directories.",
   why={"rm -r projects": "`rm -r` deletes the directory and everything inside it.",
@@ -236,7 +236,7 @@ F("3.1-21", "Type the complete command that lists the files inside backup.tar wi
 S("3.1-22", "A directory holds only report.txt.gz. What is in it after you run `gunzip report.txt.gz`?",
   ["✔Only report.txt", "Both report.txt and report.txt.gz", "Only report.txt.gz, with its contents printed to the terminal",
    "A new directory named report"],
-  "gzip and gunzip replace the file they work on: `gzip report.txt` leaves only report.txt.gz, and gunzip turns it back into report.txt. "
+  "`gzip` and `gunzip` replace the file they work on: `gzip report.txt` leaves only report.txt.gz, and gunzip turns it back into report.txt. "
   "Use `-k` to keep the original, or `zcat` to print the contents without changing anything.",
   hint="gunzip undoes gzip, and both replace the file they work on.",
   why={"Both report.txt and report.txt.gz": "The compressed file is removed unless you add `-k` (keep).",
@@ -246,7 +246,7 @@ S("3.1-22", "A directory holds only report.txt.gz. What is in it after you run `
 
 S("3.1-23", "Which compression program does tar use when you add the `-j` option?",
   ["✔bzip2", "gzip", "xz", "zip"],
-  "tar can pass the archive through a compressor: `-z` uses gzip (.tar.gz), `-j` uses bzip2 (.tar.bz2) and `-J` uses xz (.tar.xz).",
+  "`tar` can pass the archive through a compressor: `-z` uses gzip (.tar.gz), `-j` uses bzip2 (.tar.bz2) and `-J` uses xz (.tar.xz).",
   hint="Its archives end in .tar.bz2.",
   why={"gzip": "gzip is selected with `-z`.",
        "xz": "xz is selected with a capital `-J`.",
@@ -270,7 +270,7 @@ S("3.2-32", "nums.txt contains the lines 10, 9 and 100. Which command prints the
 
 F("3.2-33", "Type the complete command that prints the last 5 lines of the file app.log in the current directory.",
   ["tail -n 5 app.log", "tail -5 app.log", "tail -n5 app.log", "tail --lines 5 app.log", "tail --lines=5 app.log"],
-  "tail prints the end of a file, 10 lines unless `-n` says otherwise. head does the same for the beginning.",
+  "`tail` prints the end of a file, 10 lines unless `-n` says otherwise. head does the same for the beginning.",
   hint="The counterpart of head, with -n and a number.",
   lab=lab({"files": [{"path": "~/app.log", "data": "".join("line %d\n" % i for i in range(1, 10))}]},
           {"type": "last", "regex": r"^line 5\nline 6\nline 7\nline 8\nline 9\n?$"},
@@ -359,7 +359,7 @@ S("4.2-22", "A system has a single SATA disk with four partitions. Which device 
 
 S("4.2-23", "Which command produced this output?",
   ["✔lsblk", "lscpu", "lsusb", "free -h"],
-  "lsblk lists block devices as a tree: disks, the partitions on them, their sizes and where they are mounted.",
+  "`lsblk` lists block devices as a tree: disks, the partitions on them, their sizes and where they are mounted.",
   code="NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS\nsda      8:0    0  100G  0 disk\n├─sda1   8:1    0    1G  0 part /boot\n└─sda2   8:2    0   99G  0 part /",
   hint="The output shows disks and partitions, which are block devices.",
   why={"lscpu": "lscpu describes the processor: architecture, cores, model name.",
@@ -416,7 +416,7 @@ S("4.4-22", "How long is an IPv6 address?",
 
 S("4.4-23", "A colleague says a server seems to be down. Which command is the quickest check of whether the host answers on the network at all?",
   ["✔ping -c 4 server.example.com", "host server.example.com", "ip addr show", "ss -tln"],
-  "ping sends ICMP echo requests and reports the replies, so it shows whether the host is reachable and how long answers take. "
+  "`ping` sends ICMP echo requests and reports the replies, so it shows whether the host is reachable and how long answers take. "
   "`-c 4` stops after four requests.",
   hint="The command is named after the sound of sonar.",
   why={"host server.example.com": "host only looks up the name in DNS; it doesn't contact the server itself.",
@@ -432,7 +432,7 @@ F("5.1-21", "Type the user ID (UID) that always belongs to root, the superuser."
 
 S("5.1-22", "An administrator wants to see when the server was last rebooted and who logged in during the past days. Which command shows that history?",
   ["✔last", "who", "w", "id"],
-  "last reads /var/log/wtmp and lists past logins, logouts and reboots, newest first. who and w only show the users logged in right now.",
+  "`last` reads /var/log/wtmp and lists past logins, logouts and reboots, newest first. who and w only show the users logged in right now.",
   hint="You are asking about the last logins.",
   why={"who": "who lists only the users who are logged in at the moment.",
        "w": "w shows current users and what they are running, not past sessions.",
@@ -454,7 +454,7 @@ S("5.1-23", "Why can't a regular user read other users' password hashes?",
 # ------------------------------------------------------------------------------------------ 5.2
 F("5.2-21", "Type the complete command, including sudo, that deletes the user tom together with his home directory.",
   ["sudo userdel -r tom", "sudo userdel --remove tom"],
-  "userdel removes the account from /etc/passwd, /etc/shadow and /etc/group. With `-r` it also removes the home directory and the "
+  "`userdel` removes the account from /etc/passwd, /etc/shadow and /etc/group. With `-r` it also removes the home directory and the "
   "mail spool; without it, the files stay behind.",
   hint="userdel has an option to remove the home directory too.",
   lab=lab({"users": [{"name": "tom"}], "files": [{"path": "/home/tom/notes.txt", "data": "todo\n", "owner": "tom"}]},
@@ -472,7 +472,7 @@ S("5.2-22", "Where should an administrator put a default .bashrc so that every u
 
 F("5.2-23", "The user dave has forgotten his password. Type the complete command, including sudo, with which an administrator sets a new one for him.",
   ["sudo passwd dave"],
-  "passwd without an argument changes your own password. root can name another user, and is then not asked for the old password.",
+  "`passwd` without an argument changes your own password. root can name another user, and is then not asked for the old password.",
   hint="The same command you use for your own password, with the user's name.", level=2, variant_of="5.2-03")
 
 # ------------------------------------------------------------------------------------------ 5.3
@@ -484,7 +484,7 @@ F("5.3-21", "Type the three-digit octal mode for the permissions rwxr-xr--.",
 
 F("5.3-22", "Type the complete command (run as root) that changes only the group of report.txt to users, leaving the owner as it is.",
   ["chgrp users report.txt", "chown :users report.txt"],
-  "chgrp changes the group of a file. chown can do it too when the name is written after a colon: `chown :users report.txt`.",
+  "`chgrp` changes the group of a file. chown can do it too when the name is written after a colon: `chown :users report.txt`.",
   hint="There is a command just for changing the group.", run="touch report.txt; {A}; stat -c %G report.txt", expect="users",
   level=2, variant_of="5.3-12")
 

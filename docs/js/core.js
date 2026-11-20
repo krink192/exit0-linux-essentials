@@ -38,6 +38,14 @@
     d = d ? new Date(d) : new Date();
     return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
   }
+  /** Monday of the local week containing `d` (a Date, or a ms timestamp). */
+  function weekStart(d) {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    return x;
+  }
+  function weekKey(d) { return dayKey(weekStart(d)); }
 
   // ------------------------------------------------------------- bank index
   function indexBank(bank) {
@@ -159,6 +167,101 @@
     if (q.type === "fill") return checkTyped(q, a).ok;
     if (!Array.isArray(a)) return false;
     return a.slice().sort().join() === q.answer.slice().sort().join();
+  }
+  // ------------------------------------------------------------- why a wrong answer is wrong
+  // One plain line on why a wrong answer missed, made from the answer key and the lab's manual pages (man.js, passed
+  // in as `man`; without it the line is shorter but still right). Nothing is written per question, but a question
+  // can give its own line for a known wrong answer with `miss: { "<typed command>": "note" }`.
+  const MISS_ROLE = { TARGET: "existing file", LINK_NAME: "new name", SOURCE: "source", DEST: "destination", DIRECTORY: "directory",
+    DIR: "directory", ARCHIVE: "archive", FILE: "file", PATTERN: "pattern", MODE: "mode", OWNER: "new owner", GROUP: "group",
+    LOGIN: "user", USER: "user", NAME: "name", PAGE: "page" };
+  const missToks = s => norm(s).split(" ").filter(Boolean);
+  const missAt = t => t[0] === "sudo" ? 1 : 0;
+  const missOpt = x => /^-/.test(x) && x !== "-";
+  const missExpand = x => /^-[A-Za-z]{2,}$/.test(x) ? x.slice(1).split("").map(c => "-" + c) : [x];   // -cjf -> -c -j -f
+  function missParts(t) {
+    const r = { cmd: t[missAt(t)], sudo: missAt(t) === 1, opts: [], args: [] };
+    t.slice(missAt(t) + 1).forEach(x => missOpt(x) ? r.opts.push(...missExpand(x)) : r.args.push(x));
+    return r;
+  }
+  const sameSet = (x, y) => x.slice().sort().join("\n") === y.slice().sort().join("\n");
+  const minus = (x, y) => x.filter(v => !y.includes(v));
+  /** The accepted answer closest to what was typed: same command first, then the fewest differing parts. */
+  function closestAccepted(q, a) {
+    const accept = (q && q.accept) || [], p = missParts(missToks(a));
+    const score = s => { const r = missParts(missToks(s)); return (r.cmd === p.cmd ? 0 : 100) + minus(r.opts, p.opts).length
+      + minus(p.opts, r.opts).length + minus(r.args, p.args).length + minus(p.args, r.args).length; };
+    return accept.reduce((best, s) => best == null || score(s) < score(best) ? s : best, null) || "";
+  }
+  /** Why a typed answer is wrong: { kind, text } with `code` in backticks, or null when no rule fits
+   *  (a one-word answer, several commands joined with && or |, or a change too big to name). */
+  function missTyped(q, a, man) {
+    const t = checkTyped(q, a);
+    if (t.ok || !t.answered) return null;
+    if (t.near) return { kind: t.near, text: TYPED_NEAR[t.near] };
+    if (q.miss && q.miss[t.typed]) return { kind: "own", text: q.miss[t.typed] };
+    const page = c => man && Object.prototype.hasOwnProperty.call(man, c) ? man[c] : null;
+    const summary = c => { const m = page(c); return m ? m.summary : ""; };
+    const roles = c => { const m = page(c); if (!m || !m.synopsis) return [];
+      return m.synopsis[0].split(" ").slice(1).filter(x => !/^[[-]/.test(x)).map(x => x.replace(/\.\.\.$/, "")); };
+    const role = r => r ? MISS_ROLE[r] || MISS_ROLE[r.split(".")[0]] || "" : "";
+    const optText = (c, o) => {       // the option's first sentence; gunzip's options live on the gzip page
+      const m = page(c); if (!m) return "";
+      const pages = [m].concat((m.see || []).map(x => page(String(x).split("(")[0]))).filter(x => x && x.options);
+      for (const pg of pages) {
+        const hit = pg.options.find(([n]) => n.split(/,\s*/).some(k => k.split(" ")[0] === o));
+        if (hit) return hit[1].split(/(?<=[a-z0-9)])\.\s+|;\s|:\s/)[0].replace(/\.$/, "").replace(/^./, c => c.toLowerCase());
+      }
+      return "";
+    };
+    const code = x => "`" + x + "`";
+    const T = missToks(t.typed), best = closestAccepted(q, t.typed), A = missToks(best);
+    if (!A.length || !/^[a-z][\w.+-]*$/.test(A[missAt(A)]) || (A.length < 2 && T.length < 2)) return null;   // a word or a path, not a command line
+    if (T.concat(A).some(x => /^(&&|\|\|?|;)$/.test(x))) return null;
+    const p = missParts(T), r = missParts(A);
+    if (p.cmd !== r.cmd) {
+      const s2 = summary(r.cmd) ? `: "${summary(r.cmd)}"` : "";
+      if (!page(p.cmd)) return { kind: "command", text: `This task needs ${code(r.cmd)}${s2}.` };
+      return { kind: "command", text: `Wrong command: ${code(p.cmd)} is for "${summary(p.cmd)}". This task needs ${code(r.cmd)}${s2}.` };
+    }
+    if (r.sudo && !p.sudo && sameSet(T, A.slice(1))) return { kind: "root", text: "This one needs root: start with `sudo`." };
+    if (sameSet(p.opts, r.opts) && sameSet(p.args, r.args)) {
+      const ro = roles(r.cmd), named = r.args.map((x, i) => role(ro[i]) ? `the ${role(ro[i])} ${code(x)}` : null);
+      return { kind: "order", text: named.length > 1 && named.every(Boolean)
+        ? `Right parts, wrong order. ${code(r.cmd)} takes ${named.slice(0, -1).join(", ")} first, then ${named[named.length - 1]}.`
+        : "Right parts, wrong order. Check which name comes first." };
+    }
+    const lack = minus(r.opts, p.opts), extra = minus(p.opts, r.opts), d = o => { const s = optText(r.cmd, o); return s ? ` (${s})` : ""; };
+    if (sameSet(p.args, r.args)) {
+      if (lack.length === 1 && extra.length === 1) return { kind: "option", text: `Use ${code(lack[0])}${d(lack[0])}, not ${code(extra[0])}${d(extra[0])}.` };
+      if (lack.length && !extra.length) return { kind: "option", text: `Missing ${lack.map(o => code(o) + d(o)).join(" and ")}.` };
+      if (extra.length && !lack.length) return { kind: "option", text: `Leave out ${extra.map(o => code(o) + d(o)).join(" and ")}: the task doesn't ask for that.` };
+    }
+    if (!lack.length && !extra.length) {
+      const gone = minus(r.args, p.args), more = minus(p.args, r.args);
+      if (gone.length && !more.length) return { kind: "args", text: `Something is missing: the answer also has ${code(gone.join(" "))}.` };
+      if (gone.length === 1 && more.length === 1) return { kind: "args", text: `Check the name: the answer uses ${code(gone[0])} where you typed ${code(more[0])}.` };
+      if (more.length && !gone.length) return { kind: "args", text: `Leave out ${more.map(code).join(" and ")}: the task doesn't ask for it.` };
+    }
+    return null;
+  }
+  const andWords = xs => xs.length < 2 ? xs.join("") : xs.slice(0, -1).join(", ") + " and " + xs[xs.length - 1];
+  /** A wrong choice answer: the right letters in the order shown (`order` maps position to option index), what was
+   *  missed or wrongly picked, and one line saying so. Returns null for a right answer. */
+  function missChoice(q, a, order) {
+    const picked = Array.isArray(a) ? a : [], L = "ABCDEF";
+    order = order || q.options.map((_, i) => i);
+    const pos = oi => L[order.indexOf(oi)];
+    const right = order.filter(oi => q.answer.includes(oi));
+    const missed = right.filter(oi => !picked.includes(oi)), wrong = order.filter(oi => picked.includes(oi) && !q.answer.includes(oi));
+    if (picked.length && !missed.length && !wrong.length) return null;
+    const bits = [];
+    if (picked.length) {
+      if (missed.length && q.type === "multi") bits.push(`You missed ${andWords(missed.map(pos))}.`);
+      wrong.forEach(oi => { const w = q.why && q.why[oi]; bits.push(`${pos(oi)} is wrong${w ? ": " + w.replace(/\.$/, "") : ""}.`); });
+      if (q.type === "multi" && missed.length && !wrong.length) bits.push(`"Choose ${q.answer.length === 2 ? "TWO" : "THREE"}" only counts when you pick all ${q.answer.length}.`);
+    }
+    return { right: right.map(pos), rightIdx: right, missed: missed.map(pos), wrong: wrong.map(pos), text: bits.join(" ") };
   }
   /** Choose TWO/THREE: how many options it asks for, and how many are picked.
    *  ready is true only at exactly that count. Null for single-choice and typed questions. */
@@ -301,6 +404,7 @@
       const trim = m => { if (!m || typeof m !== "object") return {}; const out = {}; for (const id of qids) if (m[id] !== undefined) out[id] = m[id]; return out; };
       s.optOrder = trim(s.optOrder); s.answers = trim(s.answers); s.flags = trim(s.flags);
       s.checked = trim(s.checked); s.hints = trim(s.hints); s.conf = trim(s.conf); s.dontKnow = trim(s.dontKnow);
+      if (s.refresh) s.refresh = trim(s.refresh);
       s.cur = Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0));
       s.qids = qids;
     }
@@ -599,6 +703,25 @@
     if (Array.isArray(st.cdrop) && st.cdrop.length) st.cdrop = st.cdrop.filter(d => d !== day);
     return st;
   }
+  /** Remove the objective's latest mastery day and remember it in cdrop, so a peer that still has the day cannot put it back. */
+  function dropLatestMasteryDay(state, bank, obj) {
+    let latest = -1;
+    for (const id of bank.byObj[obj] || []) {
+      const qs = state.qstats[id]; if (!qs) continue;
+      for (const d of coldDaysOf(qs)) latest = Math.max(latest, d);
+    }
+    if (latest < 0) return;
+    for (const id of bank.byObj[obj] || []) {
+      const qs = state.qstats[id]; if (!qs) continue;
+      const days = coldDaysOf(qs);
+      if (days.indexOf(latest) < 0) continue;
+      qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
+      const drop = Array.isArray(qs.cdrop) ? qs.cdrop.slice() : [];
+      if (drop.indexOf(latest) < 0) drop.push(latest);
+      drop.sort((a, b) => a - b);
+      qs.cdrop = drop.slice(-16);
+    }
+  }
   function masteryLevel(coldDays, seen) {
     if (!seen) return "new";
     if (coldDays >= MASTERY_DAYS) return "mastered";
@@ -730,6 +853,14 @@
     // Untimed full exams update practice history and the review schedule, but never cold evidence or mastery days.
     const untimed = s.mode === "test" && !s.study && s.timed === false;
     const mixed = s.mode === "test" && !s.study && !untimed && (s.qids || []).length === 40;
+    const coldMiss = {};
+    // Level before this sitting. A cold miss only demotes an objective that was already Mastered,
+    // not one that reaches three days from another answer in the same session.
+    const masteredBefore = {};
+    if (s.mode !== "placement" && !untimed) {
+      const before = objectiveStats(bank, state.qstats);
+      for (const o in before) if (before[o].level === "mastered") masteredBefore[o] = 1;
+    }
     for (const id of s.qids) {
       // Placement "Don't know yet" is a cold miss (ev = 0), not a blank: the learner said they don't know it.
       const dontKnow = s.mode === "placement" && !!(s.dontKnow && s.dontKnow[id]);
@@ -743,7 +874,7 @@
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
       const hinted = !!(s.hints && s.hints[id]);
       if (!untimed) {
-        if (cold && !hinted) st.ev = ok ? 1 : 0;
+        if (cold && !hinted) { st.ev = ok ? 1 : 0; st.evAt = now; }   // evAt: when this evidence was given (sync keeps the newest)
         else if (st.ev == null) st.ev = st.seen ? coldFromHistory(st) : -1;
       } else if (st.ev == null) {
         // Block legacy coldFromHistory from treating this practice answer as readiness evidence.
@@ -755,36 +886,32 @@
         if (s.conf[id] && !ok) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
       }
       if (!untimed && ok && cold && !hinted) noteColdDay(st, bank.byId[id], today);
+      // A cold miss is one the 4-day rule counts (first attempt, or long enough since any wording, no hint).
+      // Placement still records the miss for the estimate, but it does not take a mastery day away.
+      if (s.mode !== "placement" && !untimed && cold && !hinted && !ok) coldMiss[id] = 1;
       scheduleQuestion(st, ok, today, exDay);
       state.qstats[id] = st;
     }
-    // A miss in a mixed timed exam demotes the whole objective: drop the latest day in the objective-wide union.
-    // Blanks do not demote: never having answered is not a miss.
+    // A miss in a mixed timed exam drops the objective's latest mastery day.
+    // A cold miss (the 4-day rule, no hint) does the same when that objective was already Mastered:
+    // three days becomes Proficient. One extra day already earned stays Mastered until another cold miss.
+    // Placement does not demote. An untimed exam is not counted as cold, so it does not demote either.
+    // The day is removed wherever it is stored, so a miss on a question that does not hold it still demotes the objective.
+    // Blanks do not demote. One session drops a day once, even when both rules match.
+    const hit = {};
     if (mixed) {
-      const hit = {};
       for (const id of s.qids) {
         if (!answered(bank.byId[id], s.answers[id])) continue;
         if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
       }
-      for (const o in hit) {
-        let latest = -1;
-        for (const id of bank.byObj[o] || []) {
-          const qs = state.qstats[id]; if (!qs) continue;
-          for (const d of coldDaysOf(qs)) latest = Math.max(latest, d);
-        }
-        if (latest < 0) continue;
-        for (const id of bank.byObj[o] || []) {
-          const qs = state.qstats[id]; if (!qs) continue;
-          const days = coldDaysOf(qs);
-          if (days.indexOf(latest) < 0) continue;
-          qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
-          const drop = Array.isArray(qs.cdrop) ? qs.cdrop.slice() : [];
-          if (drop.indexOf(latest) < 0) drop.push(latest);
-          drop.sort((a, b) => a - b);
-          qs.cdrop = drop.slice(-16);
-        }
+    }
+    if (Object.keys(coldMiss).length) {
+      for (const id in coldMiss) {
+        const o = bank.byId[id] && bank.byId[id].obj;
+        if (o && masteredBefore[o]) hit[o] = 1;
       }
     }
+    for (const o in hit) dropLatestMasteryDay(state, bank, o);
     const conf = {};
     for (const id of s.qids) if (s.conf && (s.conf[id] === true || s.conf[id] === false)) conf[id] = !!s.conf[id];
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
@@ -799,6 +926,7 @@
     // keep full detail for the 30 most recent records
     state.tests.forEach((t, i) => { if (i < state.tests.length - 30) { delete t.qids; delete t.answers; delete t.optOrder; delete t.flags; delete t.hints; delete t.conf; } });
     addActivity(state, res.answered, now);
+    noteEstimate(state, passPrediction(bank, state.qstats), now);
     return rec;
   }
 
@@ -866,6 +994,29 @@
   // Each day's batch mixes due reviews with new questions so learners keep moving through the bank;
   // whatever is due beyond today's size just waits its turn (oldest and missed first).
   const REVIEW_SIZE_MIN = 5, REVIEW_SIZE_MAX = 100, REVIEW_NEW_MAX = 50;
+  const REFRESH_QS = 2, REFRESH_CARDS = 2;   // mastered items mixed back in so they stay fresh; not marked due
+  /** Seen questions in mastered objectives that are not due, oldest fact first. One wording per fact: the one
+   *  seen longest ago. Picking them does not change a due date. */
+  function refresherQuestionIds(bank, state, today, n, rand) {
+    if (!n) return [];
+    today = today == null ? dayNum() : today;
+    const qstats = state.qstats || {}, os = objectiveStats(bank, qstats), dueFam = {}, facts = {};
+    for (const id of dueIds(bank, qstats, today)) { const q = bank.byId[id]; if (q) dueFam[q.variantOf || id] = 1; }
+    for (const id in qstats) {
+      const q = bank.byId[id]; if (!q) continue;
+      const s = qstats[id]; if (!s || !s.seen || s.at == null) continue;
+      if (!os[q.obj] || os[q.obj].level !== "mastered") continue;
+      const fam = q.variantOf || id; if (dueFam[fam]) continue;
+      const rec = facts[fam] || (facts[fam] = { last: 0, id, at: Infinity });
+      if (s.at > rec.last) rec.last = s.at;
+      if (s.at < rec.at) { rec.at = s.at; rec.id = id; }
+    }
+    // Already answered today: it is fresh, so it does not fill a refresher slot again.
+    const list = Object.values(facts).filter(x => dayNum(x.last) !== today);
+    return shuffle(list, rand || Math.random)
+      .sort((a, b) => a.last - b.last || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, n).map(x => x.id);
+  }
   /** settings.review = { on, size: questions a day, fresh: how many of them are new }. Off until the learner turns it on. */
   function clampReview(r) {
     r = r || {};
@@ -915,9 +1066,13 @@
     const backlog = dueIds(bank, state.qstats, today).length;
     const unseen = factCount(bank) - factsSeen(bank, state.qstats);
     const done = reviewDoneToday(state.tests, today);
-    const avail = cfg.on ? Math.min(Math.max(0, cfg.size - done), backlog + unseen) : 0;
+    const room = cfg.on ? Math.max(0, cfg.size - done) : 0;
+    // Two mastered questions take slots inside the day's first batch. A later batch the same day does not add another pair.
+    // Picking them does not change a due date.
+    const refresh = room && !done ? Math.min(REFRESH_QS, refresherQuestionIds(bank, state, today, REFRESH_QS).length, room) : 0;
+    const avail = cfg.on ? Math.min(Math.max(0, room - refresh), backlog + unseen) : 0;
     const mix = reviewMix(avail, cfg, backlog, unseen);
-    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
+    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh + refresh, due: mix.due, fresh: mix.fresh, refresh, backlog, unseen };
   }
   /** `n` of the due questions (already ordered oldest and missed first). When more are due than fit, each objective
    *  gets its share by exam weight and gives its oldest ones, so a backlog is worked off where the exam's points are. */
@@ -934,13 +1089,17 @@
     const today = opts.today == null ? dayNum() : opts.today;
     const cfg = clampReview(state.settings && state.settings.review);
     const due = dueIds(bank, state.qstats, today);
-    let mix;
+    let mix, refreshN = 0;
     if (opts.count) mix = reviewMix(opts.count, cfg, due.length, bank.questions.length);
-    else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; }
+    else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; refreshN = d.refresh || 0; }
     // A due fact that has variants comes back in the wording seen longest ago, so a review isn't a memory test of one sentence.
-    const ids = dueByWeight(bank, due, mix.due, rand).map(id => rotateVariant(bank, state.qstats, id, rand)).concat(newIds(bank, state.qstats, mix.fresh, rand));
+    const refreshIds = refreshN ? refresherQuestionIds(bank, state, today, refreshN, rand) : [];
+    const ids = dueByWeight(bank, due, mix.due, rand).map(id => rotateVariant(bank, state.qstats, id, rand))
+      .concat(newIds(bank, state.qstats, mix.fresh, rand), refreshIds);
     if (!ids.length) return null;
-    return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
+    const session = newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
+    if (refreshIds.length) { session.refresh = {}; for (const id of refreshIds) if (session.qids.indexOf(id) >= 0) session.refresh[id] = true; }
+    return session;
   }
 
   // ------------------------------------------------------------- command practice (drills on the lab shell)
@@ -1085,13 +1244,34 @@
       out.push(s);
       if (out.length >= count) break;
     }
+    // One mastered skill that is not already due, the one seen longest ago, so Recommended keeps it fresh.
+    if (src === "recommended" && out.length) {
+      const cands = pool.filter(s => {
+        const m = mastery[s.cmd], stt = cs[s.id];
+        return m && m.level === "mastered" && stt && stt.last === true && !isDue(stt, today);
+      });
+      const pick = shuffle(cands, rand).sort((a, b) => (cs[a.id].at || 0) - (cs[b.id].at || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+      if (pick) {
+        const at = out.findIndex(s => s.id === pick.id);
+        if (at < 0) {
+          const last = out[out.length - 1], lastSt = cs[last.id];
+          const urgent = isDue(lastSt, today) || !!(lastSt && lastSt.seen && lastSt.last === false);
+          if (out.length < count || !urgent) {
+            if (out.length >= count) out[out.length - 1] = pick; else out.push(pick);
+            out.refreshId = pick.id;
+          }
+        } else out.refreshId = pick.id;
+      }
+    }
     return out;
   }
   /** A practice session: one fresh machine per task. mode: "guided" (hints), "recall" (no hints), "timed" (recall + a clock). */
   function buildCmdSession(drills, index, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
     const byId = {}; for (const s of drills.skills) byId[s.id] = s;
-    const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
+    const picked = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed }));
+    const refreshId = picked.refreshId;
+    const picks = picked.filter(s => byId[s.id]);
     if (!picks.length) return null;
     // pickSkills lists each skill once. The template is chosen at random. If a skill were ever listed again, the
     // next template would be used, and the same task text isn't asked twice while that template has other values.
@@ -1099,7 +1279,7 @@
     const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
       let t = instantiateDrill(sk, k % sk.templates.length, rand);
       for (let tries = 0; tries < 12 && asked.has(sk.id + "\n" + t.text); tries++) t = instantiateDrill(sk, k % sk.templates.length, rand);
-      asked.add(sk.id + "\n" + t.text); return t; });
+      asked.add(sk.id + "\n" + t.text); t.refresh = p.id === refreshId; return t; });
     const mode = ["guided", "recall", "timed"].indexOf(opts.mode) >= 0 ? opts.mode : "guided";
     return { mode, seconds: mode === "timed" ? (opts.seconds || 90) : null, tasks, i: 0, results: [], label: opts.label || "Command practice", start: opts.now || Date.now() };
   }
@@ -1207,6 +1387,95 @@
     return /[.!?]$/.test(g) ? g : g + ".";
   }
 
+  // ------------------------------------------------------------- lesson exercises (Guided / Explorational)
+  // Original items in the shape of an LPI lesson's Guided and Explorational sections. Not copies of LPI's text.
+  // Progress uses the same shape as a lab part: { done: [item indexes], completedAt }.
+  const LX_ROLES = ["command", "option", "argument"];
+  const LX_BINS = ["builtin", "external"];
+  const LESSON_EXERCISES = [
+    { id: "split", kind: "split", label: "Guided", title: "Split the command",
+      lead: "A command line is a command, then any options, then any arguments. An option starts with - or -- and changes how the command works. An argument is what it acts on, such as a file or a word. Tag every word.",
+      items: [
+        { obj: "2.1", tokens: [{ t: "cat", role: "command" }, { t: "-n", role: "option" }, { t: "/etc/passwd", role: "argument" }] },
+        { obj: "2.1", tokens: [{ t: "echo", role: "command" }, { t: "hello", role: "argument" }] },
+        { obj: "2.1", tokens: [{ t: "ls", role: "command" }, { t: "-l", role: "option" }, { t: "/home", role: "argument" }] },
+        { obj: "2.2", tokens: [{ t: "man", role: "command" }, { t: "ls", role: "argument" }] },
+        { obj: "2.2", tokens: [{ t: "ls", role: "command" }, { t: "--help", role: "option" }] },
+        { obj: "2.3", tokens: [{ t: "pwd", role: "command" }] },
+        { obj: "2.3", tokens: [{ t: "cd", role: "command" }, { t: "/etc", role: "argument" }] },
+        { obj: "2.3", tokens: [{ t: "ls", role: "command" }, { t: "-a", role: "option" }, { t: ".", role: "argument" }] },
+        { obj: "2.4", tokens: [{ t: "mkdir", role: "command" }, { t: "-p", role: "option" }, { t: "work/lab", role: "argument" }] },
+        { obj: "2.4", tokens: [{ t: "cp", role: "command" }, { t: "-i", role: "option" }, { t: "draft.txt", role: "argument" }, { t: "final.txt", role: "argument" }] },
+      ] },
+    { id: "sort", kind: "sort", label: "Explorational", title: "Builtin or external?",
+      lead: "Some of these names are part of the shell. The others are programs stored on disk. Sort each one, then check.",
+      explain: "The type command tells you which is which. type cd prints \"cd is a shell builtin\". type ls prints a path such as /usr/bin/ls, so ls is a separate program. echo and pwd also exist as programs, but Bash runs its own builtin and type says so.",
+      items: [
+        { name: "cd", bin: "builtin" }, { name: "echo", bin: "builtin" }, { name: "ls", bin: "external" },
+        { name: "type", bin: "builtin" }, { name: "pwd", bin: "builtin" }, { name: "cat", bin: "external" },
+        { name: "export", bin: "builtin" }, { name: "grep", bin: "external" }, { name: "alias", bin: "builtin" },
+        { name: "man", bin: "external" }, { name: "history", bin: "builtin" }, { name: "find", bin: "external" },
+      ] },
+  ];
+  /** One split line. `picks` is a role per token. A blank is unfinished. An unknown or mismatched role is a mistake. */
+  function checkSplitLine(item, picks) {
+    const tokens = (item && item.tokens) || [];
+    picks = Array.isArray(picks) ? picks : [];
+    const blank = [], wrong = [];
+    const n = Math.max(tokens.length, picks.length);
+    for (let i = 0; i < n; i++) {
+      if (i >= tokens.length) { wrong.push(i); continue; }
+      const p = i < picks.length ? picks[i] : "";
+      if (p == null || p === "") blank.push(i);
+      else if (LX_ROLES.indexOf(p) < 0 || p !== tokens[i].role) wrong.push(i);
+    }
+    return { ok: tokens.length > 0 && blank.length === 0 && wrong.length === 0, blank, wrong };
+  }
+  /** Every line of the split exercise. `done` is the indexes of lines that are fully right. */
+  function checkSplitExercise(items, answers) {
+    items = items || []; answers = answers || [];
+    const results = items.map((item, i) => checkSplitLine(item, answers[i]));
+    const done = []; results.forEach((r, i) => { if (r.ok) done.push(i); });
+    return { ok: items.length > 0 && done.length === items.length, results, done };
+  }
+  /** The sort exercise. `picks` maps a name to "builtin" or "external". Unknown names are ignored. */
+  function checkSortExercise(items, picks) {
+    items = items || []; picks = isObj(picks) ? picks : {};
+    const wrong = [], blank = [], done = [];
+    items.forEach((item, i) => {
+      const p = has(picks, item.name) ? picks[item.name] : "";
+      if (p == null || p === "") blank.push(item.name);
+      else if (LX_BINS.indexOf(p) < 0 || p !== item.bin) wrong.push(item.name);
+      else done.push(i);
+    });
+    return { ok: items.length > 0 && wrong.length === 0 && blank.length === 0, wrong, blank, done };
+  }
+  /** Saved progress for one exercise. Correct indexes accumulate. The first time they are all correct, that time is kept. */
+  function lessonExerciseRecord(prev, correct, total, now) {
+    total = Math.max(0, total | 0);
+    const prior = (prev && prev.done) || [];
+    const done = Array.from(new Set(prior.concat(correct || []))).filter(i => Number.isInteger(i) && i >= 0 && i < total).sort((a, b) => a - b);
+    const row = { done };
+    if (total > 0 && done.length === total) row.completedAt = prev && prev.completedAt != null ? prev.completedAt : now;
+    return row;
+  }
+  /** Catalogue status, same words as a lab row: New, "2 of 10", or Done. */
+  function lessonExerciseStatus(row, total) {
+    total = Math.max(0, total | 0);
+    const uniq = Array.from(new Set(((row && row.done) || []).filter(i => Number.isInteger(i) && i >= 0 && i < total)));
+    const state = total && row && row.completedAt != null && uniq.length === total ? "done" : uniq.length ? "started" : "new";
+    const text = state === "done" ? "Done" : state === "new" ? "New" : uniq.length + " of " + total;
+    return { state, done: uniq.length, total, text };
+  }
+  /** Union lab-shaped rows (done indexes, earliest completedAt). Used for lesson exercises across devices. */
+  function unionProgress(into, from) {
+    for (const id in from || {}) {
+      const a = from[id] || {}, o = into[id] || (into[id] = { done: [] });
+      o.done = Array.from(new Set((o.done || []).concat(a.done || []))).sort((x, y) => x - y);
+      if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
+    }
+  }
+
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
@@ -1237,9 +1506,18 @@
     return { xp: total, level: lv + 1, name: LEVEL_NAMES[lv], floor: LEVEL_XP[lv], next: lv + 1 < LEVEL_XP.length ? LEVEL_XP[lv + 1] : null };
   }
   function longestStreak(days, goal) {
+    goal = goal > 0 ? goal : 1;          // a goal of 0 used to treat every day as met
     const nums = Object.keys(days).filter(k => days[k] >= goal).map(k => { const [y, m, d] = k.split("-").map(Number); return dayNum(new Date(y, m - 1, d)); }).sort((a, b) => a - b);
-    let best = 0, run = 0;
-    nums.forEach((n, i) => { run = i && n === nums[i - 1] + 1 ? run + 1 : 1; best = Math.max(best, run); });
+    let best = 0, run = 0, prev = null, lastGrace = null;
+    for (const n of nums) {
+      if (prev == null || n === prev + 1) { run++; prev = n; best = Math.max(best, run); continue; }
+      const gapDay = prev + 1;
+      // One missed day between two goal days, and no other rest day in the 7 days before it.
+      if (n === prev + 2 && (lastGrace == null || gapDay - lastGrace >= 7)) {
+        lastGrace = gapDay; prev = n; run++; best = Math.max(best, run); continue;
+      }
+      run = 1; prev = n; lastGrace = null; best = Math.max(best, run);
+    }
     return best;
   }
   const BADGES = [
@@ -1339,6 +1617,57 @@
   function convolve(p, q) {
     const out = new Array(p.length + q.length - 1).fill(0);
     for (let i = 0; i < p.length; i++) for (let j = 0; j < q.length; j++) out[i + j] += p[i] * q[j];
+    return out;
+  }
+  /** Rebuild cold evidence (qstats ev) under the current COLD_DAYS by replaying the saved records that still hold their
+   *  answers, oldest first, with the same rules as recordResult (blanks skipped, hints and untimed exams not evidence,
+   *  "Don't know yet" a miss, a fact's wordings sharing one clock). Each rebuilt ev is stamped with evAt, the time of
+   *  the answer it came from, so sync keeps the newest evidence whatever order devices merge in (see mergeSched).
+   *  Answers in records without detail (older than the last KEEP_DETAIL) can't be replayed: they only bound when the
+   *  last unseen answer could have been, and a fact with nothing left to replay keeps its ev. Runs once per device:
+   *  state.evRule notes the rule it was built with. Returns { ran, rebuilt, changed, kept } (counts of facts). */
+  function rebuildEvidence(bank, state, force) {
+    const out = { ran: false, rebuilt: 0, changed: 0, kept: 0 };
+    if (!state || (!force && state.evRule === COLD_DAYS)) return out;
+    out.ran = true;
+    const qstats = state.qstats || {}, gap = COLD_DAYS * DAY_MS;
+    const tests = (state.tests || []).slice().sort((a, b) => ((a.date || 0) - (b.date || 0)) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    let hiddenUpTo = null;          // date of the newest record whose answers are gone
+    const tries = {};               // family key -> answers in order
+    for (const t of tests) {
+      if (!t.qids) { hiddenUpTo = Math.max(hiddenUpTo || 0, t.date || 0); continue; }
+      const untimed = t.mode === "test" && !t.study && t.timed === false;
+      const hints = {}, dk = {};
+      for (const id of t.hints || []) hints[id] = 1;
+      if (t.mode === "placement") for (const id of t.dontKnow || []) dk[id] = 1;
+      for (const id of t.qids) {
+        const q = bank.byId[id], a = (t.answers || {})[id]; if (!q) continue;
+        if (!dk[id] && !answered(q, a)) continue;
+        const key = q.variantOf || q.id;
+        (tries[key] = tries[key] || []).push({ id, at: t.date || 0, ok: !dk[id] && isCorrect(q, a), counts: !untimed && !hints[id] });
+      }
+    }
+    for (const key in bank.family || {}) {
+      const fam = bank.family[key], list = tries[key] || [];
+      const seen = fam.reduce((n, f) => n + ((qstats[f] && qstats[f].seen) || 0), 0);
+      if (!list.length) { if (seen) out.kept++; continue; }
+      // Answers we can't see happened by hiddenUpTo (or, with no date at all, count the first answer we can see as a repeat).
+      let last = seen > list.length ? (hiddenUpTo != null ? hiddenUpTo : list[0].at) : null;
+      const found = {};
+      for (const a of list) {
+        if ((last == null || a.at - last >= gap) && a.counts) found[a.id] = { ev: a.ok ? 1 : 0, at: a.at };
+        last = a.at;
+      }
+      let any = false, diff = false;
+      for (const id in found) {
+        const s = qstats[id]; if (!s || !s.seen) continue;
+        any = true; if (s.ev !== found[id].ev) diff = true;
+        s.ev = found[id].ev; s.evAt = found[id].at;
+      }
+      if (any) out.rebuilt++; else if (seen) out.kept++;
+      if (diff) out.changed++;
+    }
+    state.evRule = COLD_DAYS;
     return out;
   }
   /** For progress saved before cold evidence was tracked: the first attempt when it can be known (seen once, always right,
@@ -1537,7 +1866,24 @@
     const byDue = (a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const missed = shuffle(dueAll.filter(c => missedToday(cstate[c.id], today)), rand);
     const other = dueAll.filter(c => !missedToday(cstate[c.id], today)).sort(byDue);
-    return missed.slice(0, MISS_LEAD).concat(mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand))).slice(0, limit);
+    const lead = missed.slice(0, MISS_LEAD);
+    const rest = mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand));
+    const organic = lead.concat(rest);
+    // Up to two cards from the top Leitner box (the 16-day step, box 5) that are not due, oldest first.
+    // Only when the session already has something else: a deck with nothing due does not start just for these.
+    const have = {}; for (const c of organic) have[c.id] = 1;
+    const extra = !organic.length ? [] : shuffle(pool.filter(c => { const s = cstate[c.id]; return s && s.box >= BOX_DAYS.length - 1 && s.due > today && !have[c.id]; }), rand)
+      .sort((a, b) => (cstate[a.id].at || 0) - (cstate[b.id].at || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, REFRESH_CARDS);
+    let q;
+    if (!extra.length) q = organic.slice(0, limit);
+    else {
+      const room = Math.max(0, limit - lead.length), take = extra.slice(0, room);
+      q = lead.concat(spreadList(rest.slice(0, Math.max(0, room - take.length)), take)).slice(0, limit);
+    }
+    q.refresh = {};
+    for (const c of extra) if (q.some(x => x.id === c.id)) q.refresh[c.id] = true;
+    return q;
   }
   /** A card missed at `index` comes back once, after at least 5 other cards. Returns the next index to show. */
   function requeueMiss(queue, index, again) {
@@ -1581,12 +1927,148 @@
     const k = dayKey(now); state.days[k] = (state.days[k] || 0) + n;
   }
   function streak(days, goal, now) {
-    const d = now ? new Date(now) : new Date();
-    let count = 0;
-    const metToday = (days[dayKey(d)] || 0) >= goal;
-    if (!metToday) d.setDate(d.getDate() - 1);
-    while ((days[dayKey(d)] || 0) >= goal) { count++; d.setDate(d.getDate() - 1); }
-    return { count, metToday, today: days[dayKey(now)] || 0 };
+    goal = goal > 0 ? goal : 1;          // a goal of 0 used to walk backwards forever
+    const today = now ? new Date(now) : new Date();
+    const met = d => (days[dayKey(d)] || 0) >= goal;
+    const metToday = met(today);
+    const cursor = new Date(today);
+    if (!metToday) cursor.setDate(cursor.getDate() - 1);   // today not finished yet does not break a streak
+    let count = 0, lastGrace = null, earliest = null;
+    for (const k of Object.keys(days)) { const p = parseDate(k); if (!p) continue; const n = dayNum(p); if (earliest == null || n < earliest) earliest = n; }
+    const graceKeys = [];
+    for (let steps = 0; steps < 20000 && (earliest == null || dayNum(cursor) >= earliest - 1); steps++) {
+      if (met(cursor)) { count++; cursor.setDate(cursor.getDate() - 1); continue; }
+      const prev = new Date(cursor); prev.setDate(prev.getDate() - 1);
+      const next = new Date(cursor); next.setDate(next.getDate() + 1);
+      const n = dayNum(cursor);
+      // A rest day needs the goal on both sides, and at most one such day in any 7.
+      if (count > 0 && met(prev) && met(next) && (lastGrace == null || lastGrace - n >= 7)) {
+        lastGrace = n; graceKeys.push(dayKey(cursor)); cursor.setDate(cursor.getDate() - 1); continue;
+      }
+      break;
+    }
+    const thisWeek = weekKey(today);
+    const graceUsed = graceKeys.some(k => weekKey(parseDate(k)) === thisWeek) ? 1 : 0;
+    return { count, metToday, today: days[dayKey(today)] || 0, graceUsed };
+  }
+  const DAY_NAME = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MON_NAME = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  /** Last `weeks` calendar weeks (Mon–Sun columns) ending this week. Future days are marked, not counted. */
+  function studyDays(days, goal, now, weeks) {
+    weeks = Math.max(1, Math.min(52, weeks || 12));
+    goal = goal > 0 ? goal : 1;
+    days = days || {};
+    const today = now ? new Date(now) : new Date();
+    today.setHours(12, 0, 0, 0);
+    const todayKey = dayKey(today), todayNum = dayNum(today);
+    const start = weekStart(today);
+    start.setDate(start.getDate() - 7 * (weeks - 1));
+    let studied = 0, met = 0, total = 0;
+    const cols = [];
+    for (let w = 0; w < weeks; w++) {
+      const mon = new Date(start);
+      mon.setDate(start.getDate() + 7 * w);
+      const col = [];
+      for (let i = 0; i < 7; i++) {
+        const dt = new Date(mon);
+        dt.setDate(mon.getDate() + i);
+        const key = dayKey(dt), future = dayNum(dt) > todayNum;
+        const n = future ? 0 : (days[key] || 0);
+        let level = -1;
+        if (!future) {
+          total++;
+          if (n <= 0) level = 0;
+          else if (n < goal) { level = 1; studied++; }
+          else if (n < goal * 2) { level = 2; studied++; met++; }
+          else { level = 3; studied++; met++; }
+        }
+        const when = DAY_NAME[dt.getDay()] + " " + dt.getDate() + " " + MON_NAME[dt.getMonth()];
+        const label = future ? when : !n ? when + ": nothing studied"
+          : level < 2 ? when + ": " + n + " done, under the goal" : when + ": " + n + " done, goal met";
+        col.push({ key, n, level, future, today: key === todayKey, label });
+      }
+      cols.push({ monday: dayKey(mon), days: col });
+    }
+    return { weeks: cols, studied, met, total, goal };
+  }
+  /**
+   * Weekly score chart. Full exams are one dot each; estimates are one hollow dot per week from `estWeeks`
+   * (the latest pass-prediction percent recorded that week). Empty weeks between the first and last point
+   * stay in the list so a line through weekly exam means is not drawn across a gap. At most the last 12
+   * weeks that contain a point. Nothing is invented for weeks before recording started.
+   */
+  function scoreHistory(tests, estWeeks, now) {
+    const today = now == null ? new Date() : new Date(now);
+    const endNum = dayNum(weekStart(today));
+    const byWeek = {};
+    const slot = key => byWeek[key] || (byWeek[key] = { exams: [], estimate: null, estAt: -1 });
+    const all = [];
+    for (const t of tests || []) {
+      if (!isReadinessExam(t) || typeof t.date !== "number" || !isFinite(t.date)) continue;
+      const wk = weekStart(t.date);
+      if (dayNum(wk) > endNum) continue;
+      const pct = Math.max(0, Math.min(100, Math.round(t.pct || 0)));
+      all.push({ pct, date: t.date });
+      slot(dayKey(wk)).exams.push({ pct, date: t.date });
+    }
+    for (const k in estWeeks || {}) {
+      if (!Object.prototype.hasOwnProperty.call(estWeeks, k)) continue;
+      const parsed = parseDate(k);
+      if (!parsed) continue;
+      const wk = weekStart(parsed);
+      if (dayNum(wk) > endNum) continue;
+      const w = estWeeks[k];
+      if (!w || typeof w.mean !== "number" || !isFinite(w.mean)) continue;
+      const box = slot(dayKey(wk)), at = typeof w.at === "number" && isFinite(w.at) ? w.at : 0;
+      if (box.estimate == null || at >= box.estAt) {
+        box.estimate = Math.max(0, Math.min(100, Math.round(w.mean)));
+        box.estAt = at;
+      }
+    }
+    const keys = Object.keys(byWeek).sort();
+    const empty = { weeks: [], examPoints: [], estimatePoints: [], segments: [], examCount: all.length, latestExam: null, estimateNow: null };
+    if (!keys.length) return empty;
+    all.sort((a, b) => a.date - b.date);
+    const last = weekStart(parseDate(keys[keys.length - 1]));
+    const firstData = weekStart(parseDate(keys[0]));
+    const windowStart = new Date(last);
+    windowStart.setDate(windowStart.getDate() - 7 * 11);
+    const start = dayNum(windowStart) < dayNum(firstData) ? firstData : windowStart;
+    const weeks = [];
+    for (let d = new Date(start); dayNum(d) <= dayNum(last); d.setDate(d.getDate() + 7)) {
+      const key = dayKey(d), box = byWeek[key] || { exams: [], estimate: null };
+      const exams = box.exams.slice().sort((a, b) => a.date - b.date);
+      const examMean = exams.length ? exams.reduce((s, e) => s + e.pct, 0) / exams.length : null;
+      weeks.push({ key, exams, examMean, estimate: box.estimate == null ? null : box.estimate });
+    }
+    const examPoints = [], estimatePoints = [], segments = [];
+    let run = [];
+    weeks.forEach((w, i) => {
+      w.exams.forEach((e, j) => examPoints.push({ week: i, pct: e.pct, date: e.date, index: j, n: w.exams.length }));
+      if (w.estimate != null) estimatePoints.push({ week: i, mean: w.estimate });
+      if (w.examMean == null) { if (run.length) segments.push(run); run = []; return; }
+      run.push({ week: i, mean: w.examMean });
+    });
+    if (run.length) segments.push(run);
+    const nowSlot = byWeek[dayKey(weekStart(today))];
+    return {
+      weeks, examPoints, estimatePoints, segments, examCount: all.length,
+      latestExam: all.length ? all[all.length - 1].pct : null,
+      estimateNow: nowSlot && nowSlot.estimate != null ? nowSlot.estimate : null
+    };
+  }
+  /** Remember this week's pass-prediction percent (0–100). Same percent again does not move the stamp. */
+  function noteEstimate(state, prediction, now) {
+    if (!state || !prediction || prediction.chance == null || !prediction.total) return false;
+    if (typeof prediction.mean !== "number" || !isFinite(prediction.mean)) return false;
+    now = now || Date.now();
+    const mean = Math.max(0, Math.min(100, Math.round(100 * prediction.mean / prediction.total)));
+    const key = weekKey(now);
+    state.estWeeks = state.estWeeks || {};
+    const cur = state.estWeeks[key];
+    if (cur && (cur.mean === mean || (cur.at || 0) > now)) return false;
+    state.estWeeks[key] = { mean, at: now };
+    return true;
   }
 
   // ------------------------------------------------------------- sync (merging progress from several devices)
@@ -1616,6 +2098,11 @@
     if (!o) { map[id] = Object.assign({}, s); return; }
     const newer = (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && (s.box || 0) > (o.box || 0));
     const m = newer ? Object.assign({}, o, s) : Object.assign({}, s, o);
+    // Cold evidence: the copy with the newer evAt (when that evidence was given) wins, so a device whose ev predates a
+    // rebuild (no evAt) can't overwrite rebuilt evidence. Same evAt: the newer copy, as above; a full tie takes the lower ev.
+    const ea = o.evAt || 0, eb = s.evAt || 0;
+    if (ea !== eb) { const w = ea > eb ? o : s; m.ev = w.ev; m.evAt = w.evAt; }
+    else if ((s.at || 0) === (o.at || 0) && (s.box || 0) === (o.box || 0) && typeof o.ev === "number" && typeof s.ev === "number") m.ev = Math.min(o.ev, s.ev);
     m.seen = (o.seen || 0) + (s.seen || 0); m.right = (o.right || 0) + (s.right || 0);
     const cw = (o.cw || 0) + (s.cw || 0);
     if (cw || o.cw != null || s.cw != null) m.cw = cw; else delete m.cw;
@@ -1633,7 +2120,7 @@
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
   function mergeStates(docs) {
-    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: {}, settingsTs: {} };
+    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, estWeeks: {}, settings: {}, settingsTs: {} };
     const tests = {};
     for (const d of docs || []) {
       if (!d) continue;
@@ -1641,12 +2128,18 @@
       for (const id in d.cards || {}) mergeSched(out.cards, id, d.cards[id]);
       for (const id in d.cmdstats || {}) mergeSched(out.cmdstats, id, d.cmdstats[id]);
       for (const k in d.days || {}) out.days[k] = (out.days[k] || 0) + (d.days[k] || 0);
+      for (const k in d.estWeeks || {}) {          // one percent per week: the newer stamp wins, a tie takes the higher percent
+        const w = d.estWeeks[k]; if (!w || typeof w.mean !== "number") continue;
+        const o = out.estWeeks[k], at = w.at || 0;
+        if (!o || at > (o.at || 0) || (at === (o.at || 0) && w.mean > o.mean)) out.estWeeks[k] = { mean: w.mean, at };
+      }
       for (const id in d.badges || {}) { const t = d.badges[id]; if (t && (!out.badges[id] || t < out.badges[id])) out.badges[id] = t; }
       for (const id in d.labs || {}) {
         const a = d.labs[id] || {}, o = out.labs[id] || (out.labs[id] = { done: [] });
         o.done = Array.from(new Set(o.done.concat(a.done || []))).sort((x, y) => x - y);
         if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
       }
+      unionProgress(out.lx, d.lx);
       for (const id in d.marks || {}) {            // bookmarks and notes: the latest change wins; a tie goes to the larger JSON so devices agree
         const m = d.marks[id], o = out.marks[id];
         if (!o || (m.at || 0) > (o.at || 0) || ((m.at || 0) === (o.at || 0) && JSON.stringify(m) > JSON.stringify(o))) out.marks[id] = clone(m);
@@ -1673,17 +2166,22 @@
    */
   function ownPart(view, others, settingsTs) {
     others = others || mergeStates([]);
-    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, estWeeks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
     for (const key of ["qstats", "cards", "cmdstats"]) {
       for (const id in view[key] || {}) {
         const s = view[key][id], o = (others[key] || {})[id];
         const seen = Math.max(0, (s.seen || 0) - (o ? o.seen || 0 : 0));
         const right = Math.max(0, Math.min(seen, (s.right || 0) - (o ? o.right || 0 : 0)));
-        const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last]) !== JSON.stringify([o.box, o.due, o.last]));
+        const newer = !o || (s.at || 0) > (o.at || 0) || ((s.at || 0) === (o.at || 0) && JSON.stringify([s.box, s.due, s.last, s.ev, s.evAt]) !== JSON.stringify([o.box, o.due, o.last, o.ev, o.evAt]));
         if (seen > 0 || newer) own[key][id] = Object.assign({}, s, { seen, right });
       }
     }
     for (const k in view.days || {}) { const n = (view.days[k] || 0) - (others.days[k] || 0); if (n > 0) own.days[k] = n; }
+    for (const k in view.estWeeks || {}) {
+      const w = view.estWeeks[k], o = (others.estWeeks || {})[k];
+      if (!w || typeof w.mean !== "number") continue;
+      if (!o || (w.at || 0) !== (o.at || 0) || w.mean !== o.mean) own.estWeeks[k] = { mean: w.mean, at: w.at || 0 };
+    }
     for (const id in view.marks || {}) { const o = (others.marks || {})[id]; if (!o || JSON.stringify(o) !== JSON.stringify(view.marks[id])) own.marks[id] = clone(view.marks[id]); }
     const theirs = {}; for (const t of others.tests) theirs[t.id] = t;
     own.tests = (view.tests || []).filter(t => !theirs[t.id] || (t.qids && !theirs[t.id].qids));
@@ -1693,6 +2191,11 @@
       const extra = (l.done || []).filter(x => !o || o.done.indexOf(x) < 0);
       if (extra.length || (l.completedAt && (!o || !o.completedAt || l.completedAt < o.completedAt))) own.labs[id] = clone(l);
     }
+    for (const id in view.lx || {}) {
+      const l = view.lx[id], o = (others.lx || {})[id];
+      const extra = (l.done || []).filter(x => !o || (o.done || []).indexOf(x) < 0);
+      if (extra.length || (l.completedAt && (!o || !o.completedAt || l.completedAt < o.completedAt))) own.lx[id] = clone(l);
+    }
     return own;
   }
   /** Copy a merged view into the app state, keeping this device's local settings and any session in progress.
@@ -1700,11 +2203,11 @@
   function applyMerged(state, view) {
     view = Object.assign(mergeStates([]), cleanDoc(view));     // whatever a server sent, the app only ever holds well-formed progress
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
-    state.badges = view.badges; state.labs = view.labs; state.marks = view.marks || {};
+    state.badges = view.badges; state.labs = view.labs; state.lx = view.lx || {}; state.marks = view.marks || {}; state.estWeeks = view.estWeeks || {};
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
     return state;
   }
-  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.cmdstats || {}).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length));
+  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.cmdstats || {}).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length) || Object.keys(st.lx || {}).some(id => ((st.lx[id] || {}).done || []).length));
   /** True when local progress looks like a copy of the account's (export/import, or this browser was linked before). */
   function looksCopied(local, remote) {
     const ids = {}; for (const t of remote.tests) ids[t.id] = 1;
@@ -1748,7 +2251,7 @@
   }
   const SCHED = { seen: count, right: count, last: v => v === true || v === false ? v : null, at: numOr(undefined),
                   box: v => Math.min(BOX_DAYS.length - 1, count(v)), due: v => isNum(v) ? Math.floor(v) : undefined,
-                  ev: v => v === 1 || v === 0 || v === -1 ? v : undefined,
+                  ev: v => v === 1 || v === 0 || v === -1 ? v : undefined, evAt: numOr(undefined),
                   conf: v => v === 1 || v === 0 ? v : undefined,
                   cw: count,
                   cdays: v => {
@@ -1768,6 +2271,22 @@
     return o;
   };
   const cleanLab = l => isObj(l) ? Object.assign({ done: [] }, shape(l, { done: v => Array.from(new Set(intList(v))), completedAt: numOr(undefined) })) : undefined;
+  /** Weekly estimate snapshots: Monday key, percent 0–100, and the time it was recorded. Newest 104 weeks only. */
+  function cleanEstWeeks(v) {
+    if (!isObj(v)) return {};
+    const out = {};
+    for (const k in v) {
+      if (!has(v, k)) continue;
+      const day = parseDate(k), raw = v[k];
+      if (!day || !isObj(raw) || !isNum(raw.mean) || !isNum(raw.at) || raw.at <= 0) continue;
+      const key = weekKey(day), mean = Math.max(0, Math.min(100, Math.round(raw.mean))), at = raw.at;
+      const prev = out[key];
+      if (!prev || at > prev.at || (at === prev.at && mean > prev.mean)) out[key] = { mean, at };
+    }
+    const keys = Object.keys(out).sort();
+    if (keys.length <= 104) return out;
+    const keep = {}; for (const k of keys.slice(-104)) keep[k] = out[k]; return keep;
+  }
   const answerOf = v => typeof v === "string" ? v.slice(0, 500) : Array.isArray(v) ? intList(v) : undefined;
   const confMap = v => mapOf(v, x => x === true || x === false ? x : undefined);
   const TEST = { id: v => typeof v === "string" && okKey(v) ? v : undefined, date: count, mode: v => typeof v === "string" && /^[a-z]{1,12}$/.test(v) ? v : "study",
@@ -1791,7 +2310,7 @@
   const cleanSettings = s => isObj(s) ? shape(s, SETTINGS) : {};
   const DOC = { tests: v => Array.isArray(v) ? v.map(cleanTest).filter(Boolean) : [], qstats: v => mapOf(v, cleanSched), cards: v => mapOf(v, cleanSched),
                 cmdstats: v => mapOf(v, cleanSched), days: v => mapOf(v, x => isNum(x) && x > 0 ? Math.floor(x) : undefined, k => DAY_RE.test(k)),
-                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), settings: cleanSettings,
+                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), lx: v => mapOf(v, cleanLab), estWeeks: cleanEstWeeks, settings: cleanSettings,
                 settingsTs: v => mapOf(v, numOr(undefined)),
                 marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
@@ -1804,13 +2323,17 @@
   }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
   const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap, seen: marks,
-                    dontKnow: marks, hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
+                    dontKnow: marks, refresh: marks, hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
     const o = shape(s, SESSION);
     if (!o.qids || !o.qids.length || o.start == null) return null;
     for (const k of ["optOrder", "answers", "flags", "checked", "hints", "conf", "dontKnow"]) o[k] = o[k] || {};
+    if (o.refresh) {
+      const keep = {}; for (const id of o.qids) if (o.refresh[id] === true) keep[id] = true;
+      if (Object.keys(keep).length) o.refresh = keep; else delete o.refresh;
+    }
     o.cur = Math.min(o.qids.length - 1, o.cur || 0); o.label = o.label || ""; o.mode = o.mode || "study"; if (o.deadline === undefined) o.deadline = null;
     return o;
   }
@@ -1818,8 +2341,10 @@
   function importState(state, d) {
     if (!isObj(d) || d.app !== "le010" || !Array.isArray(d.tests)) return null;
     const p = cleanDoc(d);
-    return migrate(Object.assign({}, state, { tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
-      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
+    // evRule is cleared so the imported progress gets its cold evidence rebuilt (rebuildEvidence).
+    return migrate(Object.assign({}, state, { evRule: undefined, tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
+      labs: p.labs || state.labs || {}, lx: p.lx || state.lx || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, estWeeks: p.estWeeks || {},
+      settings: Object.assign({}, state.settings, p.settings) }));
   }
 
   // ------------------------------------------------------------- state
@@ -1829,7 +2354,7 @@
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
-             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, current: null };
+             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, estWeeks: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -1852,7 +2377,7 @@
       }
     }
     // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")
-    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, marks: st.marks });
+    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, lx: st.lx, marks: st.marks, estWeeks: st.estWeeks });
     const fresh = freshState().settings, s = cleanSettings(st.settings);
     s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
@@ -1861,14 +2386,15 @@
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, multiPick, multiStatus, shortPicks, shortPickLine, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
+           LESSON_EXERCISES, LX_ROLES, LX_BINS, checkSplitLine, checkSplitExercise, checkSortExercise, lessonExerciseRecord, lessonExerciseStatus,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, levelUpMessage, questionOfDay, qotdDone, buildQotd,
            buildPlacement, placementSummary, isDontKnow,
            setMark, markOf, markedIds, unsureIds, search, checkHandson, layoutHandson, pickHandson, buildTest, buildStudy, studyPool, objectiveStats, objectiveMapCounts, weakObjectives, missedIds, grade,
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
-           familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN,
+           familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN, missTyped, missChoice, closestAccepted,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, freshState, migrate,
+           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, studyDays, scoreHistory, noteEstimate, weekKey, freshState, migrate,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

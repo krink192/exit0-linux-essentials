@@ -40,7 +40,7 @@
   const KEY = "le010.v3";
   const REPO = "https://github.com/krink192/exit0-linux-essentials";
   // Opens a GitHub issue form with the question ID filled in.
-  const reportLink = q => `<a class="muted" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub.">Report a problem (${q.id})</a>`;
+  const reportBtn = q => `<a class="btn ghost" href="${REPO}/issues/new?template=question.yml&title=${encodeURIComponent("[" + q.id + "] ")}&qid=${encodeURIComponent(q.id)}" target="_blank" rel="noopener" title="Wrong answer, typo or unclear wording? Tell us on GitHub (question ${esc(q.id)}).">${icon("report")}Report</a>`;
   const app = document.getElementById("app");
   // ------------------------------------------------------------------ install on phone / offline (PWA)
   const DESKTOP = () => !!window.pywebview || /exit0-desktop/.test(navigator.userAgent) || location.hostname === "127.0.0.1";
@@ -118,6 +118,8 @@
     repeat: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     bookmark: '<path d="M6 3h12v18l-6-4.5L6 21z"/>',
+    note: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>',
+    report: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4"/><path d="M12 17.5v.01"/>',
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.2a2.5 2.5 0 1 1 3.8 2.1c-.8.5-1.3 1.1-1.3 2.2V14"/><circle cx="12" cy="17" r="1"/>',
     half: '<path d="M12 3a9 9 0 1 0 0 18z"/>',
     left: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
@@ -156,6 +158,7 @@
     return C.migrate(raw, raw ? null : { history: readJSON("le010.v2.history"), qstats: readJSON("le010.v2.qstats") });
   })();
   st.current = C.repairSession(BANK, st.current);      // a question removed by an update must not stop the app from opening
+  C.rebuildEvidence(BANK, st);                         // once per device: cold evidence under the current cold window (saved below)
   function save(fromSync) {
     try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ }
     if (!fromSync) scheduleSync();
@@ -187,7 +190,7 @@
   // Re-render after remote changes, but never in the middle of a question, lab, flashcard or while typing.
   function rerenderIfIdle() {
     const h = (location.hash || "#test").slice(1), el = document.activeElement;
-    if (h === "exam" || h.startsWith("lab/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
+    if (h === "exam" || h.startsWith("lab/") || h.startsWith("lx/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
     render();
   }
@@ -207,6 +210,7 @@
     }
   }
   st.labs = st.labs || {};
+  st.lx = st.lx || {};
   const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
   if (labsCarried) setTimeout(() => toast(`Labs are now one per lesson: ${labsCarried} part${labsCarried > 1 ? "s" : ""} marked complete from labs you'd finished`), 900);
   C.awardBadges(st, BANK, CARDS, null, LABS.length); save();         // credit for progress made before badges existed, without toasts
@@ -256,7 +260,7 @@
       }).join("")}</nav>`).join("")}
       <div class="side-foot">
         <a class="today" href="#today" title="Daily goal: ${st.settings.goal} answers, cards, lab tasks or drills">
-          <div><div class="t1">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count ? plural(sk.count, "day") + " streak" : "No streak yet"}</div>
+          <div><div class="t1">${sk.count ? icon("flame") + plural(sk.count, "day") + " streak" : "Pick up where you left off"}</div>
             <div class="t2">${sk.metToday ? `Today's goal of ${st.settings.goal} done` : `${sk.today} of ${st.settings.goal} toward today's goal`}</div>
             <div class="progress goalbar" role="img" aria-label="${goalPct} percent of today's goal"><i style="width:${goalPct}%"></i></div></div>
         </a>
@@ -277,7 +281,7 @@
     app.innerHTML = `<div class="shell" id="shell">${sidebarHTML(section)}
       <div class="main"><header class="top"><button class="ghost" id="menuBtn" aria-label="Open menu">${icon("menu")}</button>
         <div class="brand"><div class="logo">$?</div><div><span class="wordmark">exit 0</span></div></div>
-        <div class="streakmini">${icon("flame", "flame" + (sk.count ? "" : " cold"))}${sk.count}</div></header>
+        <div class="streakmini${sk.count ? "" : " quiet"}">${sk.count ? icon("flame") + sk.count : "Pick up where you left off"}</div></header>
       <main class="page${opts && opts.wide ? " wide" : ""}${opts && opts.cls ? " " + opts.cls : ""}" id="page">${tabs}${body}</main>
       <nav class="bottomnav" aria-label="Main">${NAV.map(([id, name, ic]) => { const n = navCount(id);
         return `<a href="#${id}" class="${section === id ? "on" : ""}">${icon(ic)}<span>${name}</span>${n ? `<i class="dot-count">${n > 99 ? "99+" : n}</i>` : ""}</a>`; }).join("")}</nav></div></div>`;
@@ -299,6 +303,7 @@
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
+    if (h.startsWith("lx/")) return renderLessonExercise(h.slice(3));
     if (h === "cmdrun" && !cp) return go("commands");
     const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings, search: renderSearch, handson: renderHandson };
@@ -318,7 +323,7 @@
     const today = C.dayNum();
     const queue = C.cardQueue(CARDS, st.cards, c => st.cards[c.id] && st.cards[c.id].due <= today, today, 40);
     if (!queue.length) return toast("No flashcards are due");
-    cs = { queue, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
+    cs = { queue, refresh: queue.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
   }
   function startWeakStudy() {
     const weak = C.weakObjectives(BANK, st.qstats, 19);
@@ -327,14 +332,14 @@
   function startObjCards(o) {        // flashcards for one objective: due and new cards first, then the rest
     const pool = CARDS.filter(c => c.obj === o);
     const first = C.cardQueue(CARDS, st.cards, c => c.obj === o, C.dayNum(), 20);
-    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 };
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), refresh: first.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 };
     go("cards");
   }
   function startCardList(ids) {      // flashcards from a list: due and new first, then the rest
     const set = new Set(ids), pool = CARDS.filter(c => set.has(c.id));
     if (!pool.length) return toast("No flashcards for that yet");
     const first = C.cardQueue(CARDS, st.cards, c => set.has(c.id), C.dayNum(), 20);
-    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), refresh: first.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
   }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
@@ -419,13 +424,13 @@
       return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}" ${label}>${inner}</a>` : `<div class="${cls}" ${label}>${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}" ${label}>${inner}</a>` : `<button class="${cls}" ${s.attr} ${label}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
-  // The score estimate counts first attempts (and answers given C.COLD_DAYS or more days after the last attempt) only, so it can't be pushed up by repeating questions.
+  // The score estimate counts fresh answers only (a first attempt, or one given C.COLD_DAYS or more days after the last attempt), so it can't be pushed up by repeating questions.
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
   const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
     : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
-  const estimateBasis = pp => `From ${plural(pp.seen, "first attempt")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
+  const estimateBasis = pp => `From ${plural(pp.seen, "fresh answer")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
   // Likely range is the main mark; the mean is a thin tick; the target line is labelled for contrast (not colour alone).
   function scoreBand(est, T, label) {
     const span = Math.max(1, est.high - est.low);
@@ -451,7 +456,7 @@
         <div class="today-side">
           <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>Likely ${est.low}–${est.high}%</b><span class="score-mean">mean ${est.mean}% · ${T}% target</span></span>`}</div>
             ${est == null
-              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only first attempts, so repeating questions can't inflate it.</p>`
+              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only fresh answers: a question counts again once ${C.COLD_DAYS} days have passed since you last saw it, so quick repeats can't inflate it.</p>`
               : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">If you sat it today: likely ${est.low}–${est.high}%. Mean about ${est.mean}%. An estimate, not a guarantee. ${estimateBasis(pp)}</p>`}</section>
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
@@ -486,7 +491,11 @@
   // A batch of the size the learner picks, mixing due reviews with new questions. The backlog never shows as a count.
   const REVIEW_CHOICES = [10, 15, 20, 30, 50], REVIEW_NEW_CHOICES = [0, 3, 5, 10];
   let reviewOpen = false;
-  const reviewMixText = d => [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : ""].filter(Boolean).join(" and ") || "Nothing";
+  const reviewMixText = d => {
+    const parts = [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : "", d.refresh ? plural(d.refresh, "refresher") : ""].filter(Boolean);
+    if (parts.length < 2) return parts[0] || "Nothing";
+    return parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+  };
   function reviewPickerHTML() {
     const r = C.clampReview(st.settings.review);
     const toggle = `<div class="u-g10 u-wrap u-aic row"><span class="u-mw9 small">Daily review</span>
@@ -673,25 +682,73 @@
   }
 
   // ================================================================== PROGRESS
-  function trendChart(tests, W, H) {
-    W = W || 640; H = H || 190;
-    const pts = tests.slice(-15), pl = 36, pr = 14, pt = 12, pb = 26;
-    const x = i => pl + (pts.length === 1 ? (W - pl - pr) / 2 : i * (W - pl - pr) / (pts.length - 1));
+  function historyFacts(h) {
+    const bits = [];
+    if (h.examCount) bits.push("Full exams: " + h.examCount + ", latest " + h.latestExam + "%.");
+    if (h.estimateNow != null) bits.push("Estimate this week " + h.estimateNow + "%.");
+    else if (h.estimatePoints.length) bits.push("Latest weekly estimate " + h.estimatePoints[h.estimatePoints.length - 1].mean + "%.");
+    return bits.join(" ");
+  }
+  function scoreChart(h, W, H) {
+    W = W || 640; H = H || 210;
+    const weeks = h.weeks, n = weeks.length, pl = 36, pr = 14, pt = 16, pb = 28;
+    const plot = W - pl - pr;
+    const xAt = i => pl + (n === 1 ? plot / 2 : (i + 0.5) * plot / n);
     const y = v => pt + (100 - v) * (H - pt - pb) / 100;
-    const line = pts.map((t, i) => `${x(i).toFixed(1)},${y(t.pct).toFixed(1)}`).join(" ");
-    const area = `${x(0)},${y(0)} ${line} ${x(pts.length - 1)},${y(0)}`;
-    const grid = [0, 50, 100].map(v => `<line x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}" style="stroke:var(--line)"/>
+    const examX = (i, j, count, hasEst) => {
+      const c = xAt(i), slot = n === 1 ? plot * 0.4 : plot / n, room = Math.min(slot * 0.5, 26);
+      if (count <= 1) return hasEst ? c - Math.min(11, room * 0.45) : c;
+      const left = c - room / 2, span = hasEst ? room * 0.55 : room;
+      return left + j * span / (count - 1);
+    };
+    const grid = [0, 50, 100].map(v => `<line class="axis" x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${pl - 8}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join("");
-    const last = pts.length - 1;
-    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Practice test scores over time">
-      ${grid}<line x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}" style="stroke:var(--good);stroke-dasharray:5 5"/>
+    const lines = h.segments.filter(run => run.length >= 2).map(run =>
+      `<polyline class="mean" points="${run.map(p => xAt(p.week).toFixed(1) + "," + y(p.mean).toFixed(1)).join(" ")}"/>`).join("");
+    const exams = h.examPoints.map(e => {
+      const hasEst = weeks[e.week].estimate != null;
+      return `<circle class="exam" cx="${examX(e.week, e.index, e.n, hasEst).toFixed(1)}" cy="${y(e.pct).toFixed(1)}" r="4"><title>${esc(fmtDate(e.date))}: ${e.pct}%</title></circle>`;
+    }).join("");
+    const estimates = h.estimatePoints.map(e =>
+      `<circle class="est" cx="${xAt(e.week).toFixed(1)}" cy="${y(e.mean).toFixed(1)}" r="4"><title>Week of ${esc(fmtDate(C.parseDate(weeks[e.week].key).getTime()).split(",")[0])}: estimate ${e.mean}%</title></circle>`).join("");
+    const labels = weeks.map((w, i) => {
+      const d = C.parseDate(w.key), show = i === 0 || i === n - 1 || (n <= 6 && i % 2 === 0) || (n > 6 && d.getDate() <= 7);
+      return show ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${d.toLocaleDateString([], { month: "short", day: "numeric" })}</text>` : "";
+    }).join("");
+    const facts = historyFacts(h);
+    return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(facts)}">
+      ${grid}<line class="target" x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}"/>
       <text x="${pl + 6}" y="${y(80) - 6}" style="fill:var(--good)">80% target</text>
-      <polygon points="${area}" style="fill:var(--accent);opacity:.1"/>
-      <polyline points="${line}" style="fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linejoin:round"/>
-      ${pts.map((t, i) => `<circle cx="${x(i)}" cy="${y(t.pct)}" r="${i === last ? 5 : 3}" style="fill:${i === last ? "var(--accent)" : "var(--surface)"};stroke:var(--accent);stroke-width:2"><title>${fmtDate(t.date)}: ${t.pct}%</title></circle>`).join("")}
-      <text x="${x(last)}" y="${y(pts[last].pct) - 10}" text-anchor="middle" style="fill:var(--ink);font-weight:700">${pts[last].pct}%</text>
-      <text x="${pl}" y="${H - 6}">${fmtDate(pts[0].date).split(",")[0]}</text>
-      <text x="${W - pr}" y="${H - 6}" text-anchor="end">${fmtDate(pts[last].date).split(",")[0]}</text></svg></div>`;
+      ${lines}${estimates}${exams}${labels}</svg>
+      <p class="chart-key"><span><i class="fill" aria-hidden="true"></i>full exam</span><span class="sep" aria-hidden="true">·</span><span><i class="hole" aria-hidden="true"></i>weekly estimate</span></p>
+      <p class="small muted">${esc(facts)}</p></div>`;
+  }
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function studyCard(sk) {
+    const weeks = window.matchMedia("(min-width: 901px)").matches ? 16 : 12;
+    const g = C.studyDays(st.days || {}, st.settings.goal, Date.now(), weeks);
+    const cols = `auto repeat(${g.weeks.length}, minmax(0, 14px))`;
+    let prev = "";
+    const months = g.weeks.map(w => {
+      const name = MONTHS[C.parseDate(w.monday).getMonth()];
+      const show = name !== prev; prev = name;
+      return `<span>${show ? name : ""}</span>`;
+    }).join("");
+    const dow = ["Mon", "", "Wed", "", "Fri", "", "Sun"];
+    let cells = "";
+    for (let i = 0; i < 7; i++) {
+      cells += `<span class="dow" aria-hidden="true">${dow[i]}</span>`;
+      for (const w of g.weeks) {
+        const c = w.days[i];
+        cells += c.future ? `<span class="future" aria-hidden="true"></span>`
+          : `<span class="lv${c.level}${c.today ? " now" : ""}" title="${esc(c.label)}" aria-label="${esc(c.label)}"></span>`;
+      }
+    }
+    const rest = sk.graceUsed ? " 1 rest day used this week." : "";
+    return `<section class="card stack studycard"><h2>Study days</h2>
+      <p class="small">Studied on ${g.studied} of the last ${g.total} days. Goal met on ${g.met}.${rest}</p>
+      <div class="heat-months" style="grid-template-columns:${cols}" aria-hidden="true"><span class="dow"></span>${months}</div>
+      <div class="heat" style="grid-template-columns:${cols}">${cells}</div></section>`;
   }
   function objList(os, opts) {
     opts = opts || {};
@@ -718,7 +775,7 @@
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
   // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
-  const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
+  const passWhy = p => `The estimate uses only fresh answers: your first attempt at each question, and any answer given ${C.COLD_DAYS} or more days after you last saw it.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
       LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.`;
@@ -735,7 +792,7 @@
       : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
       : est.low >= 80 ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above 80%.";
     const nums = est == null
-      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "first attempt")} so far</span></div>`
+      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "fresh answer")} so far</span></div>`
       : `<div class="u-g2 stack"><span class="small muted">If you sat it today</span><b class="big">Likely ${est.low}–${est.high}%</b><span class="small muted">Mean ${est.mean}% · an estimate, not a guarantee</span></div>
         <div class="u-g2 stack"><span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Need ${p.need} of ${p.total} right</span></div>`;
     const btns = focus.length
@@ -858,10 +915,9 @@
   }
 
   function renderProgress() {
-    const tests = st.tests.filter(t => t.mode === "test");
     const plan = C.examPlan(st, BANK), sk = C.streak(st.days, st.settings.goal), x = C.xpInfo(st);
     const pills = [plan && plan.phase !== "past" ? `<a class="pill" href="#today"><b>${plan.phase === "today" ? "Exam day" : plural(plan.days, "day")}</b>${plan.phase === "today" ? "" : " to exam"}</a>` : `<a class="pill" href="#today">Set an exam date</a>`,
-      sk.count ? `<span class="pill"><b>${sk.count}-day</b> streak</span>` : "", `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
+      `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
     const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
       shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your estimated score, exam average, pass chance and weak objectives show up here.</p>
@@ -869,12 +925,16 @@
       return wireStarts($("#page"));
     }
     const os = C.objectiveStats(BANK, st.qstats);
+    const exams = st.tests.filter(C.isReadinessExam);
+    const hist = C.scoreHistory(st.tests, st.estWeeks, Date.now());
+    const points = hist.examPoints.length + hist.estimatePoints.length;
     shell("progress", `${head}
       ${heroCard()}
       ${objectivesCard(os)}
+      ${studyCard(sk)}
       <div class="grid2">
-        <section class="card stack"><div class="row spread"><h2>Exam scores</h2><span class="small muted">${tests.length ? "best " + Math.max(...tests.map(t => t.pct)) + "% · " + plural(tests.length, "exam") : "no exams yet"}</span></div>
-          ${tests.length >= 2 ? trendChart(tests, 360, 200) : `<p class="small muted">Take ${tests.length ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
+        <section class="card stack"><div class="row spread"><h2>Score history</h2><span class="small muted">${exams.length ? "best " + Math.max(...exams.map(t => t.pct)) + "% · " + plural(exams.length, "exam") : "no exams yet"}</span></div>
+          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take ${points ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
         <section class="card stack"><div class="row spread"><h2>By difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
           <p class="small muted">The real exam leans on exact syntax. If Apply or Analyze trails Recall, study those levels.</p></section>
       </div>
@@ -923,7 +983,7 @@
     $("#cstart").onclick = () => {
       const queue = C.cardQueue(CARDS, st.cards, deckFilter(), C.dayNum(), cardSize);
       if (!queue.length) return;
-      cs = { queue, i: 0, flipped: false, knew: 0, done: 0 }; renderCards();
+      cs = { queue, refresh: queue.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; renderCards();
     };
   }
   function renderCardSession() {
@@ -941,7 +1001,7 @@
         <button class="ghost" id="cend">End session</button></div>
       <div class="u-r9 progress"><i style="width:${100 * cs.i / cs.queue.length}%"></i></div>
       <div class="flash-wrap"><div class="flash ${cs.flipped ? "flipped" : ""}" id="flash" tabindex="0" role="button" aria-label="Flip card">
-        <div class="face ${isCmd ? "cmd" : ""}"><div class="meta"><span>${c.obj} · ${esc(OBJ[c.obj].name)}</span><span>Term</span></div>
+        <div class="face ${isCmd ? "cmd" : ""}"><div class="meta"><span>${c.obj} · ${esc(OBJ[c.obj].name)}${cs.refresh && cs.refresh[c.id] ? ` <span class="chip refresher" title="In the top box. In this session so it stays fresh.">Refresher</span>` : ""}</span><span>Term</span></div>
           <div class="front-t">${esc(c.front)}</div><div class="hint">Click or press <span class="kbd">Space</span> to flip</div></div>
         <div class="face back"><div class="meta"><span>${esc(c.front)}</span><span>Definition</span></div>
           <div class="back-t">${rich(c.back)}</div>${c.ex ? `<pre>${esc(c.ex)}</pre>` : ""}<div class="hint">Did you know it?</div></div></div></div>
@@ -1101,12 +1161,253 @@
           <div class="u-g10 u-aic row">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
       : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="u-jc row"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
+      ${lessonExerciseCard()}
       <section class="card stack objcard labscard"><div class="row spread"><h2>Lessons</h2>
           <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
         <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
         <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
       ${challenges}`);
     $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
+  }
+  // Lesson exercises: original Guided / Explorational items for topic 2. Answers in progress live here;
+  // saved progress is only the indexes that checked right (st.lx), same shape as a lab.
+  const lxDraft = {};
+  const LX_CYCLE = ["", "command", "option", "argument"];
+  const LX_WORD = { command: "Command", option: "Option", argument: "Argument" };
+  const LX_BIN_WORD = { builtin: "Builtin", external: "External" };
+  const LX_PAGE = 5;   // phones show this many split lines, then Next 5
+  let lxMqBound = false;
+  function lessonExerciseCard() {
+    const rows = (C.LESSON_EXERCISES || []).map(ex => {
+      const stt = C.lessonExerciseStatus((st.lx || {})[ex.id], ex.items.length);
+      const go = stt.state === "done" ? "Review" : stt.state === "started" ? "Continue" : "Start";
+      return `<a class="lxrow${stt.state === "done" ? " done" : ""}" href="#lx/${esc(ex.id)}">
+        <span class="lname"><span class="o">${esc(ex.label)}</span> ${esc(ex.title)}</span>
+        <span class="small muted">${esc(stt.text)}</span><span class="${go === "Continue" ? "u-fw7" : ""}">${go}</span></a>`;
+    }).join("");
+    return `<section class="card stack objcard labscard"><div class="row spread"><h2>Lesson exercises</h2><span class="small muted">Topic 2</span></div>
+      <div class="lxrows">${rows}</div>
+      <p class="small muted">Guided and Explorational practice for the shell lessons. Tag each part of a command, then sort names the shell knows from programs on disk.</p></section>`;
+  }
+  function lxPhone() { return matchMedia("(max-width: 560px)").matches; }
+  function bindLxMq() {
+    if (lxMqBound) return;
+    lxMqBound = true;
+    matchMedia("(max-width: 560px)").addEventListener("change", () => {
+      const h = (location.hash || "").replace(/^#/, "");
+      if (h.startsWith("lx/")) renderLessonExercise(h.slice(3));
+    });
+  }
+  function nextRole(v) {
+    const i = LX_CYCLE.indexOf(v);
+    return LX_CYCLE[(i < 0 ? 0 : i + 1) % LX_CYCLE.length];
+  }
+  function chipClass(value) {
+    return value === "command" ? "cmd" : value === "option" ? "opt" : value === "argument" ? "arg" : "none";
+  }
+  // kind is "" until Check, then "ok", "no" or "blank". A perfect exercise passes "" so chips keep their tag and no tick.
+  function splitKind(line, j, perfect) {
+    if (!line || perfect) return "";
+    if (line.blank.indexOf(j) >= 0) return "blank";
+    if (line.wrong.indexOf(j) >= 0) return "no";
+    return "ok";
+  }
+  function splitAria(word, value, kind, right) {
+    const state = value ? "tagged " + LX_WORD[value] : "not tagged";
+    const more = kind === "no" ? " Wrong. Should be " + LX_WORD[right] + "." : kind === "ok" ? " Right." : "";
+    return word + ", " + state + "." + more + " Press to change.";
+  }
+  function splitTagHTML(value, kind, right) {
+    // A wrong chip names the right role ("Is Option"), so a bare "✕ Option" can't read as "Option is wrong".
+    if (kind === "no") return icon("x") + "Is " + esc(LX_WORD[right] || "");
+    if (kind === "blank") return icon("help") + "Not tagged";
+    if (kind === "ok") return icon("check") + esc(LX_WORD[value] || "");
+    return value ? esc(LX_WORD[value]) : "";
+  }
+  function paintSplitChip(btn, value) {
+    btn.classList.remove("cmd", "opt", "arg", "none");
+    btn.classList.add(chipClass(value));
+    const tag = btn.querySelector(".lxtag");
+    tag.className = "lxtag";
+    tag.textContent = value ? LX_WORD[value] : "";
+    const word = btn.querySelector(".lxw").textContent;
+    btn.setAttribute("aria-label", splitAria(word, value, "", ""));
+  }
+  function ensureLxDraft(ex) {
+    if (lxDraft[ex.id]) return lxDraft[ex.id];
+    const saved = (((st.lx || {})[ex.id] || {}).done) || [];
+    if (ex.kind === "split") {
+      const picks = ex.items.map((item, i) => saved.indexOf(i) >= 0 ? item.tokens.map(t => t.role) : item.tokens.map(() => ""));
+      lxDraft[ex.id] = { picks, shown: false, result: null, page: 0 };
+    } else {
+      const picks = {};
+      ex.items.forEach((item, i) => { picks[item.name] = saved.indexOf(i) >= 0 ? item.bin : ""; });
+      lxDraft[ex.id] = { picks, shown: false, result: null, page: 0 };
+    }
+    return lxDraft[ex.id];
+  }
+  function lxSummary(ex, r) {
+    const n = ex.items.length, right = r.done.length;
+    if (ex.kind === "split") {
+      const words = ex.items.reduce((a, item) => a + item.tokens.length, 0);
+      if (r.ok) return "All " + words + " right";
+      let wrong = 0, blank = 0;
+      r.results.forEach(line => { wrong += line.wrong.length; blank += line.blank.length; });
+      const bits = [right + " of " + n + (right === 1 ? " line right" : " lines right")];
+      if (wrong) bits.push(wrong + (wrong === 1 ? " tag wrong" : " tags wrong"));
+      if (blank) bits.push(blank + " not tagged");
+      return bits.join(". ") + ".";
+    }
+    if (r.ok) return "All " + n + " right";
+    const bits = [right + " of " + n + " right"];
+    if (r.wrong.length) bits.push(r.wrong.length + " in the wrong group");
+    if (r.blank.length) bits.push(r.blank.length + " not sorted");
+    return bits.join(". ") + ".";
+  }
+  function lxResultHTML(ex, draft) {
+    if (!draft.shown || !draft.result) return "";
+    const ok = draft.result.ok;
+    const line = lxSummary(ex, draft.result);
+    const explain = ex.explain ? `<p>${esc(ex.explain)}</p>` : "";
+    if (ok) return `<div class="card feedback lxresult" id="lxResult"><h3 tabindex="-1">${icon("check")}${esc(line)}</h3>${explain}</div>`;
+    return `<div class="card feedback lxresult no" id="lxResult"><h3 tabindex="-1">${icon("x")}Not quite</h3><p>${esc(line)}</p>${explain}</div>`;
+  }
+  function splitExerciseHTML(ex, draft) {
+    const phone = lxPhone();
+    const perfect = draft.shown && draft.result && draft.result.ok;
+    const start = phone ? (draft.page || 0) * LX_PAGE : 0;
+    const end = phone ? Math.min(ex.items.length, start + LX_PAGE) : ex.items.length;
+    const lines = ex.items.slice(start, end).map((item, k) => {
+      const i = start + k;
+      const line = draft.shown && draft.result ? draft.result.results[i] : null;
+      const words = item.tokens.map(t => t.t).join(" ");
+      const toks = item.tokens.map((tok, j) => {
+        const value = (draft.picks[i] || [])[j] || "";
+        const kind = splitKind(line, j, perfect);
+        return `<button type="button" class="lxchip ${chipClass(value)}" data-line="${i}" data-tok="${j}" aria-label="${esc(splitAria(tok.t, value, kind, tok.role))}"><span class="lxw">${esc(tok.t)}</span><span class="lxtag${kind ? " " + kind : ""}">${splitTagHTML(value, kind, tok.role)}</span></button>`;
+      }).join("");
+      return `<div class="lxline"><span class="lxobj">${esc(item.obj)}</span><div class="lxcmd" role="group" aria-label="Line ${i + 1}, objective ${esc(item.obj)}: ${esc(words)}">${toks}</div></div>`;
+    }).join("");
+    if (!phone || ex.items.length <= LX_PAGE) return lines;
+    const pages = Math.ceil(ex.items.length / LX_PAGE);
+    const page = draft.page || 0;
+    return lines + `<div class="lxpager" role="navigation" aria-label="More command lines"><button type="button" class="ghost" id="lxPrev"${page <= 0 ? " disabled" : ""}>Previous</button><span class="small lxpnum">${start + 1}\u2013${end} of ${ex.items.length}</span><button type="button" class="ghost" id="lxNext"${page >= pages - 1 ? " disabled" : ""}>Next 5</button></div>`;
+  }
+  function sortKind(r, name, perfect) {
+    if (!r || perfect) return "";
+    if (r.blank.indexOf(name) >= 0) return "blank";
+    if (r.wrong.indexOf(name) >= 0) return "no";
+    return "ok";
+  }
+  function sortAria(name, value, kind, right) {
+    const state = value ? "tagged " + LX_BIN_WORD[value] : "not sorted";
+    if (kind === "no") return name + ", " + state + ". Wrong. Should be " + LX_BIN_WORD[right] + ".";
+    if (kind === "ok") return name + ", " + state + ". Right.";
+    return name + ", " + state + ".";
+  }
+  function sortMark(kind, right) {
+    if (kind === "ok") return `<span class="lxmark ok">${icon("check")}<span class="sr">Right</span></span>`;
+    if (kind === "no") return `<span class="lxmark no">${icon("x")}<span class="sr">Wrong. </span>${esc(LX_BIN_WORD[right] || "")}</span>`;
+    if (kind === "blank") return `<span class="lxmark">${icon("help")}Not sorted</span>`;
+    return "";
+  }
+  function sortExerciseHTML(ex, draft) {
+    const perfect = draft.shown && draft.result && draft.result.ok;
+    const rows = ex.items.map(item => {
+      const value = draft.picks[item.name] || "";
+      const kind = sortKind(draft.shown ? draft.result : null, item.name, perfect);
+      const bins = [["builtin", "Builtin"], ["external", "External"]].map(([v, label]) =>
+        `<button type="button" data-name="${esc(item.name)}" data-bin="${v}" aria-pressed="${value === v ? "true" : "false"}"${value === v ? ' class="on"' : ""}>${label}</button>`).join("");
+      return `<div class="lxsort"><span class="lxname">${esc(item.name)}</span><div class="lxbin" role="group" data-name="${esc(item.name)}" aria-label="${esc(sortAria(item.name, value, kind, item.bin))}">${bins}</div>${sortMark(kind, item.bin)}</div>`;
+    }).join("");
+    return `<div class="lxsorts">${rows}</div>`;
+  }
+  function rerenderLx(ex, y, focus) {
+    renderLessonExercise(ex.id); scrollTo(0, y);
+    if (!focus) return;
+    const again = $(focus); if (again) again.focus();
+  }
+  function renderLessonExercise(id) {
+    const ex = (C.LESSON_EXERCISES || []).find(e => e.id === id);
+    if (!ex) return go("labs");
+    bindLxMq();
+    st.lx = st.lx || {};
+    const draft = ensureLxDraft(ex);
+    if (ex.kind === "split" && lxPhone()) {
+      const pages = Math.max(1, Math.ceil(ex.items.length / LX_PAGE));
+      draft.page = Math.min(Math.max(0, draft.page || 0), pages - 1);
+    }
+    const stt = C.lessonExerciseStatus(st.lx[ex.id], ex.items.length);
+    const where = ex.kind === "split" ? "objectives 2.1 to 2.4" : "topic 2";
+    const lines = ex.kind === "split" ? splitExerciseHTML(ex, draft) : sortExerciseHTML(ex, draft);
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a>
+        <h1>${esc(ex.title)}</h1><span class="u-mt8 eyebrow">${esc(ex.label)} · ${where} · ${esc(stt.text)}</span>
+        <p class="lead">${esc(ex.lead)}</p></div>
+      <div class="card" id="lxForm">${lines}</div>
+      ${lxResultHTML(ex, draft)}
+      <div class="row"><button type="button" class="primary" id="lxCheck">Check</button></div>`, { noTabs: true });
+    if (ex.kind === "split") {
+      $$("#lxForm button.lxchip").forEach(btn => {
+        const cycle = () => {
+          const i = +btn.dataset.line, j = +btn.dataset.tok;
+          const next = nextRole((draft.picks[i] || [])[j] || "");
+          draft.picks[i][j] = next;
+          if (!draft.shown) { paintSplitChip(btn, next); return; }
+          draft.shown = false; draft.result = null;
+          rerenderLx(ex, scrollY, `button.lxchip[data-line="${i}"][data-tok="${j}"]`);
+        };
+        btn.onclick = cycle;
+        // Space and Enter both activate a button, but Enter does not in every embedded browser.
+        // preventDefault keeps that to a single step either way.
+        btn.addEventListener("keydown", e => {
+          if (e.repeat || (e.key !== "Enter" && e.key !== " ")) return;
+          e.preventDefault();
+          cycle();
+        });
+      });
+      const prev = $("#lxPrev"), next = $("#lxNext");
+      if (prev) prev.onclick = () => { draft.page = Math.max(0, (draft.page || 0) - 1); rerenderLx(ex, scrollY, "#lxPrev"); };
+      if (next) next.onclick = () => { draft.page = (draft.page || 0) + 1; rerenderLx(ex, scrollY, "#lxNext"); };
+    } else {
+      $$("#lxForm .lxbin button").forEach(btn => {
+        btn.onclick = () => {
+          const name = btn.dataset.name, bin = btn.dataset.bin;
+          draft.picks[name] = draft.picks[name] === bin ? "" : bin;
+          if (!draft.shown) {
+            const group = btn.parentElement;
+            $$("button", group).forEach(b => {
+              const on = b.dataset.bin === draft.picks[name];
+              b.classList.toggle("on", on);
+              b.setAttribute("aria-pressed", on ? "true" : "false");
+            });
+            const item = ex.items.find(it => it.name === name);
+            group.setAttribute("aria-label", sortAria(name, draft.picks[name], "", item ? item.bin : ""));
+            return;
+          }
+          draft.shown = false; draft.result = null;
+          rerenderLx(ex, scrollY, `button[data-name="${name}"][data-bin="${bin}"]`);
+        };
+      });
+    }
+    $("#lxCheck").onclick = () => {
+      if (ex.kind === "split") {
+        draft.result = C.checkSplitExercise(ex.items, draft.picks);
+        if (lxPhone() && !draft.result.ok) {
+          const start = (draft.page || 0) * LX_PAGE;
+          const here = draft.result.results.slice(start, start + LX_PAGE);
+          const hereBad = here.some(line => line.blank.length || line.wrong.length);
+          if (!hereBad) {
+            const bad = draft.result.results.findIndex(line => line.blank.length || line.wrong.length);
+            if (bad >= 0) draft.page = Math.floor(bad / LX_PAGE);
+          }
+        }
+      } else draft.result = C.checkSortExercise(ex.items, draft.picks);
+      draft.shown = true;
+      st.lx[ex.id] = C.lessonExerciseRecord(st.lx[ex.id], draft.result.done, ex.items.length, Date.now());
+      save();
+      rerenderLx(ex, scrollY, "#lxResult h3");
+      announce(lxSummary(ex, draft.result));
+    };
   }
   // A light "did you mean" for typos, like command-not-found on real systems.
   function closestCommand(sh, word) {
@@ -1565,7 +1866,7 @@
     const dots = cp.tasks.map((x, i) => { const q = cp.res[i]; const cls = i === cp.i ? "cur" : !q || !q.recorded ? "" : q.ok ? "ok" : "miss";
       return `<span class="ddot ${cls}" title="Task ${i + 1}${q && q.recorded ? (q.ok ? ": right" : ": missed") : ""}"></span>`; }).join("");
     shell("cmdrun", `<div class="page-head"><a class="small backlink" href="#commands" id="cquit">${icon("left")}Command practice</a>
-        <h1>${esc(sk.label)}</h1><span class="u-mt8 eyebrow">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span>
+        <h1>${esc(sk.label)}</h1><span class="u-mt8 eyebrow">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span>${t.refresh ? ` <span class="chip refresher" title="This command is mastered. One skill is here so it stays fresh.">Refresher</span>` : ""}</span>
         <div class="drilldots" aria-hidden="true">${dots}</div></div>
       <div class="labwrap drillwrap">
         <div class="stack tasks">
@@ -1793,7 +2094,7 @@
       try { next = C.importState(st, JSON.parse($("#impData").value)); } catch (e) { /* not JSON */ }
       if (!next) return toast("That code isn't valid. Copy the whole export code and try again.");
       st = next; st.current = C.repairSession(BANK, st.current); deck = st.settings.deck || deck;
-      C.migrateLabs(st, LABS); C.awardBadges(st, BANK, CARDS, null, LABS.length);
+      C.migrateLabs(st, LABS); C.awardBadges(st, BANK, CARDS, null, LABS.length); C.rebuildEvidence(BANK, st);
       save(); applyTheme(); toast("Progress imported"); renderSettings();
     };
     if ($("#reset")) $("#reset").onclick = () => { resetOpen = true; renderSettings(); };
@@ -1825,12 +2126,12 @@
     (S.seen = S.seen || {})[id] = 1;          // the navigator tells Unanswered (seen) from Unseen
     const rated = !isPlace && (S.conf[id] === true || S.conf[id] === false);
     const dontKnow = isPlace && C.isDontKnow(S, id);
-    if (q.lab && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
+    if ((q.lab || (revealed && q.type === "fill")) && !window.LEShell) ensureShell().then(() => { if (st.current === S && S.qids[S.cur] === id && !confirming) { const y = scrollY; renderExam(); scrollTo(0, y); } }, () => {});
     let body;
     if (q.type === "fill") {
       body = `<label class="fill ${revealed ? "locked" : ""}" for="fillin"><span class="ps">$</span><input id="fillin" autocomplete="off" autocapitalize="off" spellcheck="false"
         value="${esc(a || "")}" placeholder="${q.lab ? "type a command" : "type your answer"}" ${revealed ? "disabled" : ""}></label>
-        <p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text, as a regular user in the current directory. Add <code>sudo</code> only when the task needs root. Case matters."} Press <span class="kbd">Enter</span> ${S.study && !revealed ? "to check" : "for the next question"}.</p>`;
+        ${revealed ? "" : `<p class="small muted">${q.lab ? "Any command that does the job counts: it runs on a simulated Linux system and the result is checked." : "Type the exact text, as a regular user in the current directory. Add <code>sudo</code> only when the task needs root. Case matters."} Press <span class="kbd">Enter</span> ${S.study ? "to check" : "for the next question"}.</p>`}`;
     } else {
       const multi = q.type === "multi";
       body = `<div class="opts" role="${multi ? "group" : "radiogroup"}">${S.optOrder[id].map((oi, pos) => {
@@ -1849,7 +2150,7 @@
     const fb = revealed ? `<div class="feedback ${ok ? "ok" : "no"}"><h3>${icon(ok ? "check" : "x")}${ok ? "Correct" : dontKnow ? "Don't know yet" : near === "sudo" ? "Right command, but drop sudo" : near ? "Almost" : C.answered(q, a) ? "Not quite" : "Not answered"}</h3>
         ${dontKnow ? `<p class="small muted">Counted as a miss so your study plan knows where to start.</p>` : ""}
         ${confWrong ? `<p class="conf-flag">${icon("flag")} You marked this <b>sure</b>, but it was wrong. Worth another look.</p>` : ""}
-        ${!dontKnow && q.type === "fill" ? fillAnswerInfo(q, a, false) : ""}${!ok && !dontKnow ? multiNote(q, a) : ""}
+        ${ok ? rightNote(q, a) : answerFirst(q, a, S.optOrder[id], dontKnow)}
         ${explain(q)}${studyRef(q)}</div>` : "";
     const nav = C.navCounts(BANK, S), states = C.navStates(BANK, S);
     const shown = new Set(C.navFilter(BANK, S, navKind));
@@ -1894,15 +2195,17 @@
             ${short.length ? `<button type="button" id="goShort">Go to question ${short[0] + 1}</button>` : ""}
             <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${navPanel}
-        <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
+        <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}${S.refresh && S.refresh[id] ? `<span class="chip refresher" title="Already mastered. In this review so it stays fresh.">Refresher</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
-        ${body}${fb}${revealed && !isPlace ? noteBox(id) : ""}
+        ${body}${fb}
         <div class="qtools">${n > 1 ? `<button id="flag" class="${S.flags[id] ? "flagged" : "ghost"}" aria-pressed="${!!S.flags[id]}">${icon("flag")}${S.flags[id] ? "Flagged" : "Flag"}</button>` : ""}
           ${dontKnowBtn}
           ${S.study && !isPlace ? markButton(id) : ""}
+          ${revealed && !isPlace ? noteButton(id) + reportBtn(q) : ""}
           ${!isPlace && S.study && !revealed && q.hint && !S.hints[id] ? `<button class="ghost" id="hintBtn">${icon("bulb")}Hint</button>` : ""}
           ${confPick}</div>
+        ${revealed && !isPlace ? noteBox(id) : ""}
         <div class="qactions">${n > 1 ? `<button id="prev" ${S.cur === 0 ? "disabled" : ""}>Previous</button>` : ""}
           ${canCheck && !last ? `<button id="next">Skip</button>` : ""}${primary}</div>
         ${hintOn ? `<div class="hintbox">${icon("bulb")}<div><b>Hint</b> ${rich(q.hint)}</div></div>` : ""}
@@ -1981,23 +2284,36 @@
     if (!S.study || S.mode === "placement" || S.checked[id] || !BANK.byId[id].hint) return;
     S.hints = S.hints || {}; S.hints[id] = 1; save(); const y = scrollY; renderExam(); scrollTo(0, y);
   }
-  // "Study this" links shown with every answer in Study mode and in result reviews
-  // After a typed answer: the accepted spellings, and for lab-checked questions what the command printed on the simulated system.
-  function fillAnswerInfo(q, a, hideList) {
-    const r = q.lab ? C.runLab(q, a) : null;
-    const out = r && r.out ? (r.out.length > 1200 ? r.out.slice(0, 1200) + "\n…" : r.out) : "";
-    const t = C.checkTyped(q, a);
-    return (t.near ? `<p class="nearnote">${icon("bulb")}<span>${esc(C.TYPED_NEAR[t.near])}${t.near === "sudo" ? " Running a command as root also removes the permission checks that would stop a mistake." : ` You typed <code>${esc(t.typed)}</code>; the answer is <code>${esc(t.best)}</code>.`}</span></p>` : "") +
-      (hideList ? "" : `<div class="mono small">${q.lab ? "For example" : "Accepted"}: ${q.accept.map(x => `<code>${esc(x)}</code>`).join(" · ")}</div>`) +
-      (r ? `<div class="small muted">${r.ok ? "Your command was run on a simulated system and did the job." : "Your command was run on a simulated system and didn't produce the result asked for."}${out ? " It printed:" : ""}</div>${out ? `<pre class="code small">${esc(out)}</pre>` : ""}` : "");
+  // After a wrong answer, the answer comes first: the command (or the right letters), one line on why yours missed
+  // when a rule can tell (core.js missTyped / missChoice), and what a lab command printed, folded away.
+  function answerFirst(q, a, order, dontKnow) {
+    if (q.type === "fill") {
+      const t = C.checkTyped(q, a), best = t.near ? t.best : t.answered ? C.closestAccepted(q, a) : (q.accept || [])[0] || "";
+      const w = dontKnow ? null : C.missTyped(q, a, window.LEManPages);
+      const rest = q.lab ? [] : (q.accept || []).filter(x => x !== best).slice(0, 3);
+      const r = q.lab && !dontKnow ? C.runLab(q, a) : null, out = r && !r.ok && r.out ? (r.out.length > 1200 ? r.out.slice(0, 1200) + "\n…" : r.out) : "";
+      return `<div class="ans-box"><span class="ans-label">Answer</span><pre class="code ans-cmd">${esc(best)}</pre>${q.lab ? `<p class="small muted">Other commands that do the same job also count.</p>`
+          : rest.length ? `<p class="small muted">Also accepted: ${rest.map(x => `<code>${esc(x)}</code>`).join(" · ")}</p>` : ""}</div>
+        ${w ? `<p class="ans-why"><b>Why yours didn't work:</b> ${rich(w.text)}</p>` : ""}
+        ${out ? `<details class="ans-out"><summary>What your command printed</summary><pre class="code small">${esc(out)}</pre></details>` : ""}`;
+    }
+    const m = C.missChoice(q, a, order); if (!m) return "";
+    const short = m.rightIdx.every(oi => q.options[oi].replace(/`/g, "").length <= 40);
+    const opt = x => /`/.test(x) || /^[A-Z]/.test(x) ? rich(x) : `<code>${esc(x)}</code>`;
+    return `<p class="ans-lead"><b>Answer: ${andList(m.right)}</b>${short ? ` <span class="ans-sep">·</span> ${andList(m.rightIdx.map(oi => opt(q.options[oi])))}` : ""}</p>
+      ${m.text && !dontKnow ? `<p class="ans-why"><b>Why yours didn't work:</b> ${rich(m.text)}</p>` : ""}`;
   }
-  // Two tiers: the first sentence is the answer in short; the rest is the longer explanation. On phones the rest
-  // sits behind a "More" disclosure so the next question stays within reach; on wider screens it is simply shown.
+  // A right typed answer that the lab accepted in other words: show the usual spelling too.
+  function rightNote(q, a) {
+    if (q.type !== "fill") return "";
+    const t = C.checkTyped(q, a);
+    return t.how === "ran" && q.accept && q.accept[0] && C.norm(q.accept[0]) !== t.typed ? `<p class="small muted">Also works: <code>${esc(q.accept[0])}</code></p>` : "";
+  }
+  // The explanation: its first two sentences, and the rest behind "More" so the next question stays within reach.
   function explain(q) {
-    const e = C.splitExplanation(q.explanation);
-    if (!e.rest) return `<div class="expl"><p class="expl-short">${rich(e.short)}</p></div>`;
-    return `<div class="expl"><p class="expl-short">${rich(e.short)}</p><p class="expl-rest">${rich(e.rest)}</p>
-      <details class="expl-more"><summary>More on this</summary><p>${rich(e.rest)}</p></details></div>`;   // styles.css shows one of the two, by screen width
+    const a = C.splitExplanation(q.explanation), b = a.rest ? C.splitExplanation(a.rest) : { short: "", rest: "" };
+    const lead = a.short + (b.short ? " " + b.short : "");
+    return `<div class="expl"><p>${rich(lead)}</p>${b.rest ? `<details class="expl-more"><summary>More</summary><p>${rich(b.rest)}</p></details>` : ""}</div>`;
   }
   // "Why that's wrong": a one-line note under each wrong option once the answer is revealed.
   function whyNote(q, oi) {
@@ -2005,30 +2321,28 @@
     return n ? `<span class="note"><b>Why not:</b> ${rich(n)}</span>` : "";
   }
 
-  // Why a partly right "Choose TWO" answer is still wrong.
-  function multiNote(q, a) {
-    if (q.type !== "multi" || !Array.isArray(a) || !a.length) return "";
-    const right = a.filter(x => q.answer.includes(x)).length, n = q.answer.length;
-    const why = a.length < n ? `you picked ${a.length} of the ${n} answers asked for` : `${right} of your ${a.length} picks ${right === 1 ? "is" : "are"} correct`;
-    return `<p class="small muted multinote">Scored as wrong because ${why}. A "Choose ${n === 2 ? "TWO" : "THREE"}" question only counts when every pick is right, so pick exactly ${n}.</p>`;
-  }
   // Bookmarks and notes. A bookmark keeps a question for later (Study > Bookmarked); a note is your own words on it.
   const markButton = id => { const on = C.markOf(st, id).on; return `<button class="${on ? "marked" : "ghost"}" data-mark="${esc(id)}" aria-pressed="${on}" title="${on ? "Remove from" : "Save to"} Study > Bookmarked">${icon("bookmark")}${on ? "Bookmarked" : "Bookmark"}</button>`; };
+  const noteButton = id => { const note = C.markOf(st, id).note;
+    return `<button class="ghost" data-note-open="${esc(id)}" aria-expanded="${!!note}">${icon("note")}${note ? "Your note" : "Note"}</button>`; };
   const noteBox = id => { const note = C.markOf(st, id).note;
-    return `<details class="notebox"${note ? " open" : ""}><summary>${note ? "Your note" : "Add a note"}</summary>
-      <textarea data-note="${esc(id)}" rows="2" maxlength="1000" placeholder="Your own words: a mnemonic, why you missed it, what to look up" aria-label="Your note on this question">${esc(note)}</textarea></details>`; };
+    return `<div class="notebox" data-note-box="${esc(id)}"${note ? "" : " hidden"}>
+      <textarea data-note="${esc(id)}" rows="2" maxlength="1000" placeholder="Your own words: a mnemonic, why you missed it, what to look up" aria-label="Your note on this question">${esc(note)}</textarea></div>`; };
   function wireMarks(root, redraw) {
     $$("[data-mark]", root).forEach(b => b.onclick = () => { const id = b.dataset.mark; C.setMark(st, id, { on: !C.markOf(st, id).on }); save(); redraw(); });
+    $$("[data-note-open]", root).forEach(b => b.onclick = () => {
+      const box = $$("[data-note-box]", root).find(x => x.dataset.noteBox === b.dataset.noteOpen); if (!box) return;
+      box.hidden = !box.hidden; b.setAttribute("aria-expanded", !box.hidden); if (!box.hidden) $("textarea", box).focus(); });
     $$("[data-note]", root).forEach(t => t.onchange = () => { C.setMark(st, t.dataset.note, { note: t.value.trim() }); save(); toast(t.value.trim() ? "Note saved" : "Note removed"); });
   }
+  // "Study this" links shown with every answer in Study mode and in result reviews: one quiet line.
   function studyRef(q) {
     const nc = CARDS.filter(c => c.obj === q.obj).length;
     const labs = (LABX.q[q.id] || []).map(pid => LABS.find(x => x.id === pid)).filter(Boolean);
-    return `<div class="studyref">
-      <a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener" title="LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}">${icon("guide")}Read the lesson</a>
-      ${labs.map(p => `<a href="#lab/${p.id}" data-labgo="${p.id}" class="lablink" title="${esc(partLabel(p))}: ${esc(p.title)}">${icon("terminal")}Try it in a lab${labs.length > 1 ? ": " + esc(partLabel(p)) : ""}</a>`).join("")}
-      ${nc ? `<a href="#cards" data-cards-obj="${q.obj}">${icon("cards")}${nc} flashcards for ${q.obj}</a>` : ""}
-      <span class="grow"></span>${reportLink(q)}</div>`;
+    const lab = labs[0];
+    return `<p class="studyref qlinks"><span class="sr">Study this: </span><a href="${OBJ[q.obj].lesson}" target="_blank" rel="noopener" title="LPI lesson ${q.obj}: ${esc(OBJ[q.obj].name)}">Lesson</a>
+      ${lab ? `<span class="dotsep" aria-hidden="true">·</span><a href="#lab/${lab.id}" data-labgo="${lab.id}" title="${esc(partLabel(lab))}: ${esc(lab.title)}">${esc(partLabel(lab).replace(/, part \d+$/, ""))}</a>` : ""}
+      ${nc ? `<span class="dotsep" aria-hidden="true">·</span><a href="#cards" data-cards-obj="${q.obj}">${nc} flashcards</a>` : ""}</p>`;
   }
   function pickByNumber(pos) {
     const S = st.current, id = S.qids[S.cur], q = BANK.byId[id];
@@ -2135,14 +2449,14 @@
     const item = ({ id, i }) => {
       const q = BANK.byId[id], a = rec.answers[id], ok = perQ[id];
       let body;
-      if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${fillAnswerInfo(q, a, ok)}`;
+      if (q.type === "fill") body = `<div class="mono small">Your answer: <b>${C.answered(q, a) ? esc(C.norm(a)) : "(blank)"}</b></div>${ok ? rightNote(q, a) : answerFirst(q, a)}`;
       else body = `<div class="u-g4 stack">${order(q, rec.optOrder[id]).map((oi, pos) => { const k = q.answer.includes(oi), p = Array.isArray(a) && a.includes(oi);
-        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : multiNote(q, a)}`;
+        return `<div class="ropt ${k ? "correct" : p ? "picked" : ""}"><span class="k2">${L[pos]}</span><span class="rt">${rich(q.options[oi])}${whyNote(q, oi)}</span>${k || p ? `<span class="why">${icon(k ? "check" : "x")}${k && p ? "Correct, your pick" : k ? (q.type === "multi" && C.answered(q, a) ? "Correct, you missed this" : "Correct") : "Wrong, your pick"}</span>` : ""}</div>`; }).join("")}</div>${ok ? "" : answerFirst(q, a, order(q, rec.optOrder[id]))}`;
       return `<article class="card rev ${ok ? "right" : "wrong"}"><div class="row spread"><span class="u-g8 row"><span class="small muted">Q${i + 1} · ${q.obj} ${esc(OBJ[q.obj].name)}${flags.has(id) ? " · flagged" : ""}${hintsUsed.has(id) ? " · hint used" : ""}</span>${lvChip(q)}${confLabel(id, ok)}</span>
         <span class="dverdict ${ok ? "v-good" : "v-bad"}">${icon(ok ? "check" : "x")}${ok ? "Correct" : C.answered(q, a) ? "Wrong" : "Unanswered"}</span></div>
         <p class="u-fw6">${rich(q.q)}</p>${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}${body}
-        <div class="ex">${explain(q)}</div>${ok ? `<div class="small">${reportLink(q)}</div>` : studyRef(q)}
-        <div class="row marks">${markButton(id)}</div>${noteBox(id)}</article>`;
+        <div class="ex">${explain(q)}</div>${ok ? "" : studyRef(q)}
+        <div class="row marks">${markButton(id)}${noteButton(id)}${reportBtn(q)}</div>${noteBox(id)}</article>`;
     };
     const calLine = cal.sureN
       ? `<p class="small muted">When you said <b>sure</b> you were right ${cal.surePct}% of the time (${cal.sureOk} of ${cal.sureN})${cal.unsureN ? `; when <b>unsure</b>, ${cal.unsurePct}% (${cal.unsureOk} of ${cal.unsureN})` : ""}.${cal.cw.length ? ` ${plural(cal.cw.length, "confident miss")} to review.` : ""}</p>`
@@ -2176,6 +2490,8 @@
     wireStarts($("#page"));
     $$("[data-f]").forEach(b => b.onclick = () => { reviewFilter = b.dataset.f; const y = $("#review").offsetTop; renderResults(rec); scrollTo(0, y - 16); });
     wireMarks($("#page"), () => { const y = scrollY; renderResults(rec); scrollTo(0, y); });
+    if (!window.LEManPages && rec.qids.some(id => BANK.byId[id] && BANK.byId[id].type === "fill" && !perQ[id] && C.answered(BANK.byId[id], rec.answers[id])))
+      ensureShell().then(() => { if (location.hash === "#results" || $("#review")) { const y = scrollY; renderResults(rec); scrollTo(0, y); } }, () => {});
   }
 
   // ================================================================== HANDS-ON (matching and ordering)

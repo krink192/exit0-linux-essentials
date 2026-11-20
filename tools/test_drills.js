@@ -153,6 +153,34 @@ assert.strictEqual(mt.qWrong, 1, "a missed type-the-command question counts agai
 const labUse = { chmod: 3 }; assert.strictEqual(C.commandMastery(index, st, { labUse }).chmod.labTasks, 3);
 assert.strictEqual(C.firstCommand("sudo FOO=1 ./run.sh -x"), "run.sh");
 
+// A mastered command drops when one of its skills is missed. Recommended keeps the skill seen longest ago.
+const mini = [
+  { id: "due1", cmd: "ls", obj: "2.1", label: "List", templates: [{ text: "list it", hints: [], solution: "ls", check: {}, explain: "" }] },
+  { id: "new1", cmd: "cp", obj: "2.2", label: "Copy", templates: [{ text: "copy it", hints: [], solution: "cp", check: {}, explain: "" }] },
+  { id: "new2", cmd: "mv", obj: "2.3", label: "Move", templates: [{ text: "move it", hints: [], solution: "mv", check: {}, explain: "" }] },
+  { id: "old", cmd: "tar", obj: "3.1", label: "Old tar", templates: [{ text: "pack the old way", hints: [], solution: "tar", check: {}, explain: "" }] },
+  { id: "newer", cmd: "tar", obj: "3.1", label: "Newer tar", templates: [{ text: "pack the new way", hints: [], solution: "tar", check: {}, explain: "" }] }
+];
+const miniIndex = { skills: mini, cmdq: {} };
+const miniSt = C.freshState();
+const tOld = at(1), tNew = at(4);
+miniSt.cmdstats = {
+  due1: { seen: 1, right: 0, last: false, at: at(0), box: 0, due: day },
+  old: { seen: 2, right: 2, last: true, at: tOld, box: 5, due: day + 10 },
+  newer: { seen: 2, right: 2, last: true, at: tNew, box: 5, due: day + 12 }
+};
+assert.strictEqual(C.commandMastery(miniIndex, miniSt, { today: day }).tar.level, "mastered");
+const picked = C.pickSkills(miniIndex, miniSt, { count: 3, source: "recommended", today: day, seed: 7 });
+assert.strictEqual(picked.length, 3);
+assert.strictEqual(picked[0].id, "due1", "a due skill still comes first");
+assert.strictEqual(picked.refreshId, "old", "the mastered skill seen longest ago is the refresher");
+assert.ok(picked.some(s => s.id === "old"));
+const drillsMini = { skills: mini };
+const sess = C.buildCmdSession(drillsMini, miniIndex, miniSt, { count: 3, today: day, seed: 7, mode: "guided" });
+assert.strictEqual(sess.tasks.filter(t => t.refresh).map(t => t.skill).join(), "old");
+C.recordDrill(miniSt, "old", false, at(8));
+assert.notStrictEqual(C.commandMastery(miniIndex, miniSt, { today: day + 8 }).tar.level, "mastered", "missing a skill drops the command out of mastered");
+
 // sync merges command practice like questions; XP and the badge count drills
 const a = C.freshState(), b = C.freshState();
 C.recordDrill(a, "cp", true, at(0)); C.recordDrill(b, "cp", false, at(1));

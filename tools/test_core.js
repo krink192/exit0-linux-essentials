@@ -299,10 +299,11 @@ t("export code round-trips through import, including bookmarks and notes", () =>
   const code = C.exportDoc(st);
   assert.ok(code.marks && code.marks[s.qids[0]].on, "export includes marks");
   assert.deepStrictEqual(Object.keys(code).filter(k => k !== "app" && k !== "v").sort(),
-    ["badges", "cards", "cmdstats", "days", "labs", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
+    ["badges", "cards", "cmdstats", "days", "estWeeks", "labs", "lx", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
     "export lists every cleanDoc field");
   const next = C.importState(C.freshState(), JSON.parse(JSON.stringify(code)));
   assert.deepStrictEqual(next.marks, st.marks);
+  assert.deepStrictEqual(next.estWeeks, st.estWeeks);
   assert.deepStrictEqual(next.qstats, st.qstats);
   assert.deepStrictEqual(next.tests.map(t => t.id), st.tests.map(t => t.id));
   assert.deepStrictEqual(next.labs, st.labs);
@@ -654,12 +655,124 @@ t("due and new flashcards alternate about three to one", () => {
   const older = { a: { box: 2, seen: 1, right: 1, due: today }, b: { box: 1, seen: 1, right: 1, due: today - 3 } };
   assert.deepStrictEqual(C.cardQueue([{ id: "a", obj: "1.1" }, { id: "b", obj: "1.1" }], older, null, today, 5, 1).map(c => c.id), ["b", "a"]);
 });
+t("a top-box flashcard drops on a miss, and a session keeps two that are not due", () => {
+  const today = 21000, seed = 11, deck = [];
+  for (let i = 0; i < 6; i++) deck.push({ id: "d" + i, obj: "1.1" });
+  deck.push({ id: "top-old", obj: "1.2" }, { id: "top-mid", obj: "1.2" }, { id: "top-new", obj: "1.3" }, { id: "box4", obj: "1.3" });
+  const cs = {};
+  for (let i = 0; i < 6; i++) cs["d" + i] = { box: 1, seen: 1, right: 1, due: today, at: 1000 + i };
+  cs["top-old"] = { box: 5, seen: 6, right: 6, due: today + 16, at: 100 };
+  cs["top-mid"] = { box: 5, seen: 6, right: 6, due: today + 10, at: 200 };
+  cs["top-new"] = { box: 5, seen: 6, right: 6, due: today + 8, at: 900 };
+  cs.box4 = { box: 4, seen: 5, right: 5, due: today + 8, at: 50 };
+  const dueBefore = cs["top-old"].due;
+  const q = C.cardQueue(deck, cs, null, today, 8, seed);
+  assert.strictEqual(cs["top-old"].due, dueBefore, "mixing a card in does not make it due");
+  assert.deepStrictEqual(Object.keys(q.refresh).sort(), ["top-mid", "top-old"]);
+  assert.ok(q.some(c => c.id === "top-old") && q.some(c => c.id === "top-mid"));
+  assert.ok(!q.refresh["top-new"], "only the two seen longest ago");
+  assert.ok(!q.refresh.box4, "the 8-day box is not the top box");
+  assert.strictEqual(q.length, 8);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 8, seed).map(c => c.id), q.map(c => c.id), "same seed, same order");
+  C.reviewCard(cs, "top-old", false, today, 5000);
+  assert.strictEqual(cs["top-old"].box, 0, "a miss in the top box drops it to the first box");
+  assert.strictEqual(cs["top-old"].due, today);
+  const idle = C.cardQueue([{ id: "top-old", obj: "1.1" }], { "top-old": { box: 5, seen: 6, right: 6, due: today + 3, at: 1 } }, null, today, 20, seed);
+  assert.strictEqual(idle.length, 0, "nothing due and nothing new: no session of only refreshers");
+});
 t("streak counts consecutive goal days", () => {
   const days = {}; const now = new Date(2026, 9, 10, 12);
   for (let i = 0; i < 4; i++) { const d = new Date(now); d.setDate(d.getDate() - i); days[C.dayKey(d)] = 25; }
   assert.strictEqual(C.streak(days, 20, now).count, 4);
   delete days[C.dayKey(now)];
   const s = C.streak(days, 20, now); assert.strictEqual(s.count, 3); assert(!s.metToday);
+  assert.strictEqual(s.graceUsed, 0);
+  assert.strictEqual(typeof C.streak({ "2026-11-01": 1 }, 0, now).count, "number");   // goal 0 must not spin
+});
+t("one missed day between goal days is a rest day and is not added to the streak", () => {
+  const now = new Date(2026, 10, 18, 12);   // Wednesday
+  const days = {}, set = (off, n) => { const d = new Date(now); d.setDate(d.getDate() + off); if (n) days[C.dayKey(d)] = n; };
+  set(0, 10); set(-2, 10); set(-3, 10); set(-4, 10);   // Tuesday missed
+  const s = C.streak(days, 10, now);
+  assert.strictEqual(s.count, 4); assert.strictEqual(s.graceUsed, 1); assert.strictEqual(s.metToday, true);
+  assert.strictEqual(C.longestStreak(days, 10), 4);
+  // Today not finished yet does not confirm yesterday's miss as a rest day.
+  const open = {};
+  const put = (off, n, into) => { const d = new Date(now); d.setDate(d.getDate() + off); if (n) into[C.dayKey(d)] = n; };
+  put(-2, 10, open);
+  assert.strictEqual(C.streak(open, 10, now).count, 0);
+  open[C.dayKey(now)] = 10;
+  const closed = C.streak(open, 10, now);
+  assert.strictEqual(closed.count, 2); assert.strictEqual(closed.graceUsed, 1);
+});
+t("two gaps in one week, two missed days in a row, and a gap at the start do not extend a streak", () => {
+  const now = new Date(2026, 10, 18, 12);
+  const fill = spec => { const days = {}; spec.forEach((n, i) => { const d = new Date(now); d.setDate(d.getDate() - (spec.length - 1 - i)); if (n) days[C.dayKey(d)] = n; }); return days; };
+  const twoGaps = C.streak(fill([10, 0, 10, 0, 10]), 10, now);
+  assert.strictEqual(twoGaps.count, 2); assert.strictEqual(twoGaps.graceUsed, 1);
+  assert.strictEqual(C.longestStreak(fill([10, 0, 10, 0, 10]), 10), 2);
+  const pair = C.streak(fill([10, 10, 0, 0, 10]), 10, now);
+  assert.strictEqual(pair.count, 1); assert.strictEqual(pair.graceUsed, 0);
+  assert.strictEqual(C.longestStreak(fill([10, 10, 0, 0, 10]), 10), 2);
+  const start = C.streak(fill([0, 10, 10, 10]), 10, now);
+  assert.strictEqual(start.count, 3); assert.strictEqual(start.graceUsed, 0);
+  assert.strictEqual(C.longestStreak(fill([0, 10, 10, 10]), 10), 3);
+  // A second rest day is allowed once seven days have passed since the first.
+  const spaced = fill([10, 0, 10, 10, 10, 10, 10, 10, 0, 10]);
+  assert.strictEqual(C.streak(spaced, 10, now).count, 8);
+  assert.strictEqual(C.longestStreak(spaced, 10), 8);
+});
+t("study days shade by the daily goal and leave out days that have not happened", () => {
+  const now = new Date(2026, 10, 18, 12);   // Wednesday 18 Nov 2026
+  const on = off => { const d = new Date(now); d.setDate(d.getDate() + off); return C.dayKey(d); };
+  const days = { [on(-1)]: 4, [on(-2)]: 10, [on(-3)]: 20 };
+  const g = C.studyDays(days, 10, now, 2);
+  assert.strictEqual(g.weeks.length, 2);
+  const all = []; g.weeks.forEach(w => w.days.forEach(c => all.push(c)));
+  const by = {}; all.forEach(c => { by[c.key] = c; });
+  assert.strictEqual(by[on(0)].today, true); assert.strictEqual(by[on(0)].level, 0);
+  assert.strictEqual(by[on(0)].label, "Wed 18 Nov: nothing studied");
+  assert.strictEqual(by[on(-1)].level, 1); assert.strictEqual(by[on(-1)].label, "Tue 17 Nov: 4 done, under the goal");
+  assert.strictEqual(by[on(-2)].level, 2); assert.strictEqual(by[on(-2)].label, "Mon 16 Nov: 10 done, goal met");
+  assert.strictEqual(by[on(-3)].level, 3); assert.strictEqual(by[on(-3)].label, "Sun 15 Nov: 20 done, goal met");
+  assert.strictEqual(all.filter(c => c.future).length, 4);
+  assert.strictEqual(g.total, 10); assert.strictEqual(g.studied, 3); assert.strictEqual(g.met, 2);
+});
+t("score history keeps empty weeks as gaps and does not invent estimate weeks", () => {
+  const monday = new Date(2026, 10, 2, 12);   // Monday
+  const at = off => { const d = new Date(monday); d.setDate(d.getDate() + off); return d.getTime(); };
+  const exam = (off, pct, extra) => Object.assign({ id: "e" + off, date: at(off), mode: "test", total: 40, timed: true, study: false, pct, score: 1 }, extra);
+  const now = at(16);   // Wednesday of week 2
+  const est = {}; est[C.weekKey(at(7))] = { mean: 74, at: at(7) };
+  const h = C.scoreHistory([exam(0, 62), exam(14, 78), exam(14, 70, { timed: false }), exam(3, 90, { mode: "study" })], est, now);
+  assert.strictEqual(h.weeks.length, 3);
+  assert.strictEqual(h.weeks[1].examMean, null); assert.strictEqual(h.weeks[1].estimate, 74);
+  assert.strictEqual(h.examCount, 2); assert.strictEqual(h.latestExam, 78);
+  assert.deepStrictEqual(h.segments.map(s => s.length), [1, 1]);   // the empty week breaks the line
+  assert.strictEqual(h.estimateNow, null);
+  const early = at(-7 * 20);
+  const wide = C.scoreHistory([exam(0, 50), { id: "old", date: early, mode: "test", total: 40, timed: true, study: false, pct: 40, score: 1 }], {}, at(0));
+  assert.strictEqual(wide.examCount, 2); assert.strictEqual(wide.examPoints.length, 1); assert.strictEqual(wide.weeks.length, 12);
+});
+t("estimate snapshots store the pass-prediction percent for this week only", () => {
+  const st = C.freshState(), now = new Date(2026, 10, 18, 15).getTime();
+  assert.strictEqual(C.noteEstimate(st, { chance: null, mean: 10, total: 40 }, now), false);
+  assert.deepStrictEqual(st.estWeeks, {});
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.5, mean: 29.6, total: 40 }, now), true);
+  assert.deepStrictEqual(st.estWeeks[C.weekKey(now)], { mean: 74, at: now });
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.5, mean: 29.6, total: 40 }, now + 5000), false);
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.6, mean: 30, total: 40 }, now + 5000), true);
+  assert.strictEqual(st.estWeeks[C.weekKey(now)].mean, 75);
+  const hostile = C.cleanDoc({ estWeeks: { "<img>": { mean: 10, at: 5 }, "2026-11-18": { mean: 200, at: 9 }, "2026-11-17": { mean: 10, at: 4 }, "2026-11-19": { mean: "no", at: 8 }, "nope": { mean: 1, at: 1 } } });
+  assert.deepStrictEqual(hostile.estWeeks, { "2026-11-16": { mean: 100, at: 9 } });   // same week, newer stamp, clamped
+  for (let i = 0; i < 4 && C.passPrediction(bank, st.qstats).chance == null; i++) {
+    const s = C.buildTest(bank, st.qstats, { seed: 10 + i });
+    s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+    C.recordResult(st, bank, s, C.grade(bank, s, now), now + 10000 + i * 1000);
+  }
+  const p = C.passPrediction(bank, st.qstats);
+  assert.notStrictEqual(p.chance, null, "a few full exams reach an estimate");
+  assert.strictEqual(st.estWeeks[C.weekKey(now)].mean, Math.round(100 * p.mean / p.total));
 });
 t("answers-shown tests are labeled and excluded from readiness", () => {
   const st = C.freshState();
@@ -752,6 +865,78 @@ t("recording: first attempts and answers after a long gap are cold evidence; hin
   const st2 = C.freshState(); st.qstats = st2.qstats;
   assert.strictEqual(run(q.answer, t0, true).ev, -1, "a hinted first attempt is not evidence");
   assert.strictEqual(C.coldOutcome(st.qstats[q.id]), -1);
+});
+// A learner like Jacob, saved under the old 30-day rule: every fact answered once on day 0 at 70%, then fixed exams A-F
+// on days 10-15 at 90%. Under the old rule the exams were repeats, so ev still holds the day-0 result and has no evAt.
+function jacobOld(t0, native) {
+  const day = 86400000, st = C.freshState();
+  const right = q => q.type === "fill" ? q.accept[0] : q.answer, wrong = q => q.type === "fill" ? "zzz" : [q.options.findIndex((_, i) => !q.answer.includes(i))];
+  const leads = bank.questions.filter(q => !q.variantOf).map(q => q.id);
+  for (let i = 0; i < leads.length; i += 40) {
+    const ids = leads.slice(i, i + 40), at = t0 + i * 60e3, s = C.newSession(bank, "study", "Study", ids, { study: true, now: at });
+    ids.forEach(id => { s.answers[id] = leads.indexOf(id) % 10 < 7 ? right(bank.byId[id]) : wrong(bank.byId[id]); });
+    C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+  }
+  const first = {}; for (const id in st.qstats) first[id] = st.qstats[id].ev;
+  "ABCDEF".split("").forEach((f, k) => {
+    const at = t0 + (10 + k) * day, s = C.buildTest(bank, {}, { form: f, seed: k + 1, now: at - 3000e3 });
+    s.qids.forEach((id, j) => { s.answers[id] = j % 10 === 0 ? wrong(bank.byId[id]) : right(bank.byId[id]); });
+    C.recordResult(st, bank, s, C.grade(bank, s, at), at);
+  });
+  if (!native) for (const id in st.qstats) { st.qstats[id].ev = first[id]; delete st.qstats[id].evAt; }
+  return st;
+}
+const estMean = st => { const p = C.passPrediction(bank, st.qstats); return Math.round(100 * p.mean / p.total); };
+t("evidence rebuild: Jacob's exam repeats from 9-4 days ago become cold and the estimate rises; it runs once", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = jacobOld(t0);
+  const exam = st.tests.filter(x => x.form === "A")[0], id = exam.qids.find((x, j) => C.isCorrect(bank.byId[x], exam.answers[x]) && st.qstats[x].ev === 0);
+  assert(id, "an exam question first missed on day 0, right in the exam");
+  const before = estMean(st);
+  const r = C.rebuildEvidence(bank, st);
+  assert(r.ran && r.rebuilt === 400 && r.kept === 0, JSON.stringify(r));
+  assert(r.changed > 0);
+  assert.strictEqual(st.evRule, C.COLD_DAYS);
+  assert.strictEqual(st.qstats[id].ev, 1, "the exam answer, 10 days after the first, is cold"); assert.strictEqual(st.qstats[id].evAt, exam.date);
+  const after = estMean(st);
+  assert(after > before + 5, `estimate ${before} -> ${after}`);
+  // idempotent: once per device, and a forced re-run changes nothing
+  const snap = JSON.stringify(st.qstats);
+  assert.strictEqual(C.rebuildEvidence(bank, st).ran, false);
+  C.rebuildEvidence(bank, st, true); assert.strictEqual(JSON.stringify(st.qstats), snap);
+  // the rebuild gives exactly what recording under the 4-day rule gives
+  assert.deepStrictEqual(st.qstats, jacobOld(t0, true).qstats);
+  // imported progress is rebuilt again
+  assert.strictEqual(C.importState(st, C.exportDoc(st)).evRule, undefined);
+});
+t("evidence rebuild: answers in records without detail can't be replayed and keep their ev", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = C.freshState();
+  const single = bank.questions.filter(q => q.type === "single" && C.familyOf(bank, q.id).length === 1);
+  const [q1, q2, q3] = single, fill = single.slice(3, 33);
+  const run = (ids, at, ok) => { const s = C.newSession(bank, "study", "Study", ids, { study: true, now: at });
+    ids.forEach(id => { const q = bank.byId[id]; s.answers[id] = ok ? q.answer : [q.answer[0] === 0 ? 1 : 0]; }); C.recordResult(st, bank, s, C.grade(bank, s, at), at); };
+  run([q1.id, q2.id, q3.id], t0, false);                       // first attempts, all wrong: soon without detail
+  fill.forEach((q, i) => run([q.id], t0 + day + i * 1000, true));   // 30 more records push it out
+  run([q1.id], t0 + 3 * day, true);                            // 3 days after the hidden attempt: a repeat
+  run([q2.id], t0 + 6 * day, true);                            // 5+ days after the last hidden record: cold
+  assert(!st.tests[0].qids && !st.tests[2].qids && st.tests[3].qids, "the three oldest records lost their detail");
+  for (const q of [q1, q2, q3]) { st.qstats[q.id].ev = 0; delete st.qstats[q.id].evAt; }
+  const r = C.rebuildEvidence(bank, st);
+  assert.strictEqual(st.qstats[q1.id].ev, 0, "not 4 days after the newest record without detail: stays a repeat");
+  assert.strictEqual(st.qstats[q2.id].ev, 1, "4+ days after any hidden answer could have been: cold");
+  assert.strictEqual(st.qstats[q3.id].ev, 0); assert.strictEqual(st.qstats[q3.id].evAt, undefined, "nothing left to replay: kept as it was");
+  assert(r.kept >= 2, JSON.stringify(r));   // q1 and q3 (and the first filler, whose only answer lost its detail)
+});
+t("evidence rebuild: hinted answers and untimed exams are not evidence; Don't know yet is a miss", () => {
+  const day = 86400000, t0 = new Date(2026, 9, 1, 9).getTime(), st = C.freshState();
+  const [a, b] = bank.questions.filter(q => q.type === "single" && C.familyOf(bank, q.id).length === 1);
+  let s = C.newSession(bank, "study", "Study", [a.id, b.id], { study: true, now: t0 });
+  s.answers[a.id] = a.answer; s.answers[b.id] = b.answer; s.hints[a.id] = 1; C.recordResult(st, bank, s, C.grade(bank, s, t0), t0);
+  s = C.newSession(bank, "placement", "Placement", [a.id, b.id], { now: t0 + 5 * day }); s.dontKnow = { [b.id]: true }; s.answers[a.id] = a.answer;
+  C.recordResult(st, bank, s, C.grade(bank, s, t0 + 5 * day), t0 + 5 * day);
+  const snap = JSON.stringify(st.qstats);
+  C.rebuildEvidence(bank, st, true);
+  assert.strictEqual(JSON.stringify(st.qstats), snap, "replay gives what recording gave");
+  assert.strictEqual(st.qstats[a.id].ev, 1); assert.strictEqual(st.qstats[b.id].ev, 0);
 });
 t("cold window is 4 days: day 3 is a repeat, day 4 is cold, and the latest cold result wins", () => {
   assert.strictEqual(C.COLD_DAYS, 4);
@@ -988,6 +1173,106 @@ t("mastery: sync keeps a demotion when a peer still has the old days", () => {
   assert.deepStrictEqual(C.coldDaysOf(view.qstats["1.1-01"]), [10, 11], "dropped day stays dropped after merge");
   assert.strictEqual(view.qstats["1.1-01"].cw, 5, "confident-wrong counts add across devices");
   assert.deepStrictEqual(C.coldDaysOf({ cdays: [], ev: 1, at: 1000, cdrop: [C.dayNum(1000)] }), []);
+});
+t("mastery: a cold miss outside placement drops a mastered objective; a warm, hinted, untimed or placement miss does not", () => {
+  const DAY = 86400000, now = new Date(2026, 9, 20, 12).getTime(), today = C.dayNum(now);
+  const obj = "1.1";
+  const alone = x => { const q = bank.byId[x]; return q.type !== "fill" && !q.variantOf && !bank.questions.some(v => v.variantOf === x); };
+  const id = bank.byObj[obj].find(alone);
+  assert.ok(id, "a single-wording question to miss");
+  const q = bank.byId[id];
+  const days3 = [today - 30, today - 20, today - 10];
+  const seed = (at, cdays) => {
+    const st = C.freshState();
+    for (const qid of bank.byObj[obj]) st.qstats[qid] = { seen: 1, right: 1, last: true, at: now, box: 1, due: today + 2, cdays: [] };
+    st.qstats[id] = { seen: 3, right: 3, last: true, ev: 1, at, cdays: cdays.slice(), box: 3, due: today + 5 };
+    return st;
+  };
+  const miss = (st, mode, opts) => {
+    opts = opts || {};
+    const s = C.newSession(bank, mode, mode, [id], { study: mode !== "test" && mode !== "placement", timed: !!opts.timed, seed: 4, now });
+    s.answers[id] = [q.answer[0] === 0 ? 1 : 0];
+    if (opts.hint) s.hints[id] = true;
+    C.recordResult(st, bank, s, C.grade(bank, s), now);
+    return C.objectiveStats(bank, st.qstats)[obj];
+  };
+  // Cold (last answer 10 days ago): Mastered, 3 days, falls to Proficient. The dropped day is remembered.
+  const cold = seed(now - 10 * DAY, days3);
+  assert.strictEqual(C.objectiveStats(bank, cold.qstats)[obj].level, "mastered");
+  assert.strictEqual(miss(cold, "study").level, "proficient");
+  assert.strictEqual(C.objectiveStats(bank, cold.qstats)[obj].coldDays, 2);
+  assert.deepStrictEqual(cold.qstats[id].cdrop, [today - 10]);
+  const peer = C.freshState();
+  peer.qstats[id] = { seen: 3, right: 3, last: true, at: now - 10 * DAY, ev: 1, cdays: days3.slice(), box: 3, due: today + 5 };
+  const view = C.mergeStates([cold, peer]);
+  assert.deepStrictEqual(C.coldDaysOf(view.qstats[id]), [today - 30, today - 20], "a peer that still has the day cannot put it back");
+  // Four days: one cold miss removes only the latest, so the objective stays Mastered.
+  const extra = seed(now - 10 * DAY, [today - 40, today - 30, today - 20, today - 10]);
+  assert.strictEqual(miss(extra, "study").level, "mastered");
+  assert.strictEqual(C.objectiveStats(bank, extra.qstats)[obj].coldDays, 3);
+  // Not cold yet (answered earlier today): no drop. A hint, an untimed exam and placement do not drop either.
+  const warm = seed(now - 60 * 60 * 1000, days3);
+  assert.strictEqual(miss(warm, "study").level, "mastered");
+  assert.strictEqual(warm.qstats[id].cdrop, undefined);
+  const hinted = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(hinted, "study", { hint: true }).level, "mastered");
+  const untimed = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(untimed, "test").level, "mastered", "an untimed exam is not cold evidence");
+  const place = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(place, "placement").level, "mastered");
+  // Proficient does not lose a day on a cold miss. Only Mastered does.
+  const prof = seed(now - 10 * DAY, [today - 20, today - 10]);
+  assert.strictEqual(C.objectiveStats(bank, prof.qstats)[obj].level, "proficient");
+  assert.strictEqual(miss(prof, "study").level, "proficient");
+  assert.strictEqual(prof.qstats[id].cdrop, undefined);
+  // A mixed exam miss that is also cold drops one day, not two.
+  const both = seed(now - 10 * DAY, days3);
+  const exam = C.buildTest(bank, {}, { seed: 8 });
+  if (!exam.qids.includes(id)) exam.qids[0] = id;
+  exam.qids.forEach(qid => {
+    const qq = bank.byId[qid];
+    exam.answers[qid] = qid === id ? [qq.answer[0] === 0 ? 1 : 0] : (qq.type === "fill" ? qq.accept[0] : qq.answer);
+  });
+  C.recordResult(both, bank, exam, C.grade(bank, exam), now);
+  assert.strictEqual(C.objectiveStats(bank, both.qstats)[obj].coldDays, 2);
+  assert.strictEqual(C.objectiveStats(bank, both.qstats)[obj].level, "proficient");
+});
+t("daily review includes two mastered questions seen longest ago, without making them due", () => {
+  const DAY = 86400000, now = new Date(2026, 9, 20, 12).getTime(), today = C.dayNum(now), seed = 42;
+  const alone = id => !bank.byId[id].variantOf && !bank.questions.some(q => q.variantOf === id);
+  const take = obj => bank.byObj[obj].find(alone);
+  const old = take("1.2"), mid = take("1.3"), recent = take("2.2"), due = bank.byObj["2.1"].find(id => bank.byId[id].type !== "fill");
+  assert.ok(old && mid && recent && due);
+  const st = C.freshState();
+  st.settings.review = { on: true, size: 10, fresh: 0 };
+  const days = [today - 40, today - 25, today - 12];
+  const put = (id, daysAgo) => { st.qstats[id] = { seen: 3, right: 3, last: true, at: now - daysAgo * DAY, ev: 1, cdays: days.slice(), box: 4, due: today + 6 }; };
+  put(old, 50); put(mid, 30); put(recent, 8);
+  st.qstats[due] = { seen: 1, right: 0, last: false, at: now - 2 * DAY, box: 0, due: today - 1 };
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[bank.byId[old].obj].level, "mastered");
+  const dueBefore = st.qstats[old].due;
+  const d = C.dailyReview(bank, st, today);
+  assert.strictEqual(d.refresh, 2);
+  assert.strictEqual(d.left, 10);
+  const session = C.buildReview(bank, st, { today, seed });
+  assert.strictEqual(st.qstats[old].due, dueBefore, "a refresher is not marked due");
+  assert.deepStrictEqual(Object.keys(session.refresh).sort(), [old, mid].sort(), "the two seen longest ago");
+  assert.ok(session.qids.includes(old) && session.qids.includes(mid));
+  assert.ok(!session.refresh[recent] && !session.refresh[due]);
+  const again = C.buildReview(bank, st, { today, seed });
+  assert.deepStrictEqual(again.qids, session.qids, "same seed, same review");
+  assert.deepStrictEqual(again.refresh, session.refresh);
+  const kept = C.cleanSession(session);
+  assert.deepStrictEqual(kept.refresh, session.refresh, "the tag survives a reload");
+  // Answering one question uses up today's refresher slots. The same pair is not added again.
+  const one = session.qids.find(id => id === due) || session.qids[0];
+  const qq = bank.byId[one];
+  session.answers[one] = qq.type === "fill" ? qq.accept[0] : qq.answer;
+  C.recordResult(st, bank, session, C.grade(bank, session), now);
+  const d2 = C.dailyReview(bank, st, today);
+  assert.strictEqual(d2.done, 1);
+  assert.strictEqual(d2.refresh, 0);
+  assert.ok(d2.left > 0, "the rest of the day is still there, without a new pair");
 });
 t("repairSession drops conf (and other maps) for removed question ids", () => {
   const id = bank.questions[0].id, gone = "9.9-99";
@@ -1524,6 +1809,106 @@ t("Choose TWO/THREE can be checked only with exactly the asked number of picks",
   assert.strictEqual(C.shortPickLine([11]), "1 question has fewer picks than asked: 12");
   assert.strictEqual(C.shortPickLine([]), "");
   assert(bank.questions.every(q => (q.options || []).length <= 5), "options stop at E, so A-E does not clash with F for flag");
+});
+
+// ---------------------------------------------------------------- lesson exercises: split a command, builtin or external
+t("lesson exercises: ten original lines across 2.1-2.4, and the twelve builtin or external names", () => {
+  const ex = C.LESSON_EXERCISES;
+  assert.strictEqual(ex.length, 2);
+  assert.strictEqual(ex[0].id, "split"); assert.strictEqual(ex[0].label, "Guided"); assert.strictEqual(ex[0].kind, "split");
+  assert.strictEqual(ex[1].id, "sort"); assert.strictEqual(ex[1].label, "Explorational"); assert.strictEqual(ex[1].kind, "sort");
+  assert.strictEqual(ex[0].items.length, 10);
+  const objs = {};
+  for (const it of ex[0].items) {
+    assert(["2.1", "2.2", "2.3", "2.4"].indexOf(it.obj) >= 0, it.obj);
+    objs[it.obj] = 1;
+    assert(it.tokens.length >= 1);
+    assert.strictEqual(it.tokens[0].role, "command", it.tokens.map(t => t.t).join(" "));
+    for (const tok of it.tokens) assert(C.LX_ROLES.indexOf(tok.role) >= 0, tok.role);
+  }
+  assert.deepStrictEqual(Object.keys(objs).sort(), ["2.1", "2.2", "2.3", "2.4"]);
+  const cat = ex[0].items.find(it => it.tokens.map(t => t.t).join(" ") === "cat -n /etc/passwd");
+  assert(cat, "the worked example is one of the ten");
+  assert.deepStrictEqual(cat.tokens.map(t => t.role), ["command", "option", "argument"]);
+  assert.deepStrictEqual(ex[1].items.map(i => i.name), ["cd", "echo", "ls", "type", "pwd", "cat", "export", "grep", "alias", "man", "history", "find"]);
+  const bin = {}; ex[1].items.forEach(i => { bin[i.name] = i.bin; assert(C.LX_BINS.indexOf(i.bin) >= 0); });
+  assert.deepStrictEqual(bin, {
+    cd: "builtin", echo: "builtin", ls: "external", type: "builtin", pwd: "builtin", cat: "external",
+    export: "builtin", grep: "external", alias: "builtin", man: "external", history: "builtin", find: "external",
+  });
+  assert(/type/.test(ex[1].explain), "the note says how type tells builtin from external");
+});
+t("split check: a line is right only when every token has its role", () => {
+  const item = C.LESSON_EXERCISES[0].items[0];
+  const right = item.tokens.map(t => t.role);
+  assert.deepStrictEqual(C.checkSplitLine(item, right), { ok: true, blank: [], wrong: [] });
+  const swapped = right.slice(); swapped[1] = "argument";
+  assert.deepStrictEqual(C.checkSplitLine(item, swapped), { ok: false, blank: [], wrong: [1] });
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command", "", "argument"]), { ok: false, blank: [1], wrong: [] });
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command"]).blank, [1, 2]);
+  assert.strictEqual(C.checkSplitLine(item, null).ok, false);
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command", "flag", "argument"]).wrong, [1], "an unknown role is a mistake, not a blank");
+  assert.deepStrictEqual(C.checkSplitLine(item, right.concat("command")).wrong, [3], "an extra token is a mistake");
+});
+t("split exercise: done lists only the lines that are fully right", () => {
+  const items = C.LESSON_EXERCISES[0].items;
+  const answers = items.map(it => it.tokens.map(t => t.role));
+  const all = C.checkSplitExercise(items, answers);
+  assert.strictEqual(all.ok, true);
+  assert.deepStrictEqual(all.done, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  answers[3] = answers[3].slice(); answers[3][0] = "argument";
+  const miss = C.checkSplitExercise(items, answers);
+  assert.strictEqual(miss.ok, false);
+  assert.strictEqual(miss.done.indexOf(3), -1);
+  assert.strictEqual(miss.results[3].wrong[0], 0);
+  assert.strictEqual(C.checkSplitExercise([], []).ok, false);
+});
+t("sort check: each name is builtin or external, and a blank is unfinished", () => {
+  const items = C.LESSON_EXERCISES[1].items;
+  const picks = {}; items.forEach(i => { picks[i.name] = i.bin; });
+  const ok = C.checkSortExercise(items, picks);
+  assert.strictEqual(ok.ok, true);
+  assert.deepStrictEqual(ok.done, items.map((_, i) => i));
+  picks.ls = "builtin"; delete picks.find; picks.echo = "";
+  const bad = C.checkSortExercise(items, picks);
+  assert.strictEqual(bad.ok, false);
+  assert.deepStrictEqual(bad.wrong, ["ls"]);
+  assert.deepStrictEqual(bad.blank.slice().sort(), ["echo", "find"]);
+  assert.strictEqual(bad.done.indexOf(items.findIndex(i => i.name === "ls")), -1);
+  const again = {}; items.forEach(i => { again[i.name] = i.bin; }); again.sudo = "external";
+  assert.strictEqual(C.checkSortExercise(items, again).ok, true, "a name that is not in the exercise does not count");
+  assert.strictEqual(C.checkSortExercise(items, null).blank.length, 12);
+});
+t("lesson exercise progress unions correct items and completes once", () => {
+  assert.deepStrictEqual(C.lessonExerciseRecord(null, [0, 2], 10, 50), { done: [0, 2] });
+  const more = C.lessonExerciseRecord({ done: [0, 2] }, [2, 1], 10, 60);
+  assert.deepStrictEqual(more, { done: [0, 1, 2] });
+  const all = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const fin = C.lessonExerciseRecord(more, all, 10, 70);
+  assert.strictEqual(fin.completedAt, 70); assert.deepStrictEqual(fin.done, all);
+  const again = C.lessonExerciseRecord(fin, [0], 10, 80);
+  assert.strictEqual(again.completedAt, 70, "the first finish time stays");
+  assert.deepStrictEqual(again.done, all);
+  assert.deepStrictEqual(C.lessonExerciseRecord(null, [-1, 1.5, 3, 99], 10, 1), { done: [3] });
+  assert.deepStrictEqual(C.lessonExerciseStatus(null, 10), { state: "new", done: 0, total: 10, text: "New" });
+  assert.deepStrictEqual(C.lessonExerciseStatus({ done: [0, 1] }, 10), { state: "started", done: 2, total: 10, text: "2 of 10" });
+  assert.deepStrictEqual(C.lessonExerciseStatus(fin, 10), { state: "done", done: 10, total: 10, text: "Done" });
+  assert.strictEqual(C.lessonExerciseStatus({ done: [0], completedAt: 1 }, 10).state, "started", "a finish time without every item is not Done");
+});
+t("lesson exercise progress is saved like a lab: cleaned, merged, exported", () => {
+  const d = C.cleanDoc({ lx: { split: { done: [0, 0, 2, -1, "x"], completedAt: 5, hack: "<b>" }, nope: "no" } });
+  assert.deepStrictEqual(d.lx.split, { done: [0, 2], completedAt: 5 });
+  assert.strictEqual(d.lx.nope, undefined);
+  const m = C.mergeStates([{ lx: { split: { done: [0], completedAt: 9 } } }, { lx: { split: { done: [1], completedAt: 4 } } }]);
+  assert.deepStrictEqual(m.lx.split, { done: [0, 1], completedAt: 4 });
+  const own = C.ownPart({ lx: m.lx, settings: {} }, C.mergeStates([{ lx: { split: { done: [1], completedAt: 4 } } }]));
+  assert.deepStrictEqual(own.lx.split.done, [0, 1]);
+  const kept = C.migrate({ lx: { sort: { done: [0, -1], completedAt: 3, hack: "<b>" } } });
+  assert.deepStrictEqual(kept.lx.sort, { done: [0], completedAt: 3 });
+  const st = C.freshState(); st.lx = { split: { done: [1], completedAt: 8 } };
+  assert.strictEqual(C.hasProgress(st), true);
+  const back = C.importState(C.freshState(), JSON.parse(JSON.stringify(C.exportDoc(st))));
+  assert.deepStrictEqual(back.lx.split, { done: [1], completedAt: 8 });
 });
 
 console.log(`\n${n} tests passed`);

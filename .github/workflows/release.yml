@@ -52,6 +52,9 @@ jobs:
           python-version: "3.12"
       - name: Install build tools
         run: pip install -r desktop/requirements.txt
+      - name: Leave README pictures out of the app
+        shell: pwsh
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue docs/screenshots, docs/img/readme
       - name: Build Exit0.exe
         run: >
           pyinstaller --noconfirm --clean --onefile --windowed
@@ -86,7 +89,7 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "release" ]; then VERSION="${GITHUB_REF_NAME#v}"; else VERSION="0.0.0"; fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           mkdir -p build dist
-          cp -r docs build/web && rm -rf build/web/screenshots
+          cp -r docs build/web && rm -rf build/web/screenshots build/web/img/readme
           sed "s/@VERSION@/$VERSION/" desktop/linux/exit0 > build/exit0
           echo "Packaging version $VERSION"
       - name: Build .deb and .rpm

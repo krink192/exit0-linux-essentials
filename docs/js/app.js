@@ -682,45 +682,43 @@
   }
 
   // ================================================================== PROGRESS
-  function historyFacts(h) {
-    const bits = [];
-    if (h.examCount) bits.push("Full exams: " + h.examCount + ", latest " + h.latestExam + "%.");
-    if (h.estimateNow != null) bits.push("Estimate this week " + h.estimateNow + "%.");
-    else if (h.estimatePoints.length) bits.push("Latest weekly estimate " + h.estimatePoints[h.estimatePoints.length - 1].mean + "%.");
-    return bits.join(" ");
+  // One series for the chart: each week's full-exam average. With no full exams yet, the weekly estimates stand in.
+  function historySeries(h) {
+    const exams = h.weeks.map((w, i) => w.examMean == null ? null : { week: i, pct: Math.round(w.examMean), n: w.exams.length }).filter(Boolean);
+    if (exams.length) return { kind: "exam", points: exams };
+    return { kind: "estimate", points: h.estimatePoints.map(e => ({ week: e.week, pct: e.mean, n: 0 })) };
+  }
+  function historyFacts(h, series) {
+    const last = series.points[series.points.length - 1];
+    if (!last) return "";
+    if (series.kind === "estimate") return "Weekly estimate, latest " + last.pct + "%. Full exams will replace it.";
+    return "Weekly average of your full exams. Latest week " + last.pct + "%" + (last.n > 1 ? " (" + last.n + " exams)" : "") + ".";
   }
   function scoreChart(h, W, H) {
     W = W || 640; H = H || 210;
-    const weeks = h.weeks, n = weeks.length, pl = 36, pr = 14, pt = 16, pb = 28;
+    const series = historySeries(h), pts = series.points;
+    // The axis starts at the first plotted week, so weeks before it don't leave an empty stretch on the left.
+    const i0 = pts.length ? pts[0].week : 0, weeks = h.weeks, n = weeks.length - i0, pl = 36, pr = 34, pt = 16, pb = 28;
     const plot = W - pl - pr;
-    const xAt = i => pl + (n === 1 ? plot / 2 : (i + 0.5) * plot / n);
+    const xAt = i => pl + (n === 1 ? plot / 2 : (i - i0 + 0.5) * plot / n);
     const y = v => pt + (100 - v) * (H - pt - pb) / 100;
-    const examX = (i, j, count, hasEst) => {
-      const c = xAt(i), slot = n === 1 ? plot * 0.4 : plot / n, room = Math.min(slot * 0.5, 26);
-      if (count <= 1) return hasEst ? c - Math.min(11, room * 0.45) : c;
-      const left = c - room / 2, span = hasEst ? room * 0.55 : room;
-      return left + j * span / (count - 1);
-    };
     const grid = [0, 50, 100].map(v => `<line class="axis" x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}"/>
         <text x="${pl - 8}" y="${y(v) + 4}" text-anchor="end">${v}%</text>`).join("");
-    const lines = h.segments.filter(run => run.length >= 2).map(run =>
-      `<polyline class="mean" points="${run.map(p => xAt(p.week).toFixed(1) + "," + y(p.mean).toFixed(1)).join(" ")}"/>`).join("");
-    const exams = h.examPoints.map(e => {
-      const hasEst = weeks[e.week].estimate != null;
-      return `<circle class="exam" cx="${examX(e.week, e.index, e.n, hasEst).toFixed(1)}" cy="${y(e.pct).toFixed(1)}" r="4"><title>${esc(fmtDate(e.date))}: ${e.pct}%</title></circle>`;
-    }).join("");
-    const estimates = h.estimatePoints.map(e =>
-      `<circle class="est" cx="${xAt(e.week).toFixed(1)}" cy="${y(e.mean).toFixed(1)}" r="4"><title>Week of ${esc(fmtDate(C.parseDate(weeks[e.week].key).getTime()).split(",")[0])}: estimate ${e.mean}%</title></circle>`).join("");
+    const line = pts.length >= 2 ? `<polyline class="mean" points="${pts.map(p => xAt(p.week).toFixed(1) + "," + y(p.pct).toFixed(1)).join(" ")}"/>` : "";
+    const weekName = i => fmtDate(C.parseDate(weeks[i].key).getTime()).split(",")[0];
+    const dots = pts.map(p => `<circle class="exam" cx="${xAt(p.week).toFixed(1)}" cy="${y(p.pct).toFixed(1)}" r="4"><title>Week of ${esc(weekName(p.week))}: ${p.pct}%${p.n > 1 ? " (" + p.n + " exams)" : ""}</title></circle>`).join("");
+    const last = pts[pts.length - 1];
+    const tag = last ? `<text class="last" x="${(xAt(last.week) + 8).toFixed(1)}" y="${(y(last.pct) + 4).toFixed(1)}">${last.pct}%</text>` : "";
     const labels = weeks.map((w, i) => {
-      const d = C.parseDate(w.key), show = i === 0 || i === n - 1 || (n <= 6 && i % 2 === 0) || (n > 6 && d.getDate() <= 7);
+      if (i < i0) return "";
+      const k = i - i0, d = C.parseDate(w.key), show = k === 0 || k === n - 1 || (n <= 6 && k % 2 === 0) || (n > 6 && d.getDate() <= 7);
       return show ? `<text x="${xAt(i).toFixed(1)}" y="${H - 8}" text-anchor="middle">${d.toLocaleDateString([], { month: "short", day: "numeric" })}</text>` : "";
     }).join("");
-    const facts = historyFacts(h);
+    const facts = historyFacts(h, series);
     return `<div class="chart"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(facts)}">
       ${grid}<line class="target" x1="${pl}" x2="${W - pr}" y1="${y(80)}" y2="${y(80)}"/>
       <text x="${pl + 6}" y="${y(80) - 6}" style="fill:var(--good)">80% target</text>
-      ${lines}${estimates}${exams}${labels}</svg>
-      <p class="chart-key"><span><i class="fill" aria-hidden="true"></i>full exam</span><span class="sep" aria-hidden="true">·</span><span><i class="hole" aria-hidden="true"></i>weekly estimate</span></p>
+      ${line}${dots}${tag}${labels}</svg>
       <p class="small muted">${esc(facts)}</p></div>`;
   }
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -927,14 +925,14 @@
     const os = C.objectiveStats(BANK, st.qstats);
     const exams = st.tests.filter(C.isReadinessExam);
     const hist = C.scoreHistory(st.tests, st.estWeeks, Date.now());
-    const points = hist.examPoints.length + hist.estimatePoints.length;
+    const points = historySeries(hist).points.length;
     shell("progress", `${head}
       ${heroCard()}
       ${objectivesCard(os)}
       ${studyCard(sk)}
       <div class="grid2">
         <section class="card stack"><div class="row spread"><h2>Score history</h2><span class="small muted">${exams.length ? "best " + Math.max(...exams.map(t => t.pct)) + "% · " + plural(exams.length, "exam") : "no exams yet"}</span></div>
-          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take ${points ? "one more exam" : "two exams"} to see a trend. The dashed line is the 80% target.</p>`}</section>
+          ${points >= 2 ? scoreChart(hist, 360, 210) : `<p class="small muted">Take exams in ${points ? "one more week" : "two different weeks"} to see a trend. The dashed line is the 80% target.</p>`}</section>
         <section class="card stack"><div class="row spread"><h2>By difficulty</h2><a href="#guide" class="small">What do these mean?</a></div>${levelBars(C.levelStats(BANK, st.qstats))}
           <p class="small muted">The real exam leans on exact syntax. If Apply or Analyze trails Recall, study those levels.</p></section>
       </div>

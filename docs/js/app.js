@@ -318,7 +318,7 @@
     const today = C.dayNum();
     const queue = C.cardQueue(CARDS, st.cards, c => st.cards[c.id] && st.cards[c.id].due <= today, today, 40);
     if (!queue.length) return toast("No flashcards are due");
-    cs = { queue, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
+    cs = { queue, refresh: queue.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
   }
   function startWeakStudy() {
     const weak = C.weakObjectives(BANK, st.qstats, 19);
@@ -327,14 +327,14 @@
   function startObjCards(o) {        // flashcards for one objective: due and new cards first, then the rest
     const pool = CARDS.filter(c => c.obj === o);
     const first = C.cardQueue(CARDS, st.cards, c => c.obj === o, C.dayNum(), 20);
-    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 };
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), refresh: first.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 };
     go("cards");
   }
   function startCardList(ids) {      // flashcards from a list: due and new first, then the rest
     const set = new Set(ids), pool = CARDS.filter(c => set.has(c.id));
     if (!pool.length) return toast("No flashcards for that yet");
     const first = C.cardQueue(CARDS, st.cards, c => set.has(c.id), C.dayNum(), 20);
-    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
+    cs = { queue: first.concat(pool.filter(c => !first.includes(c))).slice(0, 20), refresh: first.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; go("cards");
   }
   function wireStarts(root) {
     $$("[data-start=test]", root).forEach(b => b.onclick = startTest);
@@ -486,7 +486,11 @@
   // A batch of the size the learner picks, mixing due reviews with new questions. The backlog never shows as a count.
   const REVIEW_CHOICES = [10, 15, 20, 30, 50], REVIEW_NEW_CHOICES = [0, 3, 5, 10];
   let reviewOpen = false;
-  const reviewMixText = d => [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : ""].filter(Boolean).join(" and ") || "Nothing";
+  const reviewMixText = d => {
+    const parts = [d.due ? plural(d.due, "review") : "", d.fresh ? plural(d.fresh, "new question") : "", d.refresh ? plural(d.refresh, "refresher") : ""].filter(Boolean);
+    if (parts.length < 2) return parts[0] || "Nothing";
+    return parts.slice(0, -1).join(", ") + " and " + parts[parts.length - 1];
+  };
   function reviewPickerHTML() {
     const r = C.clampReview(st.settings.review);
     const toggle = `<div class="u-g10 u-wrap u-aic row"><span class="u-mw9 small">Daily review</span>
@@ -923,7 +927,7 @@
     $("#cstart").onclick = () => {
       const queue = C.cardQueue(CARDS, st.cards, deckFilter(), C.dayNum(), cardSize);
       if (!queue.length) return;
-      cs = { queue, i: 0, flipped: false, knew: 0, done: 0 }; renderCards();
+      cs = { queue, refresh: queue.refresh || {}, i: 0, flipped: false, knew: 0, done: 0 }; renderCards();
     };
   }
   function renderCardSession() {
@@ -941,7 +945,7 @@
         <button class="ghost" id="cend">End session</button></div>
       <div class="u-r9 progress"><i style="width:${100 * cs.i / cs.queue.length}%"></i></div>
       <div class="flash-wrap"><div class="flash ${cs.flipped ? "flipped" : ""}" id="flash" tabindex="0" role="button" aria-label="Flip card">
-        <div class="face ${isCmd ? "cmd" : ""}"><div class="meta"><span>${c.obj} · ${esc(OBJ[c.obj].name)}</span><span>Term</span></div>
+        <div class="face ${isCmd ? "cmd" : ""}"><div class="meta"><span>${c.obj} · ${esc(OBJ[c.obj].name)}${cs.refresh && cs.refresh[c.id] ? ` <span class="chip refresher" title="In the top box. In this session so it stays fresh.">Refresher</span>` : ""}</span><span>Term</span></div>
           <div class="front-t">${esc(c.front)}</div><div class="hint">Click or press <span class="kbd">Space</span> to flip</div></div>
         <div class="face back"><div class="meta"><span>${esc(c.front)}</span><span>Definition</span></div>
           <div class="back-t">${rich(c.back)}</div>${c.ex ? `<pre>${esc(c.ex)}</pre>` : ""}<div class="hint">Did you know it?</div></div></div></div>
@@ -1565,7 +1569,7 @@
     const dots = cp.tasks.map((x, i) => { const q = cp.res[i]; const cls = i === cp.i ? "cur" : !q || !q.recorded ? "" : q.ok ? "ok" : "miss";
       return `<span class="ddot ${cls}" title="Task ${i + 1}${q && q.recorded ? (q.ok ? ": right" : ": missed") : ""}"></span>`; }).join("");
     shell("cmdrun", `<div class="page-head"><a class="small backlink" href="#commands" id="cquit">${icon("left")}Command practice</a>
-        <h1>${esc(sk.label)}</h1><span class="u-mt8 eyebrow">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span></span>
+        <h1>${esc(sk.label)}</h1><span class="u-mt8 eyebrow">${esc(CMD_MODES[cp.mode][0])} · task ${cp.i + 1} of ${cp.tasks.length} · ${esc(sk.obj)} <span class="mono">${esc(t.cmd)}</span>${t.refresh ? ` <span class="chip refresher" title="This command is mastered. One skill is here so it stays fresh.">Refresher</span>` : ""}</span>
         <div class="drilldots" aria-hidden="true">${dots}</div></div>
       <div class="labwrap drillwrap">
         <div class="stack tasks">
@@ -1894,7 +1898,7 @@
             ${short.length ? `<button type="button" id="goShort">Go to question ${short[0] + 1}</button>` : ""}
             <button class="primary" id="doSubmit">${isTest ? "Submit and see results" : "Finish and see results"}</button></div></div>` : ""}
         ${navPanel}
-        <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}</div>
+        <div class="qmeta"><span class="qpos">${esc(qpos)}</span>${S.study ? `<span class="qobj">${q.obj} ${esc(OBJ[q.obj].name)}</span>` : ""}<span>${typeTag}</span>${S.study && !isPlace ? `<span title="${C.LEVELS[q.level || 1][1]}">${C.LEVELS[q.level || 1][0]}</span>` : ""}${S.refresh && S.refresh[id] ? `<span class="chip refresher" title="Already mastered. In this review so it stays fresh.">Refresher</span>` : ""}</div>
         <h2 class="qtext">${rich(q.q)}</h2>
         ${q.code ? `<pre class="code">${esc(q.code)}</pre>` : ""}
         ${body}${fb}${revealed && !isPlace ? noteBox(id) : ""}

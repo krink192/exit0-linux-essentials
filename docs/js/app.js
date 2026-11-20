@@ -1489,7 +1489,7 @@
         ${lab.track ? "" : `<div class="cmdrow"><span class="muted">Commands in this part:</span> ${lab.commands.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div>`}
         <div class="u-g16 u-wrap row"><a href="${esc(lab.url)}" target="_blank" rel="noopener">Read LPI lesson ${esc(lab.track ? lab.url.split("/").filter(Boolean).pop().replace(/_0?(\d+)$/, " (lesson $1)") : lab.lesson.replace(/\.(\d+)$/, " (lesson $1)"))}${icon("ext", "ext")}</a><a href="${LPI_PDF}" target="_blank" rel="noopener">Whole book (PDF)${icon("ext", "ext")}</a>
           ${related.length ? `<span class="muted">${plural(related.length, "exam question")} cover this part</span>` : ""}<span class="grow"></span><button class="ghost small show-one" id="labReset2">Restart part</button></div></div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
+      ${KEYS_HELP}`, { noTabs: true });
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
@@ -1658,7 +1658,7 @@
   }
 
   // ================================================================== TERMINAL (shared by command practice and the sandbox)
-  const KEYS_HELP = `<span class="kbd">${icon("up")}</span> <span class="kbd">${icon("down")}</span> history · <span class="kbd">Tab</span> complete · <span class="kbd">Ctrl</span>+<span class="kbd">L</span> clear · <span class="kbd">Ctrl</span>+<span class="kbd">C</span> cancel the line<br>Stuck? <code>man NAME</code> · <code>NAME --help</code> · <code>apropos WORD</code> finds a command for a task · <code>help NAME</code> for builtins like cd and if · <code>man bash</code> for pipes and redirection`;
+  const KEYS_HELP = `<div class="termhelp"><p class="termhelp-row"><span class="termhelp-k">Keys</span><span class="termhelp-bits"><span class="bit"><span class="kpair"><span class="kbd">${icon("up")}</span><span class="kbd">${icon("down")}</span></span> history</span><span class="bit"><span class="kbd">Tab</span> complete</span><span class="bit"><span class="kpair"><span class="kbd">Ctrl</span><span class="kbd">L</span></span> clear</span><span class="bit"><span class="kpair"><span class="kbd">Ctrl</span><span class="kbd">C</span></span> cancel the line</span></span></p><p class="termhelp-row"><span class="termhelp-k">Stuck?</span><span class="termhelp-bits"><span class="bit"><code>man NAME</code></span><span class="bit"><code>NAME --help</code></span><span class="bit"><code>apropos WORD</code> finds a command for a task</span><span class="bit"><code>help NAME</code> for builtins like cd and if</span><span class="bit"><code>man bash</code> for pipes and redirection</span></span></p></div>`;
   const termHTML = cls => `<div class="term ${cls || ""}" id="term"><div class="term-out" id="termOut"></div>
     <div class="term-line"><span class="term-prompt" id="termPrompt"></span><input id="termIn" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Terminal input"></div></div>`;
   /** Wire the terminal markup to a machine. onRun(line, result) runs after every finished command; return true if it re-rendered the page.
@@ -1886,7 +1886,7 @@
         </div>
         ${termHTML()}
       </div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`, { noTabs: true });
+      ${KEYS_HELP}`, { noTabs: true });
     const record = () => { if (r.recorded) return; r.ok = C.cmdTaskOk(r); r.recorded = true; C.recordDrill(st, t.skill, r.ok); save(); celebrate(); };
     const next = () => { record(); cp.i++; cp.sh = null; keepScroll(renderCmdRun); };
     mountTerm(sh, (line, res) => {
@@ -1942,7 +1942,7 @@
         ${termHTML()}
       </div>
       <div class="labfoot stack small"><div class="cmdrow"><span class="muted">Look one up:</span> ${cmds.map(c => `<button class="cmdchip" data-man="${esc(c)}" title="Type 'man ${esc(c)}' in the terminal">${esc(c)}</button>`).join("")}</div></div>
-      <p class="small muted hide-sm">${KEYS_HELP}</p>`);
+      ${KEYS_HELP}`);
     mountTerm(sh, () => false);
     $$("[data-man]").forEach(b => b.onclick = () => { const i = $("#termIn"); i.value = "man " + b.dataset.man; i.focus(); });
     $("#sbReset").onclick = () => { sandboxSh = null; renderSandbox(); toast("Sandbox reset"); };

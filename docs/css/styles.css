@@ -872,7 +872,7 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .lg { display: inline-block; border: 1px solid var(--line-2); width: 14px; height: 14px; border-radius: 4px; flex: none; }
 .lg.learning { background: var(--om-tint); }
 .lg.weak { background: var(--warm-soft); border-color: var(--warm); }
-.lg.mastered { background: var(--accent-soft); border-color: var(--accent); }
+.lg.mastered { background: var(--accent); border-color: var(--accent); }
 .cgroup { display: flex; flex-direction: column; gap: 8px; }
 .ctiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
 .ctile { position: relative; display: flex; justify-content: flex-start; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 10px 9px; min-height: 52px; border-radius: var(--r-sm); text-align: left;
@@ -881,7 +881,8 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .ctile.t-new { color: var(--ink-2); background: transparent; border-style: solid; border-color: var(--line); }
 .ctile.t-learning { background: var(--om-tint); }
 .ctile.t-weak { background: var(--warm-soft); border-color: var(--warm); }
-.ctile.t-mastered { background: var(--accent-soft); border-color: var(--accent); }
+.ctile.t-mastered { background: var(--accent); border-color: var(--accent); color: var(--on-solid); }
+.ctile.t-mastered .cpips i { background: var(--on-solid); }
 .ctile:hover { border-color: var(--ink-2); }
 .ctile.open { box-shadow: 0 0 0 2px var(--ink); }
 .cpips { display: flex; gap: 3px; flex-wrap: wrap; }

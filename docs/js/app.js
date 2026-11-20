@@ -412,7 +412,7 @@
       return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}" ${label}>${inner}</a>` : `<div class="${cls}" ${label}>${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}" ${label}>${inner}</a>` : `<button class="${cls}" ${s.attr} ${label}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
-  // The score estimate counts first attempts (and answers after a long gap) only, so it can't be pushed up by repeating questions.
+  // The score estimate counts first attempts (and answers given C.COLD_DAYS or more days after the last attempt) only, so it can't be pushed up by repeating questions.
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
@@ -544,11 +544,11 @@
     const best = {}; for (const t of st.tests) if (t.form && t.mode === "test") best[t.form] = Math.max(best[t.form] == null ? -1 : best[t.form], t.pct);
     const taken = Object.keys(best).length;
     return `<section class="card stack forms"><div class="row spread"><h2>Fixed practice exams</h2><span class="small muted">${taken} of 10 taken</span></div>
-      <p class="small muted">Ten set exams, A to J. Each is a full 40-question blueprint and no question appears in two of them, so a retake of the same letter shows real improvement. They count toward readiness like any exam.</p>
+      <p class="small muted">Ten set exams, A to J. Each is a full 40-question blueprint and no question appears in two of them, so a retake of the same letter shows real improvement. They count toward your exam average like any exam.</p>
       <div class="formgrid">${"ABCDEFGHIJ".split("").map(f => `<button data-form="${f}" class="${best[f] != null ? "done" : ""}" title="Practice exam ${f}${best[f] != null ? ": best " + best[f] + "%" : ""}"><b>${f}</b><span style="${best[f] != null ? "color:" + col(best[f]) : ""}">${best[f] != null ? best[f] + "%" : "new"}</span></button>`).join("")}</div></section>`;
   }
   function renderTest() {
-    const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set Readiness uses
+    const tests = st.tests.filter(C.isReadinessExam);   // timed full exams only — same set the exam average uses
     const last = tests[tests.length - 1];
     const ready = C.readiness(st.tests);
     const weak = C.weakObjectives(BANK, st.qstats, 1)[0];
@@ -565,10 +565,10 @@
     const stats = last ? `<div class="grid4">
         <div class="card stat"><b style="color:${tcol(last.pct)}">${last.pct}%</b><span>Last exam</span></div>
         <div class="card stat"><b>${Math.max(...tests.map(t => t.pct))}%</b><span>Best</span></div>
-        <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Readiness</span></div>
+        <div class="card stat"><b style="color:${ready == null ? "var(--muted)" : col(ready)}">${ready == null ? "—" : ready + "%"}</b><span>Exam average</span></div>
         <div class="card stat"><b>${tests.length}</b><span>${tests.length === 1 ? "Exam" : "Exams"} taken</span></div></div>` : "";
     const tips = last ? "" : `<div class="tips">
-        <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward readiness.</span></div></div>
+        <div class="tip"><div class="ic">${icon("test")}</div><div><b>Exam: test-day conditions</b><span>40 questions, 60 minutes, the real blueprint, and answers hidden until you submit. Only exams count toward your exam average.</span></div></div>
         <div class="tip"><div class="ic">${icon("bulb")}</div><div><b>Study: learn as you go</b><span>Pick topics, difficulty and how many questions. Get hints, instant answers and the lesson to read.</span></div></div>
         <div class="tip"><div class="ic">${icon("cards")}</div><div><b>Flashcards</b><span>Every term on the objectives, with spaced repetition so the cards you miss come back first.</span></div></div></div>`;
     shell("test", `${resumeBanner()}
@@ -577,8 +577,8 @@
           <p class="lead">40 questions in 60 minutes, drawn from ${BANK.questions.length} questions with exactly as many per objective as the real exam. No hints, and answers stay hidden until you submit.</p></div>
         <div class="cta"><button class="primary big" data-start="test">${icon("test")}Start exam</button>
           <button class="big" data-go="study">${icon("drill")}Study instead</button></div>
-        <div class="rules"><span>${icon("clock")}60:00 timer, which you can hide</span><span>${icon("terminal")}At least ${C.EXAM_TYPED_MIN} typed answers</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward readiness</span></div>
-        <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward readiness.</p>
+        <div class="rules"><span>${icon("clock")}60:00 timer, which you can hide</span><span>${icon("terminal")}At least ${C.EXAM_TYPED_MIN} typed answers</span><span>${icon("flag")}Flag and review before you submit</span><span>${icon("trophy")}Counts toward the exam average</span></div>
+        <div class="untimed"><p class="small muted">Still learning the format? An untimed run has the same 40 questions and rules without the clock. It doesn't count toward your exam average.</p>
           <button data-start="test" data-untimed="1">${icon("clock")}Start an untimed run</button></div>
       </section>
       ${stats}${next}${formsCard()}${tips}`);
@@ -623,7 +623,7 @@
     const srcNote = !pool.length && SOURCE_EMPTY[sp.source] ? SOURCE_EMPTY[sp.source] : SOURCE_TEXT[sp.source] || SOURCE_TEXT.mix;
     shell("study", `${resumeBanner()}
       <div class="page-head"><h1>Study</h1>
-        <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your readiness score.</p></div>
+        <p class="lead">Build your own practice set. Get a hint when you're stuck, check each answer right away, and see exactly what to read next. Study sessions don't change your exam average.</p></div>
       <div class="quick">
         <button class="qs" data-start="placement" ${placeOk ? "" : "disabled"}>${icon("target")}<b>Placement test</b><span>${placeOk ? "2 or 3 questions per objective, about 15 minutes" : "No unseen questions left in any objective"}</span></button>
         <button class="qs" data-start="missed" ${missed ? "" : "disabled"}>${icon("weak")}<b>Review my misses</b><span>${missed ? plural(missed, "question") + " you got wrong last time" : "Nothing missed yet"}</span></button>
@@ -710,7 +710,7 @@
   const longDate = str => C.parseDate(str).toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
-  // One "am I ready?" card at the top of Progress: readiness, pass chance and the single most useful next step.
+  // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
   const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
@@ -857,7 +857,7 @@
       sk.count ? `<span class="pill"><b>${sk.count}-day</b> streak</span>` : "", `<span class="pill"><b>Level ${x.level}</b></span>`].join("");
     const head = `<div class="page-head row spread progress-head"><div><h1>Progress</h1><p class="lead">Linux Essentials 010-160</p></div><div class="row pills">${pills}</div></div>`;
     if (!st.tests.length) {
-      shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your readiness, pass chance and weak objectives show up here.</p>
+      shell("progress", `${head}<div class="card empty">${icon("progress")}<b>No results yet</b><p class="muted small">Take an exam or a study session. Your estimated score, exam average, pass chance and weak objectives show up here.</p>
         <div class="u-jc row"><button class="primary" data-start="test">Start exam</button><button data-go="study">Study</button></div></div>`);
       return wireStarts($("#page"));
     }
@@ -1003,7 +1003,7 @@
         <div class="grid2">
           <section class="card stack guide" id="g-plan"><h2>A study plan that works</h2><ol>
             <li>Take an exam cold to get a baseline.</li><li>Study your weak objectives. Use hints only when stuck, and read the linked lesson for anything you miss.</li>
-            <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your readiness stays at 80% or higher.</li></ol></section>
+            <li>Do a short flashcard session every day to keep your streak going.</li><li>Take another exam. Book the real one when your exam average stays at 80% or higher.</li></ol></section>
           <section class="card stack guide" id="g-tips"><h2>Test-day tips</h2><ul>
             <li>Answer every question, because a blank can't score.</li><li>Flag hard questions and come back. Don't let one question eat your time.</li>
             <li>For fill-ins, check whether they ask for the command name only or the full command.</li><li>About 90 seconds per question is your pace.</li></ul></section></div>
@@ -2126,7 +2126,7 @@
         <div class="u-g8 u-mw220 stack grow"><span class="u-g10 row"><span class="dverdict ${vclass(pct)}${lu ? " lu" : ""}">${esc(verdict)}</span><code class="exitcode">$ echo $?</code><code class="exitcode muted">${pct >= 80 ? 0 : 1}</code></span>
           <p class="u-fs-l"><b>${rec.score} of ${rec.total}</b> correct in ${fmt(rec.secs)}</p>
           <p class="small muted">${isTest ? "LPI scores the real exam from 200 to 800, and 500 passes. LPI doesn't publish a percentage, so use 80% here as your target."
-            : `Study sessions don't count toward readiness.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>
+            : `Study sessions don't count toward your exam average.${hintsUsed.size ? ` You used ${plural(hintsUsed.size, "hint")}.` : ""} Take an exam to measure yourself under test conditions.`}</p>
           ${calLine}</div></div>
       <div class="row">${isTest ? `<button class="primary" data-start="test">Take another exam</button>`
           : rec.mode === "review" ? (C.deckStats(CARDS, st.cards).due ? `<button class="primary" data-start="duecards">Review ${plural(C.deckStats(CARDS, st.cards).due, "due flashcard")}</button>` : `<button class="primary" data-go="review">Back to daily review</button>`)

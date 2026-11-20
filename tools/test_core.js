@@ -691,6 +691,31 @@ t("recording: first attempts and answers after a long gap are cold evidence; hin
   assert.strictEqual(run(q.answer, t0, true).ev, -1, "a hinted first attempt is not evidence");
   assert.strictEqual(C.coldOutcome(st.qstats[q.id]), -1);
 });
+t("cold window is 4 days: day 3 is a repeat, day 4 is cold, and the latest cold result wins", () => {
+  assert.strictEqual(C.COLD_DAYS, 4);
+  const day = 86400000, t0 = new Date(2026, 9, 1, 12).getTime();
+  const st = C.freshState(), q = bank.questions.find(x => x.type === "single" && C.familyOf(bank, x.id).length === 1);
+  const wrong = [q.answer[0] === 0 ? 1 : 0];
+  const run = (ans, at) => { const s = C.buildStudy(bank, {}, { ids: [q.id], count: 1 }, { seed: 1 });
+    s.answers[q.id] = ans; C.recordResult(st, bank, s, C.grade(bank, s), at); return st.qstats[q.id]; };
+  const evOf = () => C.passEvidence(bank, st.qstats).ev[q.obj];
+  assert.strictEqual(run(wrong, t0).ev, 0, "first attempt, wrong");
+  assert.strictEqual(C.isCold(bank, st.qstats, q.id, t0 + 3 * day), false);
+  assert.strictEqual(run(q.answer, t0 + 3 * day).ev, 0, "3 days later is a repeat: the miss stands");
+  assert.strictEqual(C.passEvidence(bank, st.qstats).repeats, 0);
+  assert.deepStrictEqual(evOf(), { right: 0, wrong: 1 });
+  // the gap runs from the last attempt (day 3), so day 6 is still a repeat and day 7 is cold
+  assert.strictEqual(run(q.answer, t0 + 6 * day).ev, 0, "3 days after the last attempt is still a repeat");
+  assert.strictEqual(C.isCold(bank, st.qstats, q.id, t0 + 10 * day), true, "4 days after the last attempt is cold");
+  assert.strictEqual(run(q.answer, t0 + 10 * day).ev, 1, "the later cold right replaces the older cold miss");
+  assert.deepStrictEqual(evOf(), { right: 1, wrong: 0 });
+  assert.strictEqual(run(wrong, t0 + 14 * day).ev, 0, "and a later cold miss replaces that hit");
+  assert.deepStrictEqual(evOf(), { right: 0, wrong: 1 });
+  // a bare record seen once: 3 days on is a repeat, 4 days on is cold
+  const one = { [q.id]: { seen: 1, at: t0 } };
+  assert.strictEqual(C.isCold(bank, one, q.id, t0 + 3 * day), false);
+  assert.strictEqual(C.isCold(bank, one, q.id, t0 + 4 * day), true);
+});
 t("an estimate needs every topic covered, not just enough answers", () => {
   const q = {}; bank.questions.filter(x => x.obj >= "2").forEach(x => q[x.id] = { seen: 1, right: 1, last: true, ev: 1 });
   const p = C.passPrediction(bank, q); assert.strictEqual(p.chance, null); assert.deepStrictEqual(p.thinTopics, ["1"]); assert.strictEqual(p.more, 0);

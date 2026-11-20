@@ -10,7 +10,7 @@
 
   const EXAM_SECONDS = 3600;
   const TARGET = 80;
-  const DAY_MS = 86400000, COLD_DAYS = 30;  // an answer this long after the last attempt counts as fresh evidence again
+  const DAY_MS = 86400000, COLD_DAYS = 4;  // an answer 4+ days after the last attempt (in any wording) counts as fresh evidence again
   const BOX_DAYS = [0, 1, 2, 4, 8, 16];   // Leitner intervals for flashcards
 
   // ------------------------------------------------------------- utilities
@@ -686,7 +686,7 @@
   function examDayNum(state, now) {
     const d = parseDate(state && state.settings && state.settings.examDate); return d ? dayNum(d) : null;
   }
-  /** Full timed exams that feed readiness / "Exams taken" (untimed and study runs are practice). */
+  /** Full timed exams that feed the exam average (readiness()) / "Exams taken" (untimed and study runs are practice). */
   function isReadinessExam(t) {
     return !!(t && t.mode === "test" && t.total === 40 && !t.study && t.timed !== false);
   }
@@ -704,7 +704,7 @@
       if (!dontKnow && !answered(bank.byId[id], s.answers[id])) continue;
       const st = state.qstats[id] || { seen: 0, right: 0, last: null };
       const ok = dontKnow ? false : !!res.perQ[id];
-      // Cold evidence for the score estimate: a first attempt, or one after a long gap, answered without a hint.
+      // Cold evidence for the score estimate: a first attempt, or one COLD_DAYS or more after the last attempt, answered without a hint.
       const cold = isCold(bank, state.qstats, id, now);
       const lead = familyLead(bank, state.qstats, id);   // another wording answered more recently: carry on from its review step
       if (lead !== id && state.qstats[lead]) st.box = state.qstats[lead].box || 0;
@@ -1309,7 +1309,7 @@
     if (s.seen === 1 && (s.last === true || s.last === false)) return s.last ? 1 : 0;
     return Math.max(0, Math.min(1, (s.right || 0) / s.seen));
   }
-  /** Evidence from a cold (first, or after a long gap, unhinted) answer to this question: 1 right, 0 wrong, a share in
+  /** Evidence from a cold (first, or COLD_DAYS or more after the last attempt, unhinted) answer to this question: 1 right, 0 wrong, a share in
    *  between for old progress, or -1 when there is none. */
   function coldOutcome(s) {
     if (!s || !s.seen) return -1;

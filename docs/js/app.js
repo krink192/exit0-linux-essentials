@@ -187,7 +187,7 @@
   // Re-render after remote changes, but never in the middle of a question, lab, flashcard or while typing.
   function rerenderIfIdle() {
     const h = (location.hash || "#test").slice(1), el = document.activeElement;
-    if (h === "exam" || h.startsWith("lab/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
+    if (h === "exam" || h.startsWith("lab/") || h.startsWith("lx/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
     render();
   }
@@ -207,6 +207,7 @@
     }
   }
   st.labs = st.labs || {};
+  st.lx = st.lx || {};
   const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
   if (labsCarried) setTimeout(() => toast(`Labs are now one per lesson: ${labsCarried} part${labsCarried > 1 ? "s" : ""} marked complete from labs you'd finished`), 900);
   C.awardBadges(st, BANK, CARDS, null, LABS.length); save();         // credit for progress made before badges existed, without toasts
@@ -299,6 +300,7 @@
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
+    if (h.startsWith("lx/")) return renderLessonExercise(h.slice(3));
     if (h === "cmdrun" && !cp) return go("commands");
     const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings, search: renderSearch, handson: renderHandson };
@@ -1101,12 +1103,142 @@
           <div class="u-g10 u-aic row">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
       : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="u-jc row"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
+      ${lessonExerciseCard()}
       <section class="card stack objcard labscard"><div class="row spread"><h2>Lessons</h2>
           <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
         <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
         <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
       ${challenges}`);
     $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
+  }
+  // Lesson exercises: original Guided / Explorational items for topic 2. Answers in progress live here;
+  // saved progress is only the indexes that checked right (st.lx), same shape as a lab.
+  const lxDraft = {};
+  const LX_ROLE_OPTS = [["", "Choose"], ["command", "Command"], ["option", "Option"], ["argument", "Argument"]];
+  const LX_BIN_OPTS = [["", "Choose"], ["builtin", "Builtin"], ["external", "External"]];
+  function lessonExerciseCard() {
+    const rows = (C.LESSON_EXERCISES || []).map(ex => {
+      const stt = C.lessonExerciseStatus((st.lx || {})[ex.id], ex.items.length);
+      const go = stt.state === "done" ? "Review" : stt.state === "started" ? "Continue" : "Start";
+      return `<a class="lxrow${stt.state === "done" ? " done" : ""}" href="#lx/${esc(ex.id)}">
+        <span class="lname"><span class="o">${esc(ex.label)}</span> ${esc(ex.title)}</span>
+        <span class="small muted">${esc(stt.text)}</span><span class="${go === "Continue" ? "u-fw7" : ""}">${go}</span></a>`;
+    }).join("");
+    return `<section class="card stack objcard labscard"><div class="row spread"><h2>Lesson exercises</h2><span class="small muted">Topic 2</span></div>
+      <div class="lxrows">${rows}</div>
+      <p class="small muted">Guided and Explorational practice for the shell lessons. Tag each part of a command, then sort names the shell knows from programs on disk.</p></section>`;
+  }
+  function lxOptions(opts, value) {
+    return opts.map(([v, label]) => `<option value="${v}"${v === value ? " selected" : ""}>${label}</option>`).join("");
+  }
+  function lxMark(kind, word) {
+    if (kind === "ok") return `<span class="lxmark ok">${icon("check")}Right</span>`;
+    if (kind === "no") return `<span class="lxmark no">${icon("x")}Wrong</span>`;
+    if (kind === "blank") return `<span class="lxmark">${icon("help")}${esc(word)}</span>`;
+    return "";
+  }
+  function ensureLxDraft(ex) {
+    if (lxDraft[ex.id]) return lxDraft[ex.id];
+    const saved = (((st.lx || {})[ex.id] || {}).done) || [];
+    if (ex.kind === "split") {
+      const picks = ex.items.map((item, i) => saved.indexOf(i) >= 0 ? item.tokens.map(t => t.role) : item.tokens.map(() => ""));
+      lxDraft[ex.id] = { picks, shown: false, result: null };
+    } else {
+      const picks = {};
+      ex.items.forEach((item, i) => { picks[item.name] = saved.indexOf(i) >= 0 ? item.bin : ""; });
+      lxDraft[ex.id] = { picks, shown: false, result: null };
+    }
+    return lxDraft[ex.id];
+  }
+  function lxSummary(ex, r) {
+    const n = ex.items.length, right = r.done.length;
+    if (ex.kind === "split") {
+      let wrong = 0, blank = 0;
+      r.results.forEach(line => { wrong += line.wrong.length; blank += line.blank.length; });
+      if (r.ok) return "Every word is tagged as a command, an option, or an argument.";
+      const bits = [right + " of " + n + (right === 1 ? " line right" : " lines right")];
+      if (wrong) bits.push(wrong + (wrong === 1 ? " tag wrong" : " tags wrong"));
+      if (blank) bits.push(blank + " not tagged");
+      return bits.join(". ") + ".";
+    }
+    if (r.ok) return "Each name is in the right group.";
+    const bits = [right + " of " + n + " right"];
+    if (r.wrong.length) bits.push(r.wrong.length + " in the wrong group");
+    if (r.blank.length) bits.push(r.blank.length + " not sorted");
+    return bits.join(". ") + ".";
+  }
+  function lxResultHTML(ex, draft) {
+    if (!draft.shown || !draft.result) return "";
+    const ok = draft.result.ok;
+    const explain = ex.explain ? `<p>${esc(ex.explain)}</p>` : "";
+    return `<div class="card feedback lxresult${ok ? "" : " no"}" id="lxResult"><h3 tabindex="-1">${ok ? icon("check") : icon("x")}${ok ? "Correct" : "Not quite"}</h3><p>${esc(lxSummary(ex, draft.result))}</p>${explain}</div>`;
+  }
+  function splitExerciseHTML(ex, draft) {
+    return ex.items.map((item, i) => {
+      const line = draft.shown && draft.result ? draft.result.results[i] : null;
+      const words = item.tokens.map(t => t.t).join(" ");
+      const toks = item.tokens.map((tok, j) => {
+        const value = (draft.picks[i] || [])[j] || "";
+        const kind = !line ? "" : line.blank.indexOf(j) >= 0 ? "blank" : line.wrong.indexOf(j) >= 0 ? "no" : "ok";
+        return `<label class="lxtok"><code>${esc(tok.t)}</code>
+          <select data-line="${i}" data-tok="${j}" aria-label="${esc(tok.t)}, line ${i + 1}, command, option or argument">${lxOptions(LX_ROLE_OPTS, value)}</select>
+          ${lxMark(kind, "Not tagged")}</label>`;
+      }).join("");
+      return `<div class="lxline" role="group" aria-label="Line ${i + 1}, objective ${esc(item.obj)}: ${esc(words)}"><span class="lxobj">${esc(item.obj)}</span><div class="lxtoks">${toks}</div></div>`;
+    }).join("");
+  }
+  function sortExerciseHTML(ex, draft) {
+    return ex.items.map(item => {
+      const value = draft.picks[item.name] || "";
+      const r = draft.shown ? draft.result : null;
+      const kind = !r ? "" : r.blank.indexOf(item.name) >= 0 ? "blank" : r.wrong.indexOf(item.name) >= 0 ? "no" : "ok";
+      const id = "lxs-" + item.name;
+      return `<div class="lxsort"><label class="lxname" for="${id}"><code>${esc(item.name)}</code></label>
+        <select id="${id}" data-name="${esc(item.name)}" aria-label="${esc(item.name)}, builtin or external">${lxOptions(LX_BIN_OPTS, value)}</select>
+        ${lxMark(kind, "Not sorted")}</div>`;
+    }).join("");
+  }
+  function renderLessonExercise(id) {
+    const ex = (C.LESSON_EXERCISES || []).find(e => e.id === id);
+    if (!ex) return go("labs");
+    st.lx = st.lx || {};
+    const draft = ensureLxDraft(ex);
+    const stt = C.lessonExerciseStatus(st.lx[ex.id], ex.items.length);
+    const where = ex.kind === "split" ? "objectives 2.1 to 2.4" : "topic 2";
+    const lines = ex.kind === "split" ? splitExerciseHTML(ex, draft) : sortExerciseHTML(ex, draft);
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a>
+        <h1>${esc(ex.title)}</h1><span class="u-mt8 eyebrow">${esc(ex.label)} · ${where} · ${esc(stt.text)}</span>
+        <p class="lead">${esc(ex.lead)}</p></div>
+      <div class="card" id="lxForm">${ex.kind === "split" ? `<div class="lxlines">${lines}</div>` : lines}</div>
+      ${lxResultHTML(ex, draft)}
+      <div class="row"><button type="button" class="primary" id="lxCheck">Check</button></div>`, { noTabs: true });
+    $$("#lxForm select").forEach(sel => sel.onchange = () => {
+      if (ex.kind === "split") draft.picks[+sel.dataset.line][+sel.dataset.tok] = sel.value;
+      else draft.picks[sel.dataset.name] = sel.value;
+      if (!draft.shown) return;
+      draft.shown = false; draft.result = null;
+      const y = scrollY, focus = ex.kind === "split" ? `[data-line="${sel.dataset.line}"][data-tok="${sel.dataset.tok}"]` : `[data-name="${sel.dataset.name}"]`;
+      renderLessonExercise(ex.id); scrollTo(0, y);
+      const again = $(focus); if (again) again.focus();
+    });
+    $("#lxCheck").onclick = () => {
+      if (ex.kind === "split") {
+        ex.items.forEach((item, i) => {
+          draft.picks[i] = item.tokens.map((_, j) => { const sel = $(`#lxForm select[data-line="${i}"][data-tok="${j}"]`); return sel ? sel.value : ""; });
+        });
+        draft.result = C.checkSplitExercise(ex.items, draft.picks);
+      } else {
+        ex.items.forEach(item => { const sel = $(`#lxForm select[data-name="${item.name}"]`); draft.picks[item.name] = sel ? sel.value : ""; });
+        draft.result = C.checkSortExercise(ex.items, draft.picks);
+      }
+      draft.shown = true;
+      st.lx[ex.id] = C.lessonExerciseRecord(st.lx[ex.id], draft.result.done, ex.items.length, Date.now());
+      save();
+      const y = scrollY;
+      renderLessonExercise(ex.id); scrollTo(0, y);
+      announce(lxSummary(ex, draft.result));
+      const head = $("#lxResult h3"); if (head) head.focus();
+    };
   }
   // A light "did you mean" for typos, like command-not-found on real systems.
   function closestCommand(sh, word) {

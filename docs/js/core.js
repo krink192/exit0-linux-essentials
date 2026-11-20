@@ -1207,6 +1207,95 @@
     return /[.!?]$/.test(g) ? g : g + ".";
   }
 
+  // ------------------------------------------------------------- lesson exercises (Guided / Explorational)
+  // Original items in the shape of an LPI lesson's Guided and Explorational sections. Not copies of LPI's text.
+  // Progress uses the same shape as a lab part: { done: [item indexes], completedAt }.
+  const LX_ROLES = ["command", "option", "argument"];
+  const LX_BINS = ["builtin", "external"];
+  const LESSON_EXERCISES = [
+    { id: "split", kind: "split", label: "Guided", title: "Split the command",
+      lead: "A command line is a command, then any options, then any arguments. An option starts with - or -- and changes how the command works. An argument is what it acts on, such as a file or a word. Tag every word.",
+      items: [
+        { obj: "2.1", tokens: [{ t: "cat", role: "command" }, { t: "-n", role: "option" }, { t: "/etc/passwd", role: "argument" }] },
+        { obj: "2.1", tokens: [{ t: "echo", role: "command" }, { t: "hello", role: "argument" }] },
+        { obj: "2.1", tokens: [{ t: "ls", role: "command" }, { t: "-l", role: "option" }, { t: "/home", role: "argument" }] },
+        { obj: "2.2", tokens: [{ t: "man", role: "command" }, { t: "ls", role: "argument" }] },
+        { obj: "2.2", tokens: [{ t: "ls", role: "command" }, { t: "--help", role: "option" }] },
+        { obj: "2.3", tokens: [{ t: "pwd", role: "command" }] },
+        { obj: "2.3", tokens: [{ t: "cd", role: "command" }, { t: "/etc", role: "argument" }] },
+        { obj: "2.3", tokens: [{ t: "ls", role: "command" }, { t: "-a", role: "option" }, { t: ".", role: "argument" }] },
+        { obj: "2.4", tokens: [{ t: "mkdir", role: "command" }, { t: "-p", role: "option" }, { t: "work/lab", role: "argument" }] },
+        { obj: "2.4", tokens: [{ t: "cp", role: "command" }, { t: "-i", role: "option" }, { t: "draft.txt", role: "argument" }, { t: "final.txt", role: "argument" }] },
+      ] },
+    { id: "sort", kind: "sort", label: "Explorational", title: "Builtin or external?",
+      lead: "Some of these names are part of the shell. The others are programs stored on disk. Sort each one, then check.",
+      explain: "The type command tells you which is which. type cd prints \"cd is a shell builtin\". type ls prints a path such as /usr/bin/ls, so ls is a separate program. echo and pwd also exist as programs, but Bash runs its own builtin and type says so.",
+      items: [
+        { name: "cd", bin: "builtin" }, { name: "echo", bin: "builtin" }, { name: "ls", bin: "external" },
+        { name: "type", bin: "builtin" }, { name: "pwd", bin: "builtin" }, { name: "cat", bin: "external" },
+        { name: "export", bin: "builtin" }, { name: "grep", bin: "external" }, { name: "alias", bin: "builtin" },
+        { name: "man", bin: "external" }, { name: "history", bin: "builtin" }, { name: "find", bin: "external" },
+      ] },
+  ];
+  /** One split line. `picks` is a role per token. A blank is unfinished. An unknown or mismatched role is a mistake. */
+  function checkSplitLine(item, picks) {
+    const tokens = (item && item.tokens) || [];
+    picks = Array.isArray(picks) ? picks : [];
+    const blank = [], wrong = [];
+    const n = Math.max(tokens.length, picks.length);
+    for (let i = 0; i < n; i++) {
+      if (i >= tokens.length) { wrong.push(i); continue; }
+      const p = i < picks.length ? picks[i] : "";
+      if (p == null || p === "") blank.push(i);
+      else if (LX_ROLES.indexOf(p) < 0 || p !== tokens[i].role) wrong.push(i);
+    }
+    return { ok: tokens.length > 0 && blank.length === 0 && wrong.length === 0, blank, wrong };
+  }
+  /** Every line of the split exercise. `done` is the indexes of lines that are fully right. */
+  function checkSplitExercise(items, answers) {
+    items = items || []; answers = answers || [];
+    const results = items.map((item, i) => checkSplitLine(item, answers[i]));
+    const done = []; results.forEach((r, i) => { if (r.ok) done.push(i); });
+    return { ok: items.length > 0 && done.length === items.length, results, done };
+  }
+  /** The sort exercise. `picks` maps a name to "builtin" or "external". Unknown names are ignored. */
+  function checkSortExercise(items, picks) {
+    items = items || []; picks = isObj(picks) ? picks : {};
+    const wrong = [], blank = [], done = [];
+    items.forEach((item, i) => {
+      const p = has(picks, item.name) ? picks[item.name] : "";
+      if (p == null || p === "") blank.push(item.name);
+      else if (LX_BINS.indexOf(p) < 0 || p !== item.bin) wrong.push(item.name);
+      else done.push(i);
+    });
+    return { ok: items.length > 0 && wrong.length === 0 && blank.length === 0, wrong, blank, done };
+  }
+  /** Saved progress for one exercise. Correct indexes accumulate. The first time they are all correct, that time is kept. */
+  function lessonExerciseRecord(prev, correct, total, now) {
+    total = Math.max(0, total | 0);
+    const prior = (prev && prev.done) || [];
+    const done = Array.from(new Set(prior.concat(correct || []))).filter(i => Number.isInteger(i) && i >= 0 && i < total).sort((a, b) => a - b);
+    const row = { done };
+    if (total > 0 && done.length === total) row.completedAt = prev && prev.completedAt != null ? prev.completedAt : now;
+    return row;
+  }
+  /** Catalogue status, same words as a lab row: New, "2 of 10", or Done. */
+  function lessonExerciseStatus(row, total) {
+    total = Math.max(0, total | 0);
+    const uniq = Array.from(new Set(((row && row.done) || []).filter(i => Number.isInteger(i) && i >= 0 && i < total)));
+    const state = total && row && row.completedAt != null && uniq.length === total ? "done" : uniq.length ? "started" : "new";
+    const text = state === "done" ? "Done" : state === "new" ? "New" : uniq.length + " of " + total;
+    return { state, done: uniq.length, total, text };
+  }
+  /** Union lab-shaped rows (done indexes, earliest completedAt). Used for lesson exercises across devices. */
+  function unionProgress(into, from) {
+    for (const id in from || {}) {
+      const a = from[id] || {}, o = into[id] || (into[id] = { done: [] });
+      o.done = Array.from(new Set((o.done || []).concat(a.done || []))).sort((x, y) => x - y);
+      if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
+    }
+  }
+
   // ------------------------------------------------------------- XP, levels and badges (all derived from saved progress)
   const LEVEL_XP = [0, 100, 250, 500, 1000, 2000, 3500, 5500];
   const LEVEL_NAMES = ["Newcomer", "Shell user", "Pipe fitter", "Script writer", "Power user", "Sysadmin", "Kernel hacker", "root"];
@@ -1633,7 +1722,7 @@
   }
   /** Merge replica docs into one view: { tests, qstats, cards, days, badges, labs, settings, settingsTs }. */
   function mergeStates(docs) {
-    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: {}, settingsTs: {} };
+    const out = { tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, settings: {}, settingsTs: {} };
     const tests = {};
     for (const d of docs || []) {
       if (!d) continue;
@@ -1647,6 +1736,7 @@
         o.done = Array.from(new Set(o.done.concat(a.done || []))).sort((x, y) => x - y);
         if (a.completedAt && (!o.completedAt || a.completedAt < o.completedAt)) o.completedAt = a.completedAt;
       }
+      unionProgress(out.lx, d.lx);
       for (const id in d.marks || {}) {            // bookmarks and notes: the latest change wins; a tie goes to the larger JSON so devices agree
         const m = d.marks[id], o = out.marks[id];
         if (!o || (m.at || 0) > (o.at || 0) || ((m.at || 0) === (o.at || 0) && JSON.stringify(m) > JSON.stringify(o))) out.marks[id] = clone(m);
@@ -1673,7 +1763,7 @@
    */
   function ownPart(view, others, settingsTs) {
     others = others || mergeStates([]);
-    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
+    const own = { v: 3, tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, settings: syncedSettings(view.settings), settingsTs: Object.assign({}, settingsTs) };
     for (const key of ["qstats", "cards", "cmdstats"]) {
       for (const id in view[key] || {}) {
         const s = view[key][id], o = (others[key] || {})[id];
@@ -1693,6 +1783,11 @@
       const extra = (l.done || []).filter(x => !o || o.done.indexOf(x) < 0);
       if (extra.length || (l.completedAt && (!o || !o.completedAt || l.completedAt < o.completedAt))) own.labs[id] = clone(l);
     }
+    for (const id in view.lx || {}) {
+      const l = view.lx[id], o = (others.lx || {})[id];
+      const extra = (l.done || []).filter(x => !o || (o.done || []).indexOf(x) < 0);
+      if (extra.length || (l.completedAt && (!o || !o.completedAt || l.completedAt < o.completedAt))) own.lx[id] = clone(l);
+    }
     return own;
   }
   /** Copy a merged view into the app state, keeping this device's local settings and any session in progress.
@@ -1700,11 +1795,11 @@
   function applyMerged(state, view) {
     view = Object.assign(mergeStates([]), cleanDoc(view));     // whatever a server sent, the app only ever holds well-formed progress
     state.tests = view.tests; state.qstats = view.qstats; state.cards = view.cards; state.cmdstats = view.cmdstats || {}; state.days = view.days;
-    state.badges = view.badges; state.labs = view.labs; state.marks = view.marks || {};
+    state.badges = view.badges; state.labs = view.labs; state.lx = view.lx || {}; state.marks = view.marks || {};
     for (const k in view.settings) if (LOCAL_SETTINGS.indexOf(k) < 0) state.settings[k] = view.settings[k];
     return state;
   }
-  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.cmdstats || {}).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length));
+  const hasProgress = st => !!st && (st.tests.length > 0 || Object.keys(st.qstats).length > 0 || Object.keys(st.cards).length > 0 || Object.keys(st.cmdstats || {}).length > 0 || Object.keys(st.labs || {}).some(id => (st.labs[id].done || []).length) || Object.keys(st.lx || {}).some(id => ((st.lx[id] || {}).done || []).length));
   /** True when local progress looks like a copy of the account's (export/import, or this browser was linked before). */
   function looksCopied(local, remote) {
     const ids = {}; for (const t of remote.tests) ids[t.id] = 1;
@@ -1791,7 +1886,7 @@
   const cleanSettings = s => isObj(s) ? shape(s, SETTINGS) : {};
   const DOC = { tests: v => Array.isArray(v) ? v.map(cleanTest).filter(Boolean) : [], qstats: v => mapOf(v, cleanSched), cards: v => mapOf(v, cleanSched),
                 cmdstats: v => mapOf(v, cleanSched), days: v => mapOf(v, x => isNum(x) && x > 0 ? Math.floor(x) : undefined, k => DAY_RE.test(k)),
-                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), settings: cleanSettings,
+                badges: v => mapOf(v, x => isNum(x) && x > 0 ? x : undefined), labs: v => mapOf(v, cleanLab), lx: v => mapOf(v, cleanLab), settings: cleanSettings,
                 settingsTs: v => mapOf(v, numOr(undefined)),
                 marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
@@ -1819,7 +1914,7 @@
     if (!isObj(d) || d.app !== "le010" || !Array.isArray(d.tests)) return null;
     const p = cleanDoc(d);
     return migrate(Object.assign({}, state, { tests: p.tests, qstats: p.qstats || {}, cards: p.cards || {}, cmdstats: p.cmdstats || {}, days: p.days || {},
-      labs: p.labs || state.labs || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
+      labs: p.labs || state.labs || {}, lx: p.lx || state.lx || {}, badges: p.badges || state.badges || {}, marks: p.marks || state.marks || {}, settings: Object.assign({}, state.settings, p.settings) }));
   }
 
   // ------------------------------------------------------------- state
@@ -1829,7 +1924,7 @@
   function freshState() {
     return { v: 3, settings: { theme: "system", goal: 10, review: { on: false, size: 20, fresh: 5 }, examDate: null, remindAt: "19:00", study: { objMode: "all", objs: [], levels: [], source: "mix", count: 20 },
                               cmd: { source: "recommended", cmds: [], count: 10, mode: "guided" } },
-             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, marks: {}, current: null };
+             tests: [], qstats: {}, cards: {}, cmdstats: {}, days: {}, badges: {}, labs: {}, lx: {}, marks: {}, current: null };
   }
   /** Bring older saved data (v2 web page) forward. */
   function migrate(raw, legacy) {
@@ -1852,7 +1947,7 @@
       }
     }
     // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")
-    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, marks: st.marks });
+    const p = cleanDoc({ tests: st.tests, qstats: st.qstats, cards: st.cards, cmdstats: st.cmdstats, days: st.days, badges: st.badges, labs: st.labs, lx: st.lx, marks: st.marks });
     const fresh = freshState().settings, s = cleanSettings(st.settings);
     s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
@@ -1861,6 +1956,7 @@
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, multiPick, multiStatus, shortPicks, shortPickLine, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
            LAB_TRACKS, LAB_KINDS, LAB_LEVELS, labKind, labLevel, labStatus, chainLocks, advisoryClock, hintTiers, describeCheck, checkedWhen,
+           LESSON_EXERCISES, LX_ROLES, LX_BINS, checkSplitLine, checkSplitExercise, checkSortExercise, lessonExerciseRecord, lessonExerciseStatus,
            xpInfo, migrateLabs, LEGACY_LABS, longestStreak, badgeStatus, awardBadges, BADGES, LEVEL_XP,
            priority, apportion, pickWeighted, objCounts, newSession, repairSession, buildQuick, buildTimed, buildLevelUp, ladder, levelUpMessage, questionOfDay, qotdDone, buildQotd,
            buildPlacement, placementSummary, isDontKnow,

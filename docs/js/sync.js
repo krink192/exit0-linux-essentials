@@ -110,7 +110,8 @@
     }
 
     // What onChange compares to decide whether remote changes altered anything the app shows.
-    const shown = st => JSON.stringify([st.tests.length, st.qstats, st.cards, st.cmdstats, st.days, st.labs, st.badges, st.marks, C.syncedSettings(st.settings)]);
+    // lx is lesson-exercise progress (Guided / Explorational), drawn on the Labs screen.
+    const shown = st => JSON.stringify([st.tests.length, st.qstats, st.cards, st.cmdstats, st.days, st.labs, st.lx, st.badges, st.marks, C.syncedSettings(st.settings)]);
 
     async function once() {
       if (!meta.token || meta.pending) return;

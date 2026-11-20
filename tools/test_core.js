@@ -299,7 +299,7 @@ t("export code round-trips through import, including bookmarks and notes", () =>
   const code = C.exportDoc(st);
   assert.ok(code.marks && code.marks[s.qids[0]].on, "export includes marks");
   assert.deepStrictEqual(Object.keys(code).filter(k => k !== "app" && k !== "v").sort(),
-    ["badges", "cards", "cmdstats", "days", "labs", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
+    ["badges", "cards", "cmdstats", "days", "labs", "lx", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
     "export lists every cleanDoc field");
   const next = C.importState(C.freshState(), JSON.parse(JSON.stringify(code)));
   assert.deepStrictEqual(next.marks, st.marks);
@@ -1524,6 +1524,106 @@ t("Choose TWO/THREE can be checked only with exactly the asked number of picks",
   assert.strictEqual(C.shortPickLine([11]), "1 question has fewer picks than asked: 12");
   assert.strictEqual(C.shortPickLine([]), "");
   assert(bank.questions.every(q => (q.options || []).length <= 5), "options stop at E, so A-E does not clash with F for flag");
+});
+
+// ---------------------------------------------------------------- lesson exercises: split a command, builtin or external
+t("lesson exercises: ten original lines across 2.1-2.4, and the twelve builtin or external names", () => {
+  const ex = C.LESSON_EXERCISES;
+  assert.strictEqual(ex.length, 2);
+  assert.strictEqual(ex[0].id, "split"); assert.strictEqual(ex[0].label, "Guided"); assert.strictEqual(ex[0].kind, "split");
+  assert.strictEqual(ex[1].id, "sort"); assert.strictEqual(ex[1].label, "Explorational"); assert.strictEqual(ex[1].kind, "sort");
+  assert.strictEqual(ex[0].items.length, 10);
+  const objs = {};
+  for (const it of ex[0].items) {
+    assert(["2.1", "2.2", "2.3", "2.4"].indexOf(it.obj) >= 0, it.obj);
+    objs[it.obj] = 1;
+    assert(it.tokens.length >= 1);
+    assert.strictEqual(it.tokens[0].role, "command", it.tokens.map(t => t.t).join(" "));
+    for (const tok of it.tokens) assert(C.LX_ROLES.indexOf(tok.role) >= 0, tok.role);
+  }
+  assert.deepStrictEqual(Object.keys(objs).sort(), ["2.1", "2.2", "2.3", "2.4"]);
+  const cat = ex[0].items.find(it => it.tokens.map(t => t.t).join(" ") === "cat -n /etc/passwd");
+  assert(cat, "the worked example is one of the ten");
+  assert.deepStrictEqual(cat.tokens.map(t => t.role), ["command", "option", "argument"]);
+  assert.deepStrictEqual(ex[1].items.map(i => i.name), ["cd", "echo", "ls", "type", "pwd", "cat", "export", "grep", "alias", "man", "history", "find"]);
+  const bin = {}; ex[1].items.forEach(i => { bin[i.name] = i.bin; assert(C.LX_BINS.indexOf(i.bin) >= 0); });
+  assert.deepStrictEqual(bin, {
+    cd: "builtin", echo: "builtin", ls: "external", type: "builtin", pwd: "builtin", cat: "external",
+    export: "builtin", grep: "external", alias: "builtin", man: "external", history: "builtin", find: "external",
+  });
+  assert(/type/.test(ex[1].explain), "the note says how type tells builtin from external");
+});
+t("split check: a line is right only when every token has its role", () => {
+  const item = C.LESSON_EXERCISES[0].items[0];
+  const right = item.tokens.map(t => t.role);
+  assert.deepStrictEqual(C.checkSplitLine(item, right), { ok: true, blank: [], wrong: [] });
+  const swapped = right.slice(); swapped[1] = "argument";
+  assert.deepStrictEqual(C.checkSplitLine(item, swapped), { ok: false, blank: [], wrong: [1] });
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command", "", "argument"]), { ok: false, blank: [1], wrong: [] });
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command"]).blank, [1, 2]);
+  assert.strictEqual(C.checkSplitLine(item, null).ok, false);
+  assert.deepStrictEqual(C.checkSplitLine(item, ["command", "flag", "argument"]).wrong, [1], "an unknown role is a mistake, not a blank");
+  assert.deepStrictEqual(C.checkSplitLine(item, right.concat("command")).wrong, [3], "an extra token is a mistake");
+});
+t("split exercise: done lists only the lines that are fully right", () => {
+  const items = C.LESSON_EXERCISES[0].items;
+  const answers = items.map(it => it.tokens.map(t => t.role));
+  const all = C.checkSplitExercise(items, answers);
+  assert.strictEqual(all.ok, true);
+  assert.deepStrictEqual(all.done, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  answers[3] = answers[3].slice(); answers[3][0] = "argument";
+  const miss = C.checkSplitExercise(items, answers);
+  assert.strictEqual(miss.ok, false);
+  assert.strictEqual(miss.done.indexOf(3), -1);
+  assert.strictEqual(miss.results[3].wrong[0], 0);
+  assert.strictEqual(C.checkSplitExercise([], []).ok, false);
+});
+t("sort check: each name is builtin or external, and a blank is unfinished", () => {
+  const items = C.LESSON_EXERCISES[1].items;
+  const picks = {}; items.forEach(i => { picks[i.name] = i.bin; });
+  const ok = C.checkSortExercise(items, picks);
+  assert.strictEqual(ok.ok, true);
+  assert.deepStrictEqual(ok.done, items.map((_, i) => i));
+  picks.ls = "builtin"; delete picks.find; picks.echo = "";
+  const bad = C.checkSortExercise(items, picks);
+  assert.strictEqual(bad.ok, false);
+  assert.deepStrictEqual(bad.wrong, ["ls"]);
+  assert.deepStrictEqual(bad.blank.slice().sort(), ["echo", "find"]);
+  assert.strictEqual(bad.done.indexOf(items.findIndex(i => i.name === "ls")), -1);
+  const again = {}; items.forEach(i => { again[i.name] = i.bin; }); again.sudo = "external";
+  assert.strictEqual(C.checkSortExercise(items, again).ok, true, "a name that is not in the exercise does not count");
+  assert.strictEqual(C.checkSortExercise(items, null).blank.length, 12);
+});
+t("lesson exercise progress unions correct items and completes once", () => {
+  assert.deepStrictEqual(C.lessonExerciseRecord(null, [0, 2], 10, 50), { done: [0, 2] });
+  const more = C.lessonExerciseRecord({ done: [0, 2] }, [2, 1], 10, 60);
+  assert.deepStrictEqual(more, { done: [0, 1, 2] });
+  const all = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const fin = C.lessonExerciseRecord(more, all, 10, 70);
+  assert.strictEqual(fin.completedAt, 70); assert.deepStrictEqual(fin.done, all);
+  const again = C.lessonExerciseRecord(fin, [0], 10, 80);
+  assert.strictEqual(again.completedAt, 70, "the first finish time stays");
+  assert.deepStrictEqual(again.done, all);
+  assert.deepStrictEqual(C.lessonExerciseRecord(null, [-1, 1.5, 3, 99], 10, 1), { done: [3] });
+  assert.deepStrictEqual(C.lessonExerciseStatus(null, 10), { state: "new", done: 0, total: 10, text: "New" });
+  assert.deepStrictEqual(C.lessonExerciseStatus({ done: [0, 1] }, 10), { state: "started", done: 2, total: 10, text: "2 of 10" });
+  assert.deepStrictEqual(C.lessonExerciseStatus(fin, 10), { state: "done", done: 10, total: 10, text: "Done" });
+  assert.strictEqual(C.lessonExerciseStatus({ done: [0], completedAt: 1 }, 10).state, "started", "a finish time without every item is not Done");
+});
+t("lesson exercise progress is saved like a lab: cleaned, merged, exported", () => {
+  const d = C.cleanDoc({ lx: { split: { done: [0, 0, 2, -1, "x"], completedAt: 5, hack: "<b>" }, nope: "no" } });
+  assert.deepStrictEqual(d.lx.split, { done: [0, 2], completedAt: 5 });
+  assert.strictEqual(d.lx.nope, undefined);
+  const m = C.mergeStates([{ lx: { split: { done: [0], completedAt: 9 } } }, { lx: { split: { done: [1], completedAt: 4 } } }]);
+  assert.deepStrictEqual(m.lx.split, { done: [0, 1], completedAt: 4 });
+  const own = C.ownPart({ lx: m.lx, settings: {} }, C.mergeStates([{ lx: { split: { done: [1], completedAt: 4 } } }]));
+  assert.deepStrictEqual(own.lx.split.done, [0, 1]);
+  const kept = C.migrate({ lx: { sort: { done: [0, -1], completedAt: 3, hack: "<b>" } } });
+  assert.deepStrictEqual(kept.lx.sort, { done: [0], completedAt: 3 });
+  const st = C.freshState(); st.lx = { split: { done: [1], completedAt: 8 } };
+  assert.strictEqual(C.hasProgress(st), true);
+  const back = C.importState(C.freshState(), JSON.parse(JSON.stringify(C.exportDoc(st))));
+  assert.deepStrictEqual(back.lx.split, { done: [1], completedAt: 8 });
 });
 
 console.log(`\n${n} tests passed`);

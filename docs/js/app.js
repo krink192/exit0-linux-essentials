@@ -156,6 +156,7 @@
     return C.migrate(raw, raw ? null : { history: readJSON("le010.v2.history"), qstats: readJSON("le010.v2.qstats") });
   })();
   st.current = C.repairSession(BANK, st.current);      // a question removed by an update must not stop the app from opening
+  C.rebuildEvidence(BANK, st);                         // once per device: cold evidence under the current cold window (saved below)
   function save(fromSync) {
     try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked: keep working in memory */ }
     if (!fromSync) scheduleSync();
@@ -419,13 +420,13 @@
       return `<li>${s.done ? (s.doneHref ? `<a class="${cls}" href="${s.doneHref}" ${label}>${inner}</a>` : `<div class="${cls}" ${label}>${inner}</div>`) : s.href ? `<a class="${cls}" href="${s.href}" ${label}>${inner}</a>` : `<button class="${cls}" ${s.attr} ${label}>${inner}</button>`}</li>`;
     }).join("")}</ol>`;
   }
-  // The score estimate counts first attempts (and answers given C.COLD_DAYS or more days after the last attempt) only, so it can't be pushed up by repeating questions.
+  // The score estimate counts fresh answers only (a first attempt, or one given C.COLD_DAYS or more days after the last attempt), so it can't be pushed up by repeating questions.
   const estimateOf = pp => pp.chance == null ? null
     : { mean: Math.round(100 * pp.mean / pp.total), low: Math.round(100 * pp.low / pp.total), high: Math.round(100 * pp.high / pp.total) };
   const topicList = ts => andList(ts.map(t => "topic " + t));
   const estimateWait = pp => pp.more ? `Answer ${plural(pp.more, "more question")} you haven't seen before to get an estimate.`
     : `Answer a few questions from ${topicList(pp.thinTopics)} to get an estimate.`;
-  const estimateBasis = pp => `From ${plural(pp.seen, "first attempt")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
+  const estimateBasis = pp => `From ${plural(pp.seen, "fresh answer")}${pp.repeats ? `; ${plural(pp.repeats, "repeated question")} left out` : ""}.`;
   // Likely range is the main mark; the mean is a thin tick; the target line is labelled for contrast (not colour alone).
   function scoreBand(est, T, label) {
     const span = Math.max(1, est.high - est.low);
@@ -451,7 +452,7 @@
         <div class="today-side">
           <section><div class="sect-head"><h2>Estimated score</h2>${est == null ? "" : `<span class="score-now"><b>Likely ${est.low}–${est.high}%</b><span class="score-mean">mean ${est.mean}% · ${T}% target</span></span>`}</div>
             ${est == null
-              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only first attempts, so repeating questions can't inflate it.</p>`
+              ? `${scoreBandSkeleton(T)}<p class="muted small band-note">${estimateWait(pp)} It counts only fresh answers: a question counts again once ${C.COLD_DAYS} days have passed since you last saw it, so quick repeats can't inflate it.</p>`
               : `${scoreBand(est, T, "Estimated score")}<p class="small muted band-note">If you sat it today: likely ${est.low}–${est.high}%. Mean about ${est.mean}%. An estimate, not a guarantee. ${estimateBasis(pp)}</p>`}</section>
           <section class="weak"><div class="weak-head"><h2>Weakest objectives</h2>${weak.length ? `<span>Weight</span><span>Score</span>` : ""}</div>
             ${weak.length ? weak.map(o => `<button class="weak-row" data-study="${o}" aria-label="${o} ${esc(OBJ[o].name)}: weight ${OBJ[o].weight}, score ${os[o].pct} percent. Practise this objective."><span>${o} ${esc(OBJ[o].name)}</span><span class="n">${OBJ[o].weight}</span><span class="s">${os[o].pct}%</span></button>`).join("")
@@ -718,7 +719,7 @@
   const todayStr = () => { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
 
   // One "am I ready?" card at the top of Progress: estimate, pass chance, exam average and the single most useful next step.
-  const passWhy = p => `The estimate uses only your first attempt at each question, plus answers given ${C.COLD_DAYS} or more days after you last saw a question.
+  const passWhy = p => `The estimate uses only fresh answers: your first attempt at each question, and any answer given ${C.COLD_DAYS} or more days after you last saw it.
       Repeats, and answers given after a hint, are left out: by then you've seen the answer, so they measure memory of that question rather than readiness for new ones.
       Answers are weighted like the real exam, and an objective with little evidence counts as a coin flip. The range is where 8 in 10 fresh exams would land.
       LPI doesn't publish the raw pass mark, so pass chance assumes ${p.passPct}% to stay on the safe side. It's an estimate, not a guarantee.`;
@@ -735,7 +736,7 @@
       : focus.length ? `More right answers in ${andList(focus)} move your pass chance the most.`
       : est.low >= 80 ? "Your whole likely range is above the target. Confirm it with a full exam, then book the real one." : "Aim to get the whole likely range above 80%.";
     const nums = est == null
-      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "first attempt")} so far</span></div>`
+      ? `<div class="u-g2 stack"><span class="small muted">Estimated score</span><span class="small muted">${plural(p.seen, "fresh answer")} so far</span></div>`
       : `<div class="u-g2 stack"><span class="small muted">If you sat it today</span><b class="big">Likely ${est.low}–${est.high}%</b><span class="small muted">Mean ${est.mean}% · an estimate, not a guarantee</span></div>
         <div class="u-g2 stack"><span class="small muted">Pass chance</span><b class="big">${pct}%</b><span class="small muted">Need ${p.need} of ${p.total} right</span></div>`;
     const btns = focus.length
@@ -1793,7 +1794,7 @@
       try { next = C.importState(st, JSON.parse($("#impData").value)); } catch (e) { /* not JSON */ }
       if (!next) return toast("That code isn't valid. Copy the whole export code and try again.");
       st = next; st.current = C.repairSession(BANK, st.current); deck = st.settings.deck || deck;
-      C.migrateLabs(st, LABS); C.awardBadges(st, BANK, CARDS, null, LABS.length);
+      C.migrateLabs(st, LABS); C.awardBadges(st, BANK, CARDS, null, LABS.length); C.rebuildEvidence(BANK, st);
       save(); applyTheme(); toast("Progress imported"); renderSettings();
     };
     if ($("#reset")) $("#reset").onclick = () => { resetOpen = true; renderSettings(); };

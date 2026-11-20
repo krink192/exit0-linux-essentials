@@ -695,10 +695,11 @@ code, pre, kbd, .mono, .term, .term input, .fill input, .kbd, textarea { font-va
 .pill { display: inline-flex; gap: 4px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: var(--fs-sm); color: var(--muted); text-decoration: none; align-items: center; }
 .pill b { color: var(--ink); font-weight: 700; }
 a.pill:hover { border-color: var(--line-2); color: var(--ink); }
-.readyhero { display: flex; flex-wrap: wrap; gap: 28px; align-items: center; padding: 26px; }
-.hero-nums { display: flex; gap: 22px; align-items: center; }
-.hero-nums .big { font-size: var(--fs-title); font-weight: 800; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.hero-text { flex: 1 1 300px; gap: 12px; }
+.readyhero { display: flex; flex-direction: column; align-items: stretch; gap: 14px; padding: 26px; }
+.hero-nums { display: flex; flex-wrap: wrap; gap: 12px 36px; align-items: flex-start; }
+.hero-fig { display: flex; flex-direction: column; gap: 4px; }
+.hero-nums .big, .hero-gap { font-size: var(--fs-title); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.hero-text { gap: 12px; }
 .hero-head { font-size: var(--fs-q); font-weight: 700; }
 .readyhero details summary { cursor: pointer; }
 .readyhero details p { margin-top: 6px; }
@@ -767,7 +768,7 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .histcard[open] > summary h2::before { content: ""; }
 .histcard .tablewrap { margin-top: 14px; }
 @media (max-width: 560px) {
-  .readyhero { padding: 20px; gap: 20px; }
+  .readyhero { padding: 20px; gap: 14px; }
   .objcard .trow > summary { grid-template-columns: minmax(0, 1fr) 3.4em; }
   .objcard .trow > summary .track2 { display: none; }
   /* Phone: the name gets its own line; chip on the left, % and Study on the right below it */
@@ -1036,11 +1037,19 @@ button.marked { background: var(--accent-soft); border-color: var(--accent); col
 .goalline { display: flex; align-items: center; gap: 0 10px; flex-wrap: wrap; color: var(--muted); margin: -20px 0 -8px; }
 .goalline button { padding: 0 2px; color: var(--accent-text); }
 .goalline button:hover { background: transparent; text-decoration: underline; text-underline-offset: 3px; }
-.today-grid { display: grid; gap: 28px; grid-template-columns: minmax(0, 1fr); align-items: start; }
-.today-side { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+/* Phone: pipeline, score column, then Exam day. Wide: the two columns are equal height; Exam day sits under both. */
+.today-grid { display: flex; flex-direction: column; gap: 28px; }
+.today-main { display: contents; }
+.today-side { display: flex; flex-direction: column; gap: 20px; min-width: 0; order: 2; }
+.today-page .pipe { order: 1; min-width: 0; }
+.today-plan { order: 3; min-width: 0; }
 @media (min-width: 1180px) {
   .page.today-page { max-width: 1080px; }
-  .today-grid { grid-template-columns: minmax(0, 11fr) minmax(0, 9fr); gap: 40px; }
+  .today-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; row-gap: 28px; align-items: stretch; }
+  .today-main { display: flex; flex-direction: column; min-width: 0; order: 0; }
+  .today-main .pipe { flex: 1; order: 0; justify-content: space-between; }
+  .today-side, .today-plan { order: 0; }
+  .today-plan { grid-column: 1 / -1; }
 }
 .pipe { list-style: none; margin: 0; padding: 6px; display: flex; flex-direction: column; gap: 2px; background: var(--pipe-bg); color: var(--pipe-ink); border-radius: var(--r); box-shadow: var(--shadow); }
 .pipe-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 16px; align-items: center; justify-content: stretch; width: 100%; min-height: 64px; padding: 10px 14px;
@@ -1060,30 +1069,29 @@ button.pipe-row.next:hover, a.pipe-row.next:hover { background: var(--pipe-next-
 .pipe-row:focus-visible { outline: 2px solid var(--pipe-ink); outline-offset: -3px; }
 .pipe-row.next:focus-visible { outline-color: var(--pipe-next-ink); }
 .sect-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.sect-head h2, .weak-head h2 { font-size: var(--fs-row); }
-.score-now { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 2px; color: var(--muted); font-size: var(--fs-sm); text-align: right; }
-.score-now b { font-size: var(--fs-q); font-weight: 700; color: var(--ink); line-height: 1.2; }
-.score-now .score-mean { font-weight: 400; color: var(--muted); font-size: var(--fs-xs); }
+.sect-head h2, .weak-head h2, .score-block h2 { font-size: var(--fs-row); }
+.score-block { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.score-block[data-readiness="distance"] h2 { font-size: var(--fs-q); }
 .scorebar { position: relative; height: 8px; border-radius: 999px; background: var(--track); margin-top: 12px; }
 .scorebar i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .scorebar .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-/* Likely range is the main mark; mean is a thin tick; target line is full-ink + label (3:1, not colour alone). */
-.scorebar.band { height: 10px; margin-top: 22px; overflow: visible; }
-.scorebar.band .range { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 55%, var(--track)); border-radius: 999px; }
-.scorebar.band .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
-.scorebar.band .mark { top: -6px; bottom: -6px; width: 2px; background: var(--ink); opacity: 1; }
-.scorebar.band .mark-label { position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%);
+/* Distance: a gap between the mean dot and the goal notch. Gauge: the likely range, with the pass mark labelled. */
+.scorebar.band { height: 10px; margin-top: 32px; overflow: visible; }
+.scorebar.band .range, .scorebar.band .gap { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.scorebar.band .range { background: color-mix(in srgb, var(--accent) 55%, var(--track)); }
+.scorebar.band .gap { background: color-mix(in srgb, var(--accent) 70%, var(--track)); }
+.scorebar.band .pin { position: absolute; top: -8px; bottom: -8px; width: 0; }
+.scorebar.band .notch { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--ink); }
+.scorebar.band .dot { position: absolute; top: 50%; left: 0; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--ink); }
+.scorebar.band .mark-label { position: absolute; left: 0; bottom: calc(100% + 4px); transform: translateX(-50%);
   font: 600 var(--fs-xs) var(--ui); color: var(--ink); white-space: nowrap; line-height: 1; }
+.scorebar.band .pin.end .mark-label { transform: translateX(-100%); }
+.scorebar.band .pin.start .mark-label { transform: none; }
 .scorebar.band.skeleton { background: var(--sunk); border: 1px solid var(--line); }
-.scorebar.band.skeleton .mark { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .scorebar.band.skeleton { animation: none; }
 }
-.band-note { margin-top: 8px; }
-.hero-nums { flex-wrap: wrap; row-gap: 16px; }
-.hero-band { flex: 1 1 100%; }
-.hero-band .scorebar { margin-top: 22px; }
-.hero-band .scorebar.band.skeleton { margin-top: 8px; }
+.band-note { margin-top: 10px; }
 .today-side .weak { display: flex; flex-direction: column; margin: 0 -10px; }
 .weak-head, .weak-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.5em 3.5em; gap: 12px; align-items: center; padding: 0 10px; }
 .weak-head { align-items: baseline; padding-bottom: 8px; font-size: var(--fs-sm); color: var(--muted); }
@@ -1163,8 +1171,6 @@ svg.i.ext { width: 14px; height: 14px; margin-left: 4px; }
 }
 
 /* ---------- Progress */
-.hero-nums { gap: 32px; align-items: flex-start; }
-.hero-nums .big { font-size: var(--fs-num); font-weight: 700; }
 .factstrip b, .stat b, .countdown b, .facts .card b, .deck .dn { font-weight: 700; }
 
 /* ---------- polish: no rings, rows in one surface, neutral hints */

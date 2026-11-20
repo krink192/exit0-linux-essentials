@@ -42,7 +42,7 @@ jobs:
         run: |
           mkdir _site
           cp -r docs/. _site/
-          rm -rf _site/screenshots
+          rm -rf _site/screenshots _site/img/readme
       - name: Build the signed package repository
         id: repo
         env:

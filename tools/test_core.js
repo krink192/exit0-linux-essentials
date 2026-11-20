@@ -299,10 +299,11 @@ t("export code round-trips through import, including bookmarks and notes", () =>
   const code = C.exportDoc(st);
   assert.ok(code.marks && code.marks[s.qids[0]].on, "export includes marks");
   assert.deepStrictEqual(Object.keys(code).filter(k => k !== "app" && k !== "v").sort(),
-    ["badges", "cards", "cmdstats", "days", "labs", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
+    ["badges", "cards", "cmdstats", "days", "estWeeks", "labs", "marks", "qstats", "settings", "settingsTs", "tests"].sort(),
     "export lists every cleanDoc field");
   const next = C.importState(C.freshState(), JSON.parse(JSON.stringify(code)));
   assert.deepStrictEqual(next.marks, st.marks);
+  assert.deepStrictEqual(next.estWeeks, st.estWeeks);
   assert.deepStrictEqual(next.qstats, st.qstats);
   assert.deepStrictEqual(next.tests.map(t => t.id), st.tests.map(t => t.id));
   assert.deepStrictEqual(next.labs, st.labs);
@@ -660,6 +661,93 @@ t("streak counts consecutive goal days", () => {
   assert.strictEqual(C.streak(days, 20, now).count, 4);
   delete days[C.dayKey(now)];
   const s = C.streak(days, 20, now); assert.strictEqual(s.count, 3); assert(!s.metToday);
+  assert.strictEqual(s.graceUsed, 0);
+  assert.strictEqual(typeof C.streak({ "2026-11-01": 1 }, 0, now).count, "number");   // goal 0 must not spin
+});
+t("one missed day between goal days is a rest day and is not added to the streak", () => {
+  const now = new Date(2026, 10, 18, 12);   // Wednesday
+  const days = {}, set = (off, n) => { const d = new Date(now); d.setDate(d.getDate() + off); if (n) days[C.dayKey(d)] = n; };
+  set(0, 10); set(-2, 10); set(-3, 10); set(-4, 10);   // Tuesday missed
+  const s = C.streak(days, 10, now);
+  assert.strictEqual(s.count, 4); assert.strictEqual(s.graceUsed, 1); assert.strictEqual(s.metToday, true);
+  assert.strictEqual(C.longestStreak(days, 10), 4);
+  // Today not finished yet does not confirm yesterday's miss as a rest day.
+  const open = {};
+  const put = (off, n, into) => { const d = new Date(now); d.setDate(d.getDate() + off); if (n) into[C.dayKey(d)] = n; };
+  put(-2, 10, open);
+  assert.strictEqual(C.streak(open, 10, now).count, 0);
+  open[C.dayKey(now)] = 10;
+  const closed = C.streak(open, 10, now);
+  assert.strictEqual(closed.count, 2); assert.strictEqual(closed.graceUsed, 1);
+});
+t("two gaps in one week, two missed days in a row, and a gap at the start do not extend a streak", () => {
+  const now = new Date(2026, 10, 18, 12);
+  const fill = spec => { const days = {}; spec.forEach((n, i) => { const d = new Date(now); d.setDate(d.getDate() - (spec.length - 1 - i)); if (n) days[C.dayKey(d)] = n; }); return days; };
+  const twoGaps = C.streak(fill([10, 0, 10, 0, 10]), 10, now);
+  assert.strictEqual(twoGaps.count, 2); assert.strictEqual(twoGaps.graceUsed, 1);
+  assert.strictEqual(C.longestStreak(fill([10, 0, 10, 0, 10]), 10), 2);
+  const pair = C.streak(fill([10, 10, 0, 0, 10]), 10, now);
+  assert.strictEqual(pair.count, 1); assert.strictEqual(pair.graceUsed, 0);
+  assert.strictEqual(C.longestStreak(fill([10, 10, 0, 0, 10]), 10), 2);
+  const start = C.streak(fill([0, 10, 10, 10]), 10, now);
+  assert.strictEqual(start.count, 3); assert.strictEqual(start.graceUsed, 0);
+  assert.strictEqual(C.longestStreak(fill([0, 10, 10, 10]), 10), 3);
+  // A second rest day is allowed once seven days have passed since the first.
+  const spaced = fill([10, 0, 10, 10, 10, 10, 10, 10, 0, 10]);
+  assert.strictEqual(C.streak(spaced, 10, now).count, 8);
+  assert.strictEqual(C.longestStreak(spaced, 10), 8);
+});
+t("study days shade by the daily goal and leave out days that have not happened", () => {
+  const now = new Date(2026, 10, 18, 12);   // Wednesday 18 Nov 2026
+  const on = off => { const d = new Date(now); d.setDate(d.getDate() + off); return C.dayKey(d); };
+  const days = { [on(-1)]: 4, [on(-2)]: 10, [on(-3)]: 20 };
+  const g = C.studyDays(days, 10, now, 2);
+  assert.strictEqual(g.weeks.length, 2);
+  const all = []; g.weeks.forEach(w => w.days.forEach(c => all.push(c)));
+  const by = {}; all.forEach(c => { by[c.key] = c; });
+  assert.strictEqual(by[on(0)].today, true); assert.strictEqual(by[on(0)].level, 0);
+  assert.strictEqual(by[on(0)].label, "Wed 18 Nov: nothing studied");
+  assert.strictEqual(by[on(-1)].level, 1); assert.strictEqual(by[on(-1)].label, "Tue 17 Nov: 4 done, under the goal");
+  assert.strictEqual(by[on(-2)].level, 2); assert.strictEqual(by[on(-2)].label, "Mon 16 Nov: 10 done, goal met");
+  assert.strictEqual(by[on(-3)].level, 3); assert.strictEqual(by[on(-3)].label, "Sun 15 Nov: 20 done, goal met");
+  assert.strictEqual(all.filter(c => c.future).length, 4);
+  assert.strictEqual(g.total, 10); assert.strictEqual(g.studied, 3); assert.strictEqual(g.met, 2);
+});
+t("score history keeps empty weeks as gaps and does not invent estimate weeks", () => {
+  const monday = new Date(2026, 10, 2, 12);   // Monday
+  const at = off => { const d = new Date(monday); d.setDate(d.getDate() + off); return d.getTime(); };
+  const exam = (off, pct, extra) => Object.assign({ id: "e" + off, date: at(off), mode: "test", total: 40, timed: true, study: false, pct, score: 1 }, extra);
+  const now = at(16);   // Wednesday of week 2
+  const est = {}; est[C.weekKey(at(7))] = { mean: 74, at: at(7) };
+  const h = C.scoreHistory([exam(0, 62), exam(14, 78), exam(14, 70, { timed: false }), exam(3, 90, { mode: "study" })], est, now);
+  assert.strictEqual(h.weeks.length, 3);
+  assert.strictEqual(h.weeks[1].examMean, null); assert.strictEqual(h.weeks[1].estimate, 74);
+  assert.strictEqual(h.examCount, 2); assert.strictEqual(h.latestExam, 78);
+  assert.deepStrictEqual(h.segments.map(s => s.length), [1, 1]);   // the empty week breaks the line
+  assert.strictEqual(h.estimateNow, null);
+  const early = at(-7 * 20);
+  const wide = C.scoreHistory([exam(0, 50), { id: "old", date: early, mode: "test", total: 40, timed: true, study: false, pct: 40, score: 1 }], {}, at(0));
+  assert.strictEqual(wide.examCount, 2); assert.strictEqual(wide.examPoints.length, 1); assert.strictEqual(wide.weeks.length, 12);
+});
+t("estimate snapshots store the pass-prediction percent for this week only", () => {
+  const st = C.freshState(), now = new Date(2026, 10, 18, 15).getTime();
+  assert.strictEqual(C.noteEstimate(st, { chance: null, mean: 10, total: 40 }, now), false);
+  assert.deepStrictEqual(st.estWeeks, {});
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.5, mean: 29.6, total: 40 }, now), true);
+  assert.deepStrictEqual(st.estWeeks[C.weekKey(now)], { mean: 74, at: now });
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.5, mean: 29.6, total: 40 }, now + 5000), false);
+  assert.strictEqual(C.noteEstimate(st, { chance: 0.6, mean: 30, total: 40 }, now + 5000), true);
+  assert.strictEqual(st.estWeeks[C.weekKey(now)].mean, 75);
+  const hostile = C.cleanDoc({ estWeeks: { "<img>": { mean: 10, at: 5 }, "2026-11-18": { mean: 200, at: 9 }, "2026-11-17": { mean: 10, at: 4 }, "2026-11-19": { mean: "no", at: 8 }, "nope": { mean: 1, at: 1 } } });
+  assert.deepStrictEqual(hostile.estWeeks, { "2026-11-16": { mean: 100, at: 9 } });   // same week, newer stamp, clamped
+  for (let i = 0; i < 4 && C.passPrediction(bank, st.qstats).chance == null; i++) {
+    const s = C.buildTest(bank, st.qstats, { seed: 10 + i });
+    s.qids.forEach(id => { const q = bank.byId[id]; s.answers[id] = q.type === "fill" ? q.accept[0] : q.answer; });
+    C.recordResult(st, bank, s, C.grade(bank, s, now), now + 10000 + i * 1000);
+  }
+  const p = C.passPrediction(bank, st.qstats);
+  assert.notStrictEqual(p.chance, null, "a few full exams reach an estimate");
+  assert.strictEqual(st.estWeeks[C.weekKey(now)].mean, Math.round(100 * p.mean / p.total));
 });
 t("answers-shown tests are labeled and excluded from readiness", () => {
   const st = C.freshState();

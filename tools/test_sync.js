@@ -236,6 +236,21 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     assert.strictEqual(a.st.settings.examDate, "2027-01-20"); assert.strictEqual(a.changes, was + 2);
   });
 
+  await t("estimate weeks merge by week and the newer stamp wins", async () => {
+    const week = { "2026-11-02": { mean: 60, at: 10 }, "2026-11-09": { mean: 70, at: 10 } };
+    const other = { "2026-11-09": { mean: 74, at: 20 }, "2026-11-16": { mean: 80, at: 20 } };
+    const merged = C.mergeStates([{ estWeeks: week }, { estWeeks: other }]);
+    assert.deepStrictEqual(merged.estWeeks, { "2026-11-02": { mean: 60, at: 10 }, "2026-11-09": { mean: 74, at: 20 }, "2026-11-16": { mean: 80, at: 20 } });
+    assert.deepStrictEqual(C.mergeStates([{ estWeeks: { "2026-11-02": { mean: 61, at: 5 } } }, { estWeeks: { "2026-11-02": { mean: 60, at: 5 } } }]).estWeeks["2026-11-02"].mean, 61);
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery"); await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    await a.sync.syncNow(); await b.sync.syncNow();
+    a.st.estWeeks = week; b.st.estWeeks = other;
+    await a.sync.syncNow(); await b.sync.syncNow(); await a.sync.syncNow();
+    assert.deepStrictEqual(a.st.estWeeks, merged.estWeeks);
+    assert.deepStrictEqual(b.st.estWeeks, merged.estWeeks);
+  });
+
   await t("revoked token: sync stops quietly and asks to sign in again", async () => {
     const srv = fakeServer(), a = device(srv, "A");
     await a.sync.signIn(URL0, "jacob", "correct horse battery");

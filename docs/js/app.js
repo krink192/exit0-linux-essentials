@@ -190,7 +190,7 @@
   // Re-render after remote changes, but never in the middle of a question, lab, flashcard or while typing.
   function rerenderIfIdle() {
     const h = (location.hash || "#test").slice(1), el = document.activeElement;
-    if (h === "exam" || h.startsWith("lab/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
+    if (h === "exam" || h.startsWith("lab/") || h.startsWith("lx/") || h === "cmdrun" || h === "sandbox" || (h === "cards" && cs && cs.i < cs.queue.length)) return;
     if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
     render();
   }
@@ -210,6 +210,7 @@
     }
   }
   st.labs = st.labs || {};
+  st.lx = st.lx || {};
   const labsCarried = C.migrateLabs(st, LABS);     // labs you finished before they were split per lesson count for their new parts
   if (labsCarried) setTimeout(() => toast(`Labs are now one per lesson: ${labsCarried} part${labsCarried > 1 ? "s" : ""} marked complete from labs you'd finished`), 900);
   C.awardBadges(st, BANK, CARDS, null, LABS.length); save();         // credit for progress made before badges existed, without toasts
@@ -302,6 +303,7 @@
     if (h === "results" && lastRec) return renderResults(lastRec);
     if (h === "weak" || h === "drill") return go("study");      // pages merged into Study
     if (h.startsWith("lab/")) return renderLab(h.slice(4));
+    if (h.startsWith("lx/")) return renderLessonExercise(h.slice(3));
     if (h === "cmdrun" && !cp) return go("commands");
     const pages = { today: renderToday, labs: renderLabs, commands: renderCommands, sandbox: renderSandbox, cmdrun: renderCmdRun, sheets: renderSheets, review: renderReview, test: renderTest, study: renderStudy, progress: renderProgress, cards: renderCards,
                     guide: renderGuide, settings: renderSettings, search: renderSearch, handson: renderHandson };
@@ -1159,12 +1161,253 @@
           <div class="u-g10 u-aic row">${segs(partsOf(next.lesson))}<span class="small muted">${partsOf(next.lesson).filter(p => labState(p.id).completedAt).length} of ${partsOf(next.lesson).length} parts done</span></div></div>
         <a class="btn primary" href="#lab/${next.id}">${labState(next.id).done.length ? "Continue lab" : "Start lab"}</a></section>`
       : `<div class="card celebrate">${icon("trophy")}<h2>Every lab is complete</h2><p class="muted">Keep the commands fresh with command practice, or try the sandbox.</p><div class="u-jc row"><a class="btn primary" href="#commands">Command practice</a><a class="btn" href="#sandbox">Sandbox</a></div></div>`}
+      ${lessonExerciseCard()}
       <section class="card stack objcard labscard"><div class="row spread"><h2>Lessons</h2>
           <div class="seg" id="labFilter" role="group" aria-label="Show lessons"><button data-v="all" class="${labFilter === "all" ? "on" : ""}">All</button><button data-v="open" class="${labFilter === "open" ? "on" : ""}">Not finished</button></div></div>
         <div>${topics || `<p class="muted small">Every lesson is finished. Switch to All to review one.</p>`}</div>
         <p class="small muted">Each lab follows its <a href="${LPI_PDF}" target="_blank" rel="noopener">LPI lesson</a> with original tasks. Read the lesson first, then practise it here.</p></section>
       ${challenges}`);
     $$("#labFilter button").forEach(b => b.onclick = () => { labFilter = b.dataset.v; renderLabs(); });
+  }
+  // Lesson exercises: original Guided / Explorational items for topic 2. Answers in progress live here;
+  // saved progress is only the indexes that checked right (st.lx), same shape as a lab.
+  const lxDraft = {};
+  const LX_CYCLE = ["", "command", "option", "argument"];
+  const LX_WORD = { command: "Command", option: "Option", argument: "Argument" };
+  const LX_BIN_WORD = { builtin: "Builtin", external: "External" };
+  const LX_PAGE = 5;   // phones show this many split lines, then Next 5
+  let lxMqBound = false;
+  function lessonExerciseCard() {
+    const rows = (C.LESSON_EXERCISES || []).map(ex => {
+      const stt = C.lessonExerciseStatus((st.lx || {})[ex.id], ex.items.length);
+      const go = stt.state === "done" ? "Review" : stt.state === "started" ? "Continue" : "Start";
+      return `<a class="lxrow${stt.state === "done" ? " done" : ""}" href="#lx/${esc(ex.id)}">
+        <span class="lname"><span class="o">${esc(ex.label)}</span> ${esc(ex.title)}</span>
+        <span class="small muted">${esc(stt.text)}</span><span class="${go === "Continue" ? "u-fw7" : ""}">${go}</span></a>`;
+    }).join("");
+    return `<section class="card stack objcard labscard"><div class="row spread"><h2>Lesson exercises</h2><span class="small muted">Topic 2</span></div>
+      <div class="lxrows">${rows}</div>
+      <p class="small muted">Guided and Explorational practice for the shell lessons. Tag each part of a command, then sort names the shell knows from programs on disk.</p></section>`;
+  }
+  function lxPhone() { return matchMedia("(max-width: 560px)").matches; }
+  function bindLxMq() {
+    if (lxMqBound) return;
+    lxMqBound = true;
+    matchMedia("(max-width: 560px)").addEventListener("change", () => {
+      const h = (location.hash || "").replace(/^#/, "");
+      if (h.startsWith("lx/")) renderLessonExercise(h.slice(3));
+    });
+  }
+  function nextRole(v) {
+    const i = LX_CYCLE.indexOf(v);
+    return LX_CYCLE[(i < 0 ? 0 : i + 1) % LX_CYCLE.length];
+  }
+  function chipClass(value) {
+    return value === "command" ? "cmd" : value === "option" ? "opt" : value === "argument" ? "arg" : "none";
+  }
+  // kind is "" until Check, then "ok", "no" or "blank". A perfect exercise passes "" so chips keep their tag and no tick.
+  function splitKind(line, j, perfect) {
+    if (!line || perfect) return "";
+    if (line.blank.indexOf(j) >= 0) return "blank";
+    if (line.wrong.indexOf(j) >= 0) return "no";
+    return "ok";
+  }
+  function splitAria(word, value, kind, right) {
+    const state = value ? "tagged " + LX_WORD[value] : "not tagged";
+    const more = kind === "no" ? " Wrong. Should be " + LX_WORD[right] + "." : kind === "ok" ? " Right." : "";
+    return word + ", " + state + "." + more + " Press to change.";
+  }
+  function splitTagHTML(value, kind, right) {
+    // A wrong chip names the right role ("Is Option"), so a bare "✕ Option" can't read as "Option is wrong".
+    if (kind === "no") return icon("x") + "Is " + esc(LX_WORD[right] || "");
+    if (kind === "blank") return icon("help") + "Not tagged";
+    if (kind === "ok") return icon("check") + esc(LX_WORD[value] || "");
+    return value ? esc(LX_WORD[value]) : "";
+  }
+  function paintSplitChip(btn, value) {
+    btn.classList.remove("cmd", "opt", "arg", "none");
+    btn.classList.add(chipClass(value));
+    const tag = btn.querySelector(".lxtag");
+    tag.className = "lxtag";
+    tag.textContent = value ? LX_WORD[value] : "";
+    const word = btn.querySelector(".lxw").textContent;
+    btn.setAttribute("aria-label", splitAria(word, value, "", ""));
+  }
+  function ensureLxDraft(ex) {
+    if (lxDraft[ex.id]) return lxDraft[ex.id];
+    const saved = (((st.lx || {})[ex.id] || {}).done) || [];
+    if (ex.kind === "split") {
+      const picks = ex.items.map((item, i) => saved.indexOf(i) >= 0 ? item.tokens.map(t => t.role) : item.tokens.map(() => ""));
+      lxDraft[ex.id] = { picks, shown: false, result: null, page: 0 };
+    } else {
+      const picks = {};
+      ex.items.forEach((item, i) => { picks[item.name] = saved.indexOf(i) >= 0 ? item.bin : ""; });
+      lxDraft[ex.id] = { picks, shown: false, result: null, page: 0 };
+    }
+    return lxDraft[ex.id];
+  }
+  function lxSummary(ex, r) {
+    const n = ex.items.length, right = r.done.length;
+    if (ex.kind === "split") {
+      const words = ex.items.reduce((a, item) => a + item.tokens.length, 0);
+      if (r.ok) return "All " + words + " right";
+      let wrong = 0, blank = 0;
+      r.results.forEach(line => { wrong += line.wrong.length; blank += line.blank.length; });
+      const bits = [right + " of " + n + (right === 1 ? " line right" : " lines right")];
+      if (wrong) bits.push(wrong + (wrong === 1 ? " tag wrong" : " tags wrong"));
+      if (blank) bits.push(blank + " not tagged");
+      return bits.join(". ") + ".";
+    }
+    if (r.ok) return "All " + n + " right";
+    const bits = [right + " of " + n + " right"];
+    if (r.wrong.length) bits.push(r.wrong.length + " in the wrong group");
+    if (r.blank.length) bits.push(r.blank.length + " not sorted");
+    return bits.join(". ") + ".";
+  }
+  function lxResultHTML(ex, draft) {
+    if (!draft.shown || !draft.result) return "";
+    const ok = draft.result.ok;
+    const line = lxSummary(ex, draft.result);
+    const explain = ex.explain ? `<p>${esc(ex.explain)}</p>` : "";
+    if (ok) return `<div class="card feedback lxresult" id="lxResult"><h3 tabindex="-1">${icon("check")}${esc(line)}</h3>${explain}</div>`;
+    return `<div class="card feedback lxresult no" id="lxResult"><h3 tabindex="-1">${icon("x")}Not quite</h3><p>${esc(line)}</p>${explain}</div>`;
+  }
+  function splitExerciseHTML(ex, draft) {
+    const phone = lxPhone();
+    const perfect = draft.shown && draft.result && draft.result.ok;
+    const start = phone ? (draft.page || 0) * LX_PAGE : 0;
+    const end = phone ? Math.min(ex.items.length, start + LX_PAGE) : ex.items.length;
+    const lines = ex.items.slice(start, end).map((item, k) => {
+      const i = start + k;
+      const line = draft.shown && draft.result ? draft.result.results[i] : null;
+      const words = item.tokens.map(t => t.t).join(" ");
+      const toks = item.tokens.map((tok, j) => {
+        const value = (draft.picks[i] || [])[j] || "";
+        const kind = splitKind(line, j, perfect);
+        return `<button type="button" class="lxchip ${chipClass(value)}" data-line="${i}" data-tok="${j}" aria-label="${esc(splitAria(tok.t, value, kind, tok.role))}"><span class="lxw">${esc(tok.t)}</span><span class="lxtag${kind ? " " + kind : ""}">${splitTagHTML(value, kind, tok.role)}</span></button>`;
+      }).join("");
+      return `<div class="lxline"><span class="lxobj">${esc(item.obj)}</span><div class="lxcmd" role="group" aria-label="Line ${i + 1}, objective ${esc(item.obj)}: ${esc(words)}">${toks}</div></div>`;
+    }).join("");
+    if (!phone || ex.items.length <= LX_PAGE) return lines;
+    const pages = Math.ceil(ex.items.length / LX_PAGE);
+    const page = draft.page || 0;
+    return lines + `<div class="lxpager" role="navigation" aria-label="More command lines"><button type="button" class="ghost" id="lxPrev"${page <= 0 ? " disabled" : ""}>Previous</button><span class="small lxpnum">${start + 1}\u2013${end} of ${ex.items.length}</span><button type="button" class="ghost" id="lxNext"${page >= pages - 1 ? " disabled" : ""}>Next 5</button></div>`;
+  }
+  function sortKind(r, name, perfect) {
+    if (!r || perfect) return "";
+    if (r.blank.indexOf(name) >= 0) return "blank";
+    if (r.wrong.indexOf(name) >= 0) return "no";
+    return "ok";
+  }
+  function sortAria(name, value, kind, right) {
+    const state = value ? "tagged " + LX_BIN_WORD[value] : "not sorted";
+    if (kind === "no") return name + ", " + state + ". Wrong. Should be " + LX_BIN_WORD[right] + ".";
+    if (kind === "ok") return name + ", " + state + ". Right.";
+    return name + ", " + state + ".";
+  }
+  function sortMark(kind, right) {
+    if (kind === "ok") return `<span class="lxmark ok">${icon("check")}<span class="sr">Right</span></span>`;
+    if (kind === "no") return `<span class="lxmark no">${icon("x")}<span class="sr">Wrong. </span>${esc(LX_BIN_WORD[right] || "")}</span>`;
+    if (kind === "blank") return `<span class="lxmark">${icon("help")}Not sorted</span>`;
+    return "";
+  }
+  function sortExerciseHTML(ex, draft) {
+    const perfect = draft.shown && draft.result && draft.result.ok;
+    const rows = ex.items.map(item => {
+      const value = draft.picks[item.name] || "";
+      const kind = sortKind(draft.shown ? draft.result : null, item.name, perfect);
+      const bins = [["builtin", "Builtin"], ["external", "External"]].map(([v, label]) =>
+        `<button type="button" data-name="${esc(item.name)}" data-bin="${v}" aria-pressed="${value === v ? "true" : "false"}"${value === v ? ' class="on"' : ""}>${label}</button>`).join("");
+      return `<div class="lxsort"><span class="lxname">${esc(item.name)}</span><div class="lxbin" role="group" data-name="${esc(item.name)}" aria-label="${esc(sortAria(item.name, value, kind, item.bin))}">${bins}</div>${sortMark(kind, item.bin)}</div>`;
+    }).join("");
+    return `<div class="lxsorts">${rows}</div>`;
+  }
+  function rerenderLx(ex, y, focus) {
+    renderLessonExercise(ex.id); scrollTo(0, y);
+    if (!focus) return;
+    const again = $(focus); if (again) again.focus();
+  }
+  function renderLessonExercise(id) {
+    const ex = (C.LESSON_EXERCISES || []).find(e => e.id === id);
+    if (!ex) return go("labs");
+    bindLxMq();
+    st.lx = st.lx || {};
+    const draft = ensureLxDraft(ex);
+    if (ex.kind === "split" && lxPhone()) {
+      const pages = Math.max(1, Math.ceil(ex.items.length / LX_PAGE));
+      draft.page = Math.min(Math.max(0, draft.page || 0), pages - 1);
+    }
+    const stt = C.lessonExerciseStatus(st.lx[ex.id], ex.items.length);
+    const where = ex.kind === "split" ? "objectives 2.1 to 2.4" : "topic 2";
+    const lines = ex.kind === "split" ? splitExerciseHTML(ex, draft) : sortExerciseHTML(ex, draft);
+    shell("labs", `<div class="page-head"><a class="small backlink" href="#labs">${icon("left")}All labs</a>
+        <h1>${esc(ex.title)}</h1><span class="u-mt8 eyebrow">${esc(ex.label)} · ${where} · ${esc(stt.text)}</span>
+        <p class="lead">${esc(ex.lead)}</p></div>
+      <div class="card" id="lxForm">${lines}</div>
+      ${lxResultHTML(ex, draft)}
+      <div class="row"><button type="button" class="primary" id="lxCheck">Check</button></div>`, { noTabs: true });
+    if (ex.kind === "split") {
+      $$("#lxForm button.lxchip").forEach(btn => {
+        const cycle = () => {
+          const i = +btn.dataset.line, j = +btn.dataset.tok;
+          const next = nextRole((draft.picks[i] || [])[j] || "");
+          draft.picks[i][j] = next;
+          if (!draft.shown) { paintSplitChip(btn, next); return; }
+          draft.shown = false; draft.result = null;
+          rerenderLx(ex, scrollY, `button.lxchip[data-line="${i}"][data-tok="${j}"]`);
+        };
+        btn.onclick = cycle;
+        // Space and Enter both activate a button, but Enter does not in every embedded browser.
+        // preventDefault keeps that to a single step either way.
+        btn.addEventListener("keydown", e => {
+          if (e.repeat || (e.key !== "Enter" && e.key !== " ")) return;
+          e.preventDefault();
+          cycle();
+        });
+      });
+      const prev = $("#lxPrev"), next = $("#lxNext");
+      if (prev) prev.onclick = () => { draft.page = Math.max(0, (draft.page || 0) - 1); rerenderLx(ex, scrollY, "#lxPrev"); };
+      if (next) next.onclick = () => { draft.page = (draft.page || 0) + 1; rerenderLx(ex, scrollY, "#lxNext"); };
+    } else {
+      $$("#lxForm .lxbin button").forEach(btn => {
+        btn.onclick = () => {
+          const name = btn.dataset.name, bin = btn.dataset.bin;
+          draft.picks[name] = draft.picks[name] === bin ? "" : bin;
+          if (!draft.shown) {
+            const group = btn.parentElement;
+            $$("button", group).forEach(b => {
+              const on = b.dataset.bin === draft.picks[name];
+              b.classList.toggle("on", on);
+              b.setAttribute("aria-pressed", on ? "true" : "false");
+            });
+            const item = ex.items.find(it => it.name === name);
+            group.setAttribute("aria-label", sortAria(name, draft.picks[name], "", item ? item.bin : ""));
+            return;
+          }
+          draft.shown = false; draft.result = null;
+          rerenderLx(ex, scrollY, `button[data-name="${name}"][data-bin="${bin}"]`);
+        };
+      });
+    }
+    $("#lxCheck").onclick = () => {
+      if (ex.kind === "split") {
+        draft.result = C.checkSplitExercise(ex.items, draft.picks);
+        if (lxPhone() && !draft.result.ok) {
+          const start = (draft.page || 0) * LX_PAGE;
+          const here = draft.result.results.slice(start, start + LX_PAGE);
+          const hereBad = here.some(line => line.blank.length || line.wrong.length);
+          if (!hereBad) {
+            const bad = draft.result.results.findIndex(line => line.blank.length || line.wrong.length);
+            if (bad >= 0) draft.page = Math.floor(bad / LX_PAGE);
+          }
+        }
+      } else draft.result = C.checkSortExercise(ex.items, draft.picks);
+      draft.shown = true;
+      st.lx[ex.id] = C.lessonExerciseRecord(st.lx[ex.id], draft.result.done, ex.items.length, Date.now());
+      save();
+      rerenderLx(ex, scrollY, "#lxResult h3");
+      announce(lxSummary(ex, draft.result));
+    };
   }
   // A light "did you mean" for typos, like command-not-found on real systems.
   function closestCommand(sh, word) {

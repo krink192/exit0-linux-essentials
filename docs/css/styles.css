@@ -870,7 +870,7 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .clegend { color: var(--muted); flex-wrap: wrap; gap: 8px 18px; }
 .clegend span { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
 .lg { display: inline-block; border: 1px solid var(--line-2); width: 14px; height: 14px; border-radius: 4px; flex: none; }
-.lg.learning { background: var(--sunk); }
+.lg.learning { background: var(--om-tint); }
 .lg.weak { background: var(--warm-soft); border-color: var(--warm); }
 .lg.mastered { background: var(--accent-soft); border-color: var(--accent); }
 .cgroup { display: flex; flex-direction: column; gap: 8px; }
@@ -878,7 +878,8 @@ a.pill:hover { border-color: var(--line-2); color: var(--ink); }
 .ctile { position: relative; display: flex; justify-content: flex-start; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 10px 9px; min-height: 52px; border-radius: var(--r-sm); text-align: left;
   border: 1px solid var(--line); background: var(--sunk); color: var(--ink); font: 600 var(--fs-sm) var(--mono); }
 .ctile .cn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ctile.t-new { color: var(--ink-2); background: var(--surface); border-style: solid; border-color: var(--line); }
+.ctile.t-new { color: var(--ink-2); background: transparent; border-style: solid; border-color: var(--line); }
+.ctile.t-learning { background: var(--om-tint); }
 .ctile.t-weak { background: var(--warm-soft); border-color: var(--warm); }
 .ctile.t-mastered { background: var(--accent-soft); border-color: var(--accent); }
 .ctile:hover { border-color: var(--ink-2); }
@@ -1180,7 +1181,7 @@ textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outlin
 .qmeta .qpos { font-weight: 600; color: var(--ink); }
 
 /* ---------- Commands: legend swatches match the tiles; quick starts stack on phones instead of scrolling sideways */
-.lg.new { background: var(--surface); }
+.lg.new { background: transparent; }
 @media (max-width: 560px) {
   .cq, .cq.primary-soft { border: 0; border-radius: 0; }
   .cq + .cq { border-top: 1px solid var(--line); }

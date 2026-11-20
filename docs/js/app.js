@@ -718,7 +718,7 @@
   function studyCard(sk) {
     const weeks = window.matchMedia("(min-width: 901px)").matches ? 16 : 12;
     const g = C.studyDays(st.days || {}, st.settings.goal, Date.now(), weeks);
-    const cols = `auto repeat(${g.weeks.length}, minmax(0, 1fr))`;
+    const cols = `auto repeat(${g.weeks.length}, minmax(0, 14px))`;
     let prev = "";
     const months = g.weeks.map(w => {
       const name = MONTHS[C.parseDate(w.monday).getMonth()];

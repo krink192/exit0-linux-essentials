@@ -27,3 +27,5 @@ jobs:
         run: node tools/test_drills.js
       - name: The lab's man pages and help cover every command and option the labs use, and their examples run
         run: node tools/test_man.js
+      - name: Every colour scheme keeps text and control contrast
+        run: node tools/test_schemes.js

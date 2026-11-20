@@ -41,6 +41,7 @@ jobs:
           node tools/test_questions.js
           node tools/test_drills.js
           node tools/test_man.js
+          node tools/test_schemes.js
 
   windows:
     needs: test

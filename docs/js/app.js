@@ -179,7 +179,7 @@
     fetch: (url, o) => fetch(url, o),
     getState: () => st,
     resetProgress: () => { const keep = st.settings; st = C.freshState(); st.settings = keep; save(true); },
-    onChange: () => { C.migrateLabs(st, LABS); save(true); C.awardBadges(st, BANK, CARDS, null, LABS.length); save(true); rerenderIfIdle(); },
+    onChange: () => { applyTheme(); C.migrateLabs(st, LABS); save(true); C.awardBadges(st, BANK, CARDS, null, LABS.length); save(true); rerenderIfIdle(); },
   }) : null;
   let syncTimer = null;
   function scheduleSync(delay) {
@@ -222,12 +222,27 @@
   }
   celebrate.lv = C.xpInfo(st).level;
 
+  const SCHEME_BG = { github: ["#F6F8FA", "#0D1117"], flexoki: ["#F2F0E5", "#100F0F"], catppuccin: ["#E6E9EF", "#1E1E2E"], tokyo: ["#E1E2E7", "#1A1B26"], dracula: ["#FFFBEB", "#282A36"] };
+  const SCHEME_CHOICES = [["green", "Green"], ["github", "GitHub"], ["flexoki", "Flexoki"], ["catppuccin", "Catppuccin"], ["tokyo", "Tokyo Night"], ["dracula", "Dracula"]];
+  const GREEN_CHROME = ["#F6F7F5", "#111413"];
   function applyTheme() {
-    const t = st.settings.theme;
-    if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
-    else document.documentElement.removeAttribute("data-theme");
+    const t = st.settings.theme, scheme = st.settings.scheme, root = document.documentElement;
+    if (t === "light" || t === "dark") root.setAttribute("data-theme", t);
+    else root.removeAttribute("data-theme");
+    if (SCHEME_BG[scheme]) root.setAttribute("data-scheme", scheme);
+    else root.removeAttribute("data-scheme");
+    const dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+    const metas = document.querySelectorAll('meta[name="theme-color"]');
+    if (!SCHEME_BG[scheme]) metas.forEach(m => m.setAttribute("content", (m.getAttribute("media") || "").indexOf("dark") >= 0 ? GREEN_CHROME[1] : GREEN_CHROME[0]));
+    else { const c = SCHEME_BG[scheme][dark ? 1 : 0]; metas.forEach(m => m.setAttribute("content", c)); }
   }
   applyTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  function schemePickerHTML(current) {
+    const cur = SCHEME_CHOICES.some(([id]) => id === current) ? current : "green";
+    const buttons = SCHEME_CHOICES.map(([id, name]) => `<button type="button" class="swatch${id === cur ? " on" : ""}" data-v="${id}" aria-pressed="${id === cur}"><span class="dots" aria-hidden="true"><i class="dot dot-bg"></i><i class="dot dot-surface"></i><i class="dot dot-ink"></i><i class="dot dot-accent"></i></span>${name}</button>`).join("");
+    return `<div class="schemes"><span id="schemeLabel">Color scheme</span><div class="swatch-grid" id="schemes" role="group" aria-labelledby="schemeLabel">${buttons}</div><p class="small muted">Light, Dark and System use this.</p></div>`;
+  }
 
   let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, finishing = false, discardOpen = false, navKind = "all", warned5 = null;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
@@ -295,6 +310,7 @@
   // ------------------------------------------------------------------ router
   function go(h) { if (location.hash === "#" + h) render(); else location.hash = h; }
   function render() {
+    applyTheme();
     const h = (location.hash || "#today").slice(1);
     if (h === "practice") return go(lastPractice || (qLeft() + C.deckStats(CARDS, st.cards).due ? "review" : "test"));
     if (h === "learn") return go("guide");
@@ -2071,7 +2087,8 @@
     const data = exportOpen ? JSON.stringify(C.exportDoc(st)) : "";
     shell("settings", `<div class="page-head"><h1>Settings</h1></div>
       <div class="card stack"><h2>Appearance</h2><div class="row spread"><span>Theme</span>
-        <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div></div>
+        <div class="seg" id="theme">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([k, n]) => `<button data-v="${k}" class="${s.theme === k ? "on" : ""}">${n}</button>`).join("")}</div></div>
+        ${schemePickerHTML(s.scheme)}</div>
       <div class="card stack"><h2>Daily goal</h2>
         <div class="u-g10 stack"><div class="small muted">${GOAL_TEXT}</div>${goalPickerHTML()}</div></div>
       <div class="card stack"><h2>Daily review</h2>${reviewPickerHTML()}</div>
@@ -2096,6 +2113,10 @@
       <p class="small muted"><b class="wordmark">exit 0</b> · Free practice for LPI Linux Essentials 010-160 · Free and open source under the GNU AGPL v3 · <a href="${REPO}" target="_blank" rel="noopener">Source code</a><br>
         Original practice material based on LPI's published objectives. Not affiliated with or endorsed by the Linux Professional Institute.</p>`);
     $$("#theme button").forEach(b => b.onclick = () => { s.theme = b.dataset.v; save(); applyTheme(); renderSettings(); });
+    $$("#schemes button").forEach(b => b.onclick = () => {
+      if (!SCHEME_CHOICES.some(([id]) => id === b.dataset.v)) return;
+      s.scheme = b.dataset.v; save(); applyTheme(); renderSettings();
+    });
     wireGoalPicker(renderSettings);
     wireReviewPicker(renderSettings);
     $("#exp").onclick = () => {

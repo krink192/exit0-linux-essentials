@@ -173,9 +173,10 @@ const T0 = Date.UTC(2026, 9, 1, 18);
   await t("settings sync (except theme); the latest change wins", async () => {
     const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
     await a.sync.signIn(URL0, "jacob", "correct horse battery"); await b.sync.signIn(URL0, "jacob", "correct horse battery");
-    a.st.settings.examDate = "2026-12-01"; a.st.settings.theme = "dark";
+    a.st.settings.examDate = "2026-12-01"; a.st.settings.theme = "dark"; a.st.settings.scheme = "flexoki";
     await a.sync.syncNow(); await b.sync.syncNow();
     assert.strictEqual(b.st.settings.examDate, "2026-12-01");
+    assert.strictEqual(b.st.settings.scheme, "flexoki");
     assert.strictEqual(b.st.settings.theme, "system");
     b.st.settings.goal = 40; await b.sync.syncNow(); await a.sync.syncNow();
     assert.strictEqual(a.st.settings.goal, 40);

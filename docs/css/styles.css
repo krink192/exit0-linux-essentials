@@ -258,7 +258,7 @@ label.orow input { width: 18px; height: 18px; accent-color: var(--accent); margi
 .heat span.lv1 { background: color-mix(in srgb, var(--accent) 28%, var(--sunk)); }
 .heat span.lv2 { background: color-mix(in srgb, var(--accent) 62%, var(--sunk)); }
 .heat span.lv3 { background: var(--accent); }
-.heat span.today { box-shadow: inset 0 0 0 2px var(--ink); }
+.heat span.now { box-shadow: inset 0 0 0 2px var(--ink); }
 .heat span.future { background: transparent; }
 
 /* ---------- exam */

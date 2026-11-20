@@ -741,7 +741,7 @@
       for (const w of g.weeks) {
         const c = w.days[i];
         cells += c.future ? `<span class="future" aria-hidden="true"></span>`
-          : `<span class="lv${c.level}${c.today ? " today" : ""}" title="${esc(c.label)}" aria-label="${esc(c.label)}"></span>`;
+          : `<span class="lv${c.level}${c.today ? " now" : ""}" title="${esc(c.label)}" aria-label="${esc(c.label)}"></span>`;
       }
     }
     const rest = sk.graceUsed ? " 1 rest day used this week." : "";

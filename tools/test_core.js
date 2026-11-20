@@ -654,6 +654,31 @@ t("due and new flashcards alternate about three to one", () => {
   const older = { a: { box: 2, seen: 1, right: 1, due: today }, b: { box: 1, seen: 1, right: 1, due: today - 3 } };
   assert.deepStrictEqual(C.cardQueue([{ id: "a", obj: "1.1" }, { id: "b", obj: "1.1" }], older, null, today, 5, 1).map(c => c.id), ["b", "a"]);
 });
+t("a top-box flashcard drops on a miss, and a session keeps two that are not due", () => {
+  const today = 21000, seed = 11, deck = [];
+  for (let i = 0; i < 6; i++) deck.push({ id: "d" + i, obj: "1.1" });
+  deck.push({ id: "top-old", obj: "1.2" }, { id: "top-mid", obj: "1.2" }, { id: "top-new", obj: "1.3" }, { id: "box4", obj: "1.3" });
+  const cs = {};
+  for (let i = 0; i < 6; i++) cs["d" + i] = { box: 1, seen: 1, right: 1, due: today, at: 1000 + i };
+  cs["top-old"] = { box: 5, seen: 6, right: 6, due: today + 16, at: 100 };
+  cs["top-mid"] = { box: 5, seen: 6, right: 6, due: today + 10, at: 200 };
+  cs["top-new"] = { box: 5, seen: 6, right: 6, due: today + 8, at: 900 };
+  cs.box4 = { box: 4, seen: 5, right: 5, due: today + 8, at: 50 };
+  const dueBefore = cs["top-old"].due;
+  const q = C.cardQueue(deck, cs, null, today, 8, seed);
+  assert.strictEqual(cs["top-old"].due, dueBefore, "mixing a card in does not make it due");
+  assert.deepStrictEqual(Object.keys(q.refresh).sort(), ["top-mid", "top-old"]);
+  assert.ok(q.some(c => c.id === "top-old") && q.some(c => c.id === "top-mid"));
+  assert.ok(!q.refresh["top-new"], "only the two seen longest ago");
+  assert.ok(!q.refresh.box4, "the 8-day box is not the top box");
+  assert.strictEqual(q.length, 8);
+  assert.deepStrictEqual(C.cardQueue(deck, cs, null, today, 8, seed).map(c => c.id), q.map(c => c.id), "same seed, same order");
+  C.reviewCard(cs, "top-old", false, today, 5000);
+  assert.strictEqual(cs["top-old"].box, 0, "a miss in the top box drops it to the first box");
+  assert.strictEqual(cs["top-old"].due, today);
+  const idle = C.cardQueue([{ id: "top-old", obj: "1.1" }], { "top-old": { box: 5, seen: 6, right: 6, due: today + 3, at: 1 } }, null, today, 20, seed);
+  assert.strictEqual(idle.length, 0, "nothing due and nothing new: no session of only refreshers");
+});
 t("streak counts consecutive goal days", () => {
   const days = {}; const now = new Date(2026, 9, 10, 12);
   for (let i = 0; i < 4; i++) { const d = new Date(now); d.setDate(d.getDate() - i); days[C.dayKey(d)] = 25; }
@@ -1060,6 +1085,106 @@ t("mastery: sync keeps a demotion when a peer still has the old days", () => {
   assert.deepStrictEqual(C.coldDaysOf(view.qstats["1.1-01"]), [10, 11], "dropped day stays dropped after merge");
   assert.strictEqual(view.qstats["1.1-01"].cw, 5, "confident-wrong counts add across devices");
   assert.deepStrictEqual(C.coldDaysOf({ cdays: [], ev: 1, at: 1000, cdrop: [C.dayNum(1000)] }), []);
+});
+t("mastery: a cold miss outside placement drops a mastered objective; a warm, hinted, untimed or placement miss does not", () => {
+  const DAY = 86400000, now = new Date(2026, 9, 20, 12).getTime(), today = C.dayNum(now);
+  const obj = "1.1";
+  const alone = x => { const q = bank.byId[x]; return q.type !== "fill" && !q.variantOf && !bank.questions.some(v => v.variantOf === x); };
+  const id = bank.byObj[obj].find(alone);
+  assert.ok(id, "a single-wording question to miss");
+  const q = bank.byId[id];
+  const days3 = [today - 30, today - 20, today - 10];
+  const seed = (at, cdays) => {
+    const st = C.freshState();
+    for (const qid of bank.byObj[obj]) st.qstats[qid] = { seen: 1, right: 1, last: true, at: now, box: 1, due: today + 2, cdays: [] };
+    st.qstats[id] = { seen: 3, right: 3, last: true, ev: 1, at, cdays: cdays.slice(), box: 3, due: today + 5 };
+    return st;
+  };
+  const miss = (st, mode, opts) => {
+    opts = opts || {};
+    const s = C.newSession(bank, mode, mode, [id], { study: mode !== "test" && mode !== "placement", timed: !!opts.timed, seed: 4, now });
+    s.answers[id] = [q.answer[0] === 0 ? 1 : 0];
+    if (opts.hint) s.hints[id] = true;
+    C.recordResult(st, bank, s, C.grade(bank, s), now);
+    return C.objectiveStats(bank, st.qstats)[obj];
+  };
+  // Cold (last answer 10 days ago): Mastered, 3 days, falls to Proficient. The dropped day is remembered.
+  const cold = seed(now - 10 * DAY, days3);
+  assert.strictEqual(C.objectiveStats(bank, cold.qstats)[obj].level, "mastered");
+  assert.strictEqual(miss(cold, "study").level, "proficient");
+  assert.strictEqual(C.objectiveStats(bank, cold.qstats)[obj].coldDays, 2);
+  assert.deepStrictEqual(cold.qstats[id].cdrop, [today - 10]);
+  const peer = C.freshState();
+  peer.qstats[id] = { seen: 3, right: 3, last: true, at: now - 10 * DAY, ev: 1, cdays: days3.slice(), box: 3, due: today + 5 };
+  const view = C.mergeStates([cold, peer]);
+  assert.deepStrictEqual(C.coldDaysOf(view.qstats[id]), [today - 30, today - 20], "a peer that still has the day cannot put it back");
+  // Four days: one cold miss removes only the latest, so the objective stays Mastered.
+  const extra = seed(now - 10 * DAY, [today - 40, today - 30, today - 20, today - 10]);
+  assert.strictEqual(miss(extra, "study").level, "mastered");
+  assert.strictEqual(C.objectiveStats(bank, extra.qstats)[obj].coldDays, 3);
+  // Not cold yet (answered earlier today): no drop. A hint, an untimed exam and placement do not drop either.
+  const warm = seed(now - 60 * 60 * 1000, days3);
+  assert.strictEqual(miss(warm, "study").level, "mastered");
+  assert.strictEqual(warm.qstats[id].cdrop, undefined);
+  const hinted = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(hinted, "study", { hint: true }).level, "mastered");
+  const untimed = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(untimed, "test").level, "mastered", "an untimed exam is not cold evidence");
+  const place = seed(now - 10 * DAY, days3);
+  assert.strictEqual(miss(place, "placement").level, "mastered");
+  // Proficient does not lose a day on a cold miss. Only Mastered does.
+  const prof = seed(now - 10 * DAY, [today - 20, today - 10]);
+  assert.strictEqual(C.objectiveStats(bank, prof.qstats)[obj].level, "proficient");
+  assert.strictEqual(miss(prof, "study").level, "proficient");
+  assert.strictEqual(prof.qstats[id].cdrop, undefined);
+  // A mixed exam miss that is also cold drops one day, not two.
+  const both = seed(now - 10 * DAY, days3);
+  const exam = C.buildTest(bank, {}, { seed: 8 });
+  if (!exam.qids.includes(id)) exam.qids[0] = id;
+  exam.qids.forEach(qid => {
+    const qq = bank.byId[qid];
+    exam.answers[qid] = qid === id ? [qq.answer[0] === 0 ? 1 : 0] : (qq.type === "fill" ? qq.accept[0] : qq.answer);
+  });
+  C.recordResult(both, bank, exam, C.grade(bank, exam), now);
+  assert.strictEqual(C.objectiveStats(bank, both.qstats)[obj].coldDays, 2);
+  assert.strictEqual(C.objectiveStats(bank, both.qstats)[obj].level, "proficient");
+});
+t("daily review includes two mastered questions seen longest ago, without making them due", () => {
+  const DAY = 86400000, now = new Date(2026, 9, 20, 12).getTime(), today = C.dayNum(now), seed = 42;
+  const alone = id => !bank.byId[id].variantOf && !bank.questions.some(q => q.variantOf === id);
+  const take = obj => bank.byObj[obj].find(alone);
+  const old = take("1.2"), mid = take("1.3"), recent = take("2.2"), due = bank.byObj["2.1"].find(id => bank.byId[id].type !== "fill");
+  assert.ok(old && mid && recent && due);
+  const st = C.freshState();
+  st.settings.review = { on: true, size: 10, fresh: 0 };
+  const days = [today - 40, today - 25, today - 12];
+  const put = (id, daysAgo) => { st.qstats[id] = { seen: 3, right: 3, last: true, at: now - daysAgo * DAY, ev: 1, cdays: days.slice(), box: 4, due: today + 6 }; };
+  put(old, 50); put(mid, 30); put(recent, 8);
+  st.qstats[due] = { seen: 1, right: 0, last: false, at: now - 2 * DAY, box: 0, due: today - 1 };
+  assert.strictEqual(C.objectiveStats(bank, st.qstats)[bank.byId[old].obj].level, "mastered");
+  const dueBefore = st.qstats[old].due;
+  const d = C.dailyReview(bank, st, today);
+  assert.strictEqual(d.refresh, 2);
+  assert.strictEqual(d.left, 10);
+  const session = C.buildReview(bank, st, { today, seed });
+  assert.strictEqual(st.qstats[old].due, dueBefore, "a refresher is not marked due");
+  assert.deepStrictEqual(Object.keys(session.refresh).sort(), [old, mid].sort(), "the two seen longest ago");
+  assert.ok(session.qids.includes(old) && session.qids.includes(mid));
+  assert.ok(!session.refresh[recent] && !session.refresh[due]);
+  const again = C.buildReview(bank, st, { today, seed });
+  assert.deepStrictEqual(again.qids, session.qids, "same seed, same review");
+  assert.deepStrictEqual(again.refresh, session.refresh);
+  const kept = C.cleanSession(session);
+  assert.deepStrictEqual(kept.refresh, session.refresh, "the tag survives a reload");
+  // Answering one question uses up today's refresher slots. The same pair is not added again.
+  const one = session.qids.find(id => id === due) || session.qids[0];
+  const qq = bank.byId[one];
+  session.answers[one] = qq.type === "fill" ? qq.accept[0] : qq.answer;
+  C.recordResult(st, bank, session, C.grade(bank, session), now);
+  const d2 = C.dailyReview(bank, st, today);
+  assert.strictEqual(d2.done, 1);
+  assert.strictEqual(d2.refresh, 0);
+  assert.ok(d2.left > 0, "the rest of the day is still there, without a new pair");
 });
 t("repairSession drops conf (and other maps) for removed question ids", () => {
   const id = bank.questions[0].id, gone = "9.9-99";

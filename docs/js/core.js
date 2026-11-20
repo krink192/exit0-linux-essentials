@@ -396,6 +396,7 @@
       const trim = m => { if (!m || typeof m !== "object") return {}; const out = {}; for (const id of qids) if (m[id] !== undefined) out[id] = m[id]; return out; };
       s.optOrder = trim(s.optOrder); s.answers = trim(s.answers); s.flags = trim(s.flags);
       s.checked = trim(s.checked); s.hints = trim(s.hints); s.conf = trim(s.conf); s.dontKnow = trim(s.dontKnow);
+      if (s.refresh) s.refresh = trim(s.refresh);
       s.cur = Math.max(0, Math.min(qids.length - 1, qids.indexOf(s.qids[s.cur]) >= 0 ? qids.indexOf(s.qids[s.cur]) : s.cur || 0));
       s.qids = qids;
     }
@@ -694,6 +695,25 @@
     if (Array.isArray(st.cdrop) && st.cdrop.length) st.cdrop = st.cdrop.filter(d => d !== day);
     return st;
   }
+  /** Remove the objective's latest mastery day and remember it in cdrop, so a peer that still has the day cannot put it back. */
+  function dropLatestMasteryDay(state, bank, obj) {
+    let latest = -1;
+    for (const id of bank.byObj[obj] || []) {
+      const qs = state.qstats[id]; if (!qs) continue;
+      for (const d of coldDaysOf(qs)) latest = Math.max(latest, d);
+    }
+    if (latest < 0) return;
+    for (const id of bank.byObj[obj] || []) {
+      const qs = state.qstats[id]; if (!qs) continue;
+      const days = coldDaysOf(qs);
+      if (days.indexOf(latest) < 0) continue;
+      qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
+      const drop = Array.isArray(qs.cdrop) ? qs.cdrop.slice() : [];
+      if (drop.indexOf(latest) < 0) drop.push(latest);
+      drop.sort((a, b) => a - b);
+      qs.cdrop = drop.slice(-16);
+    }
+  }
   function masteryLevel(coldDays, seen) {
     if (!seen) return "new";
     if (coldDays >= MASTERY_DAYS) return "mastered";
@@ -825,6 +845,14 @@
     // Untimed full exams update practice history and the review schedule, but never cold evidence or mastery days.
     const untimed = s.mode === "test" && !s.study && s.timed === false;
     const mixed = s.mode === "test" && !s.study && !untimed && (s.qids || []).length === 40;
+    const coldMiss = {};
+    // Level before this sitting. A cold miss only demotes an objective that was already Mastered,
+    // not one that reaches three days from another answer in the same session.
+    const masteredBefore = {};
+    if (s.mode !== "placement" && !untimed) {
+      const before = objectiveStats(bank, state.qstats);
+      for (const o in before) if (before[o].level === "mastered") masteredBefore[o] = 1;
+    }
     for (const id of s.qids) {
       // Placement "Don't know yet" is a cold miss (ev = 0), not a blank: the learner said they don't know it.
       const dontKnow = s.mode === "placement" && !!(s.dontKnow && s.dontKnow[id]);
@@ -850,36 +878,32 @@
         if (s.conf[id] && !ok) st.cw = (st.cw || 0) + 1;   // confident-but-wrong count
       }
       if (!untimed && ok && cold && !hinted) noteColdDay(st, bank.byId[id], today);
+      // A cold miss is one the 4-day rule counts (first attempt, or long enough since any wording, no hint).
+      // Placement still records the miss for the estimate, but it does not take a mastery day away.
+      if (s.mode !== "placement" && !untimed && cold && !hinted && !ok) coldMiss[id] = 1;
       scheduleQuestion(st, ok, today, exDay);
       state.qstats[id] = st;
     }
-    // A miss in a mixed timed exam demotes the whole objective: drop the latest day in the objective-wide union.
-    // Blanks do not demote: never having answered is not a miss.
+    // A miss in a mixed timed exam drops the objective's latest mastery day.
+    // A cold miss (the 4-day rule, no hint) does the same when that objective was already Mastered:
+    // three days becomes Proficient. One extra day already earned stays Mastered until another cold miss.
+    // Placement does not demote. An untimed exam is not counted as cold, so it does not demote either.
+    // The day is removed wherever it is stored, so a miss on a question that does not hold it still demotes the objective.
+    // Blanks do not demote. One session drops a day once, even when both rules match.
+    const hit = {};
     if (mixed) {
-      const hit = {};
       for (const id of s.qids) {
         if (!answered(bank.byId[id], s.answers[id])) continue;
         if (!res.perQ[id] && bank.byId[id]) hit[bank.byId[id].obj] = 1;
       }
-      for (const o in hit) {
-        let latest = -1;
-        for (const id of bank.byObj[o] || []) {
-          const qs = state.qstats[id]; if (!qs) continue;
-          for (const d of coldDaysOf(qs)) latest = Math.max(latest, d);
-        }
-        if (latest < 0) continue;
-        for (const id of bank.byObj[o] || []) {
-          const qs = state.qstats[id]; if (!qs) continue;
-          const days = coldDaysOf(qs);
-          if (days.indexOf(latest) < 0) continue;
-          qs.cdays = days.filter(d => d !== latest);   // keep [] so legacy ev cannot re-seed the dropped day
-          const drop = Array.isArray(qs.cdrop) ? qs.cdrop.slice() : [];
-          if (drop.indexOf(latest) < 0) drop.push(latest);
-          drop.sort((a, b) => a - b);
-          qs.cdrop = drop.slice(-16);
-        }
+    }
+    if (Object.keys(coldMiss).length) {
+      for (const id in coldMiss) {
+        const o = bank.byId[id] && bank.byId[id].obj;
+        if (o && masteredBefore[o]) hit[o] = 1;
       }
     }
+    for (const o in hit) dropLatestMasteryDay(state, bank, o);
     const conf = {};
     for (const id of s.qids) if (s.conf && (s.conf[id] === true || s.conf[id] === false)) conf[id] = !!s.conf[id];
     const rec = { id: "t" + now, date: now, mode: s.mode, label: s.label, score: res.score, total: res.total, pct: res.pct, answered: res.answered,
@@ -961,6 +985,29 @@
   // Each day's batch mixes due reviews with new questions so learners keep moving through the bank;
   // whatever is due beyond today's size just waits its turn (oldest and missed first).
   const REVIEW_SIZE_MIN = 5, REVIEW_SIZE_MAX = 100, REVIEW_NEW_MAX = 50;
+  const REFRESH_QS = 2, REFRESH_CARDS = 2;   // mastered items mixed back in so they stay fresh; not marked due
+  /** Seen questions in mastered objectives that are not due, oldest fact first. One wording per fact: the one
+   *  seen longest ago. Picking them does not change a due date. */
+  function refresherQuestionIds(bank, state, today, n, rand) {
+    if (!n) return [];
+    today = today == null ? dayNum() : today;
+    const qstats = state.qstats || {}, os = objectiveStats(bank, qstats), dueFam = {}, facts = {};
+    for (const id of dueIds(bank, qstats, today)) { const q = bank.byId[id]; if (q) dueFam[q.variantOf || id] = 1; }
+    for (const id in qstats) {
+      const q = bank.byId[id]; if (!q) continue;
+      const s = qstats[id]; if (!s || !s.seen || s.at == null) continue;
+      if (!os[q.obj] || os[q.obj].level !== "mastered") continue;
+      const fam = q.variantOf || id; if (dueFam[fam]) continue;
+      const rec = facts[fam] || (facts[fam] = { last: 0, id, at: Infinity });
+      if (s.at > rec.last) rec.last = s.at;
+      if (s.at < rec.at) { rec.at = s.at; rec.id = id; }
+    }
+    // Already answered today: it is fresh, so it does not fill a refresher slot again.
+    const list = Object.values(facts).filter(x => dayNum(x.last) !== today);
+    return shuffle(list, rand || Math.random)
+      .sort((a, b) => a.last - b.last || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, n).map(x => x.id);
+  }
   /** settings.review = { on, size: questions a day, fresh: how many of them are new }. Off until the learner turns it on. */
   function clampReview(r) {
     r = r || {};
@@ -1010,9 +1057,13 @@
     const backlog = dueIds(bank, state.qstats, today).length;
     const unseen = factCount(bank) - factsSeen(bank, state.qstats);
     const done = reviewDoneToday(state.tests, today);
-    const avail = cfg.on ? Math.min(Math.max(0, cfg.size - done), backlog + unseen) : 0;
+    const room = cfg.on ? Math.max(0, cfg.size - done) : 0;
+    // Two mastered questions take slots inside the day's first batch. A later batch the same day does not add another pair.
+    // Picking them does not change a due date.
+    const refresh = room && !done ? Math.min(REFRESH_QS, refresherQuestionIds(bank, state, today, REFRESH_QS).length, room) : 0;
+    const avail = cfg.on ? Math.min(Math.max(0, room - refresh), backlog + unseen) : 0;
     const mix = reviewMix(avail, cfg, backlog, unseen);
-    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh, due: mix.due, fresh: mix.fresh, backlog, unseen };
+    return { on: cfg.on, size: cfg.size, perDayNew: cfg.fresh, done, left: mix.due + mix.fresh + refresh, due: mix.due, fresh: mix.fresh, refresh, backlog, unseen };
   }
   /** `n` of the due questions (already ordered oldest and missed first). When more are due than fit, each objective
    *  gets its share by exam weight and gives its oldest ones, so a backlog is worked off where the exam's points are. */
@@ -1029,13 +1080,17 @@
     const today = opts.today == null ? dayNum() : opts.today;
     const cfg = clampReview(state.settings && state.settings.review);
     const due = dueIds(bank, state.qstats, today);
-    let mix;
+    let mix, refreshN = 0;
     if (opts.count) mix = reviewMix(opts.count, cfg, due.length, bank.questions.length);
-    else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; }
+    else { const d = dailyReview(bank, state, today); mix = { due: d.due, fresh: d.fresh }; refreshN = d.refresh || 0; }
     // A due fact that has variants comes back in the wording seen longest ago, so a review isn't a memory test of one sentence.
-    const ids = dueByWeight(bank, due, mix.due, rand).map(id => rotateVariant(bank, state.qstats, id, rand)).concat(newIds(bank, state.qstats, mix.fresh, rand));
+    const refreshIds = refreshN ? refresherQuestionIds(bank, state, today, refreshN, rand) : [];
+    const ids = dueByWeight(bank, due, mix.due, rand).map(id => rotateVariant(bank, state.qstats, id, rand))
+      .concat(newIds(bank, state.qstats, mix.fresh, rand), refreshIds);
     if (!ids.length) return null;
-    return newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
+    const session = newSession(bank, "review", "Daily review", shuffle(ids, rand), { study: true, seed: opts.seed });
+    if (refreshIds.length) { session.refresh = {}; for (const id of refreshIds) if (session.qids.indexOf(id) >= 0) session.refresh[id] = true; }
+    return session;
   }
 
   // ------------------------------------------------------------- command practice (drills on the lab shell)
@@ -1180,13 +1235,34 @@
       out.push(s);
       if (out.length >= count) break;
     }
+    // One mastered skill that is not already due, the one seen longest ago, so Recommended keeps it fresh.
+    if (src === "recommended" && out.length) {
+      const cands = pool.filter(s => {
+        const m = mastery[s.cmd], stt = cs[s.id];
+        return m && m.level === "mastered" && stt && stt.last === true && !isDue(stt, today);
+      });
+      const pick = shuffle(cands, rand).sort((a, b) => (cs[a.id].at || 0) - (cs[b.id].at || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))[0];
+      if (pick) {
+        const at = out.findIndex(s => s.id === pick.id);
+        if (at < 0) {
+          const last = out[out.length - 1], lastSt = cs[last.id];
+          const urgent = isDue(lastSt, today) || !!(lastSt && lastSt.seen && lastSt.last === false);
+          if (out.length < count || !urgent) {
+            if (out.length >= count) out[out.length - 1] = pick; else out.push(pick);
+            out.refreshId = pick.id;
+          }
+        } else out.refreshId = pick.id;
+      }
+    }
     return out;
   }
   /** A practice session: one fresh machine per task. mode: "guided" (hints), "recall" (no hints), "timed" (recall + a clock). */
   function buildCmdSession(drills, index, state, opts) {
     opts = opts || {}; const rand = rng(opts.seed);
     const byId = {}; for (const s of drills.skills) byId[s.id] = s;
-    const picks = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed })).filter(s => byId[s.id]);
+    const picked = pickSkills(index, state, Object.assign({}, opts, { seed: opts.seed }));
+    const refreshId = picked.refreshId;
+    const picks = picked.filter(s => byId[s.id]);
     if (!picks.length) return null;
     // pickSkills lists each skill once. The template is chosen at random. If a skill were ever listed again, the
     // next template would be used, and the same task text isn't asked twice while that template has other values.
@@ -1194,7 +1270,7 @@
     const tasks = picks.map(p => { const sk = byId[p.id]; const k = used[sk.id] = (used[sk.id] == null ? Math.floor(rand() * sk.templates.length) : used[sk.id] + 1);
       let t = instantiateDrill(sk, k % sk.templates.length, rand);
       for (let tries = 0; tries < 12 && asked.has(sk.id + "\n" + t.text); tries++) t = instantiateDrill(sk, k % sk.templates.length, rand);
-      asked.add(sk.id + "\n" + t.text); return t; });
+      asked.add(sk.id + "\n" + t.text); t.refresh = p.id === refreshId; return t; });
     const mode = ["guided", "recall", "timed"].indexOf(opts.mode) >= 0 ? opts.mode : "guided";
     return { mode, seconds: mode === "timed" ? (opts.seconds || 90) : null, tasks, i: 0, results: [], label: opts.label || "Command practice", start: opts.now || Date.now() };
   }
@@ -1683,7 +1759,24 @@
     const byDue = (a, b) => cstate[a.id].due - cstate[b.id].due || cstate[a.id].box - cstate[b.id].box || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
     const missed = shuffle(dueAll.filter(c => missedToday(cstate[c.id], today)), rand);
     const other = dueAll.filter(c => !missedToday(cstate[c.id], today)).sort(byDue);
-    return missed.slice(0, MISS_LEAD).concat(mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand))).slice(0, limit);
+    const lead = missed.slice(0, MISS_LEAD);
+    const rest = mixDueNew(spreadList(other, missed.slice(MISS_LEAD)), freshCards(pool, cstate, rand));
+    const organic = lead.concat(rest);
+    // Up to two cards from the top Leitner box (the 16-day step, box 5) that are not due, oldest first.
+    // Only when the session already has something else: a deck with nothing due does not start just for these.
+    const have = {}; for (const c of organic) have[c.id] = 1;
+    const extra = !organic.length ? [] : shuffle(pool.filter(c => { const s = cstate[c.id]; return s && s.box >= BOX_DAYS.length - 1 && s.due > today && !have[c.id]; }), rand)
+      .sort((a, b) => (cstate[a.id].at || 0) - (cstate[b.id].at || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .slice(0, REFRESH_CARDS);
+    let q;
+    if (!extra.length) q = organic.slice(0, limit);
+    else {
+      const room = Math.max(0, limit - lead.length), take = extra.slice(0, room);
+      q = lead.concat(spreadList(rest.slice(0, Math.max(0, room - take.length)), take)).slice(0, limit);
+    }
+    q.refresh = {};
+    for (const c of extra) if (q.some(x => x.id === c.id)) q.refresh[c.id] = true;
+    return q;
   }
   /** A card missed at `index` comes back once, after at least 5 other cards. Returns the next index to show. */
   function requeueMiss(queue, index, again) {
@@ -1955,13 +2048,17 @@
   }
   const marks = v => mapOf(v, x => isNum(x) || typeof x === "boolean" ? x : undefined);
   const SESSION = { mode: TEST.mode, label: text(200), qids: idList, optOrder: TEST.optOrder, answers: TEST.answers, flags: marks, checked: marks, hints: marks, conf: confMap, seen: marks,
-                    dontKnow: marks, hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
+                    dontKnow: marks, refresh: marks, hideTimer: flag, cur: count, study: flag, timed: flag, form: TEST.form, start: numOr(undefined), deadline: numOr(null) };
   /** The session in progress as saved in the browser, or null when it isn't one. */
   function cleanSession(s) {
     if (!isObj(s)) return null;
     const o = shape(s, SESSION);
     if (!o.qids || !o.qids.length || o.start == null) return null;
     for (const k of ["optOrder", "answers", "flags", "checked", "hints", "conf", "dontKnow"]) o[k] = o[k] || {};
+    if (o.refresh) {
+      const keep = {}; for (const id of o.qids) if (o.refresh[id] === true) keep[id] = true;
+      if (Object.keys(keep).length) o.refresh = keep; else delete o.refresh;
+    }
     o.cur = Math.min(o.qids.length - 1, o.cur || 0); o.label = o.label || ""; o.mode = o.mode || "study"; if (o.deadline === undefined) o.deadline = null;
     return o;
   }

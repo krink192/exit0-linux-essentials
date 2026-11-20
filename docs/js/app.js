@@ -65,7 +65,14 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   // `code` and **bold** (bold only outside code spans). Options that are commands or literals use backticks in the
   // question sources so they render in JetBrains Mono with whitespace kept (see .opt .t code).
-  const rich = s => esc(s).split(/(`[^`]+`)/).map(p => p.length > 1 && p[0] === "`" && p.endsWith("`") ? "<code>" + p.slice(1, -1) + "</code>" : p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")).join("");
+  // Short code (24 characters or fewer) is .nw: never split inside, and kept with punctuation right after it. Longer code wraps at spaces.
+  const rich = s => esc(s).split(/(`[^`]+`[?!.,:;)]*)/).map(p => {
+    const m = /^`([^`]+)`([?!.,:;)]*)$/.exec(p);
+    if (!m) return p.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+    if (m[1].length > 24) return "<code>" + m[1] + "</code>" + m[2];
+    const c = '<code class="nw">' + m[1] + "</code>";
+    return m[2] ? '<span class="nw">' + c + m[2] + "</span>" : c;
+  }).join("");
   const LPI_PDF = "https://learning.lpi.org/pdfstore/LPI-Learning-Material-010-160-en.pdf";     // the whole 010-160 book, CC BY-NC-ND (link only)
   const fmt = s => { s = Math.max(0, Math.round(s)); return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); };
   const fmtDate = ms => new Date(ms).toLocaleDateString([], { month: "short", day: "numeric" }) + ", " +
@@ -2239,8 +2246,9 @@
     const h = (location.hash || "#today").slice(1);
     if (h === "exam" && st.current && !typing) {
       const S = st.current;
-      if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { S.cur++; save(); renderExam(); }
-      else if (e.key === "ArrowLeft" && S.cur > 0) { S.cur--; save(); renderExam(); }
+      // preventDefault: the arrow moves the question only, so its default sideways scroll can't land on the next question's code block
+      if (e.key === "ArrowRight" && S.cur < S.qids.length - 1) { e.preventDefault(); S.cur++; save(); renderExam(); }
+      else if (e.key === "ArrowLeft" && S.cur > 0) { e.preventDefault(); S.cur--; save(); renderExam(); }
       else if (/^[1-5]$/.test(e.key)) pickByNumber(+e.key - 1);
       else if (e.key.toLowerCase() === "f" && S.qids.length > 1) { const id = S.qids[S.cur]; S.flags[id] = !S.flags[id]; save(); renderExam(); }
       else if (e.key.toLowerCase() === "h") showHint(S, S.qids[S.cur]);

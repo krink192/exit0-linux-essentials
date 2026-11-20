@@ -1115,6 +1115,15 @@
     return best && best !== word ? best : null;
   }
   const focusTask = {};         // partId -> task shown on phones (one task at a time above the terminal)
+  /** Colour every prompt in the scrollback the same way as the live one: user@host in the accent, the path in its own colour, the typed command in plain ink. */
+  function paintTermLog(el, log) {
+    const re = /^([A-Za-z_][\w.-]*@[\w.-]+):(.*?)([$#]) (.*)$/;
+    el.innerHTML = String(log).split("\n").map(line => {
+      const m = re.exec(line);
+      if (!m) return esc(line);
+      return `<span class="pu">${esc(m[1])}</span>:<span class="pp">${esc(m[2])}</span>${esc(m[3])} ${esc(m[4])}`;
+    }).join("\n");
+  }
   function renderLab(id) {
     const meta = LABS.find(l => l.id === id); if (!meta) return go("labs");
     clearInterval(labTick);
@@ -1183,7 +1192,7 @@
     const out = $("#termOut"), inp = $("#termIn");
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
-    const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
+    const paint = () => { paintTermLog(out, sh.log); $("#termPrompt").innerHTML = promptHTML(); out.scrollTop = out.scrollHeight; $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
     // A sync swaps st.labs for merged copies, so the handlers below read this part's progress fresh each time.
@@ -1357,7 +1366,7 @@
     const out = $("#termOut"), inp = $("#termIn");
     const promptText = () => { if (sh.pending != null) return "> "; const p = sh.prompt(); return `${p.user}@${p.host}:${p.path}${p.sym} `; };
     const promptHTML = () => { if (sh.pending != null) return "&gt; "; const p = sh.prompt(); return `<span class="pu">${esc(p.user)}@${esc(p.host)}</span>:<span class="pp">${esc(p.path)}</span>${p.sym} `; };
-    const paint = () => { out.textContent = sh.log; $("#termPrompt").innerHTML = promptHTML(); $("#term").scrollTop = $("#term").scrollHeight; };
+    const paint = () => { paintTermLog(out, sh.log); $("#termPrompt").innerHTML = promptHTML(); $("#term").scrollTop = $("#term").scrollHeight; };
     paint();
     let hi = null;
     const run = line => {

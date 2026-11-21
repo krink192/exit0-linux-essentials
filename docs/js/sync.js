@@ -27,11 +27,25 @@
         const m = Object.assign(blank(), JSON.parse(storage.getItem(META_KEY)) || {});
         const others = {}; for (const id in m.others || {}) others[id] = C.cleanDoc(m.others[id]);     // replicas saved by an older version
         m.others = others;
+        m.prev = cleanPrev(m.prev);
         return m;
       } catch (e) { return blank(); }
     }
     function blank() { return { url: "", username: "", token: null, device: null, epoch: null, cursor: 0, ownSeq: 0, others: {},
-                                settingsSnap: null, settingsTs: {}, pushed: null, lastSync: null, lastError: null, pending: null }; }
+                                settingsSnap: null, settingsTs: {}, pushed: null, lastSync: null, lastError: null, pending: null, prev: null }; }
+    // The account this device last signed in to. Kept across Sign out and a revoked token so the next sign-in
+    // can continue that account instead of treating this browser as a new device.
+    function cleanPrev(p) {
+      if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+      const url = typeof p.url === "string" ? p.url.trim().replace(/\/+$/, "") : "";
+      const username = typeof p.username === "string" ? p.username : "";
+      if (!/^https?:\/\//.test(url) || !username) return null;
+      return { url, username };
+    }
+    function rememberPrev() {
+      const p = cleanPrev({ url: meta.url, username: meta.username });
+      if (p) meta.prev = p;
+    }
     function persist() { try { storage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* storage full or blocked */ } }
 
     const base = () => meta.url.replace(/\/+$/, "");
@@ -60,14 +74,19 @@
     /**
      * Sign in and link this device. Returns { linked: true } or { needsChoice: true, copied } when both this device
      * and the account already have progress; the app then calls choose("merge" | "cloud").
+     * Signing back into the same server and username does not ask. The old replica stays on the server under its
+     * old device id, and only progress made while signed out is uploaded.
      */
     async function signIn(url, username, password, { signup } = {}) {
       url = String(url || "").trim().replace(/\/+$/, "");
       if (!/^https?:\/\//.test(url)) throw new Error("Enter the full address, starting with https://");
+      const prev = cleanPrev(meta.prev);
       meta = freshMeta({ url, username });
+      if (prev) meta.prev = prev;                         // a wrong password must not forget the account we were on
       const r = await call("POST", signup ? "/v1/signup" : "/v1/login", { username, password, device: opts.deviceName || "Device" });
       Object.assign(meta, { token: r.token, device: r.device, username: r.user.username });
       const remote = await call("GET", `/v1/packs/${PACK}?since=0`, undefined, meta.token);
+      meta.prev = null;
       meta.epoch = remote.epoch;
       const st = opts.getState();
       // Settings already on the account win over this device's on first link (time 0 loses to any real change).
@@ -75,6 +94,20 @@
       meta.settingsSnap = C.syncedSettings(st.settings); meta.settingsTs = {};
       if (!remote.replicas.length) for (const k in meta.settingsSnap) meta.settingsTs[k] = now();
       const remoteView = C.mergeStates(remote.replicas.map(x => C.cleanDoc(x.doc)));
+      // Same account as the last Sign out or revoked token: keep every replica, including this device's old one,
+      // so the next push is only the progress made while signed out. The login above minted a new device id.
+      const returning = !signup && prev && prev.url === url && prev.username === username && r.user && r.user.username === username;
+      if (returning) {
+        for (const rep of remote.replicas) {
+          if (!rep || rep.device == null || rep.device === meta.device.id) continue;
+          meta.others[rep.device] = C.cleanDoc(rep.doc);
+        }
+        if (Number.isInteger(remote.seq) && remote.seq >= 0) meta.cursor = remote.seq;
+        if (remote.replicas.length) { meta.settingsSnap = remoteView.settings || {}; meta.settingsTs = {}; }
+        persist();
+        await syncNow();
+        return { linked: true };
+      }
       if (remote.replicas.length && C.hasProgress(st)) {
         meta.pending = { copied: C.looksCopied(st, remoteView) };
         persist();
@@ -94,7 +127,9 @@
     }
     async function signOut() {
       const token = meta.token;
-      meta = freshMeta(meta); persist();
+      meta = freshMeta(meta);
+      rememberPrev();
+      persist();
       if (token) { try { await call("POST", "/v1/logout", undefined, token); } catch (e) { /* signed out locally anyway */ } }
     }
 
@@ -172,7 +207,11 @@
         if (differs && opts.onChange) opts.onChange({ remote: true });
       } catch (e) {
         meta.lastError = e.message;
-        if (e.status === 401) { meta.token = null; meta.lastError = "Signed out. Sign in again to keep syncing."; }
+        if (e.status === 401) {
+          meta.token = null;
+          rememberPrev();
+          meta.lastError = "Signed out. Sign in again to keep syncing.";
+        }
         persist();
         if (!e.offline && e.status !== 401) throw e;
       }

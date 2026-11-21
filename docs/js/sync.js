@@ -113,6 +113,12 @@
     // lx is lesson-exercise progress (Guided / Explorational), drawn on the Labs screen.
     const shown = st => JSON.stringify([st.tests.length, st.qstats, st.cards, st.cmdstats, st.days, st.labs, st.lx, st.badges, st.marks, st.estWeeks, C.syncedSettings(st.settings)]);
 
+    function badReply() { throw new Error("Unexpected reply from the sync server"); }
+    // Refuse the body before comparing epochs. {} or a string epoch must not count as a reset.
+    function packReply(r) {
+      return !!r && Number.isInteger(r.epoch) && r.epoch >= 0 && Number.isInteger(r.seq) && r.seq >= 0 && Array.isArray(r.replicas);
+    }
+
     async function once() {
       if (!meta.token || meta.pending) return;
       try {
@@ -120,13 +126,15 @@
         //    state until it returns.
         let base = othersView();                // what the other devices had contributed before this pull
         let remote = await call("GET", `/v1/packs/${PACK}?since=${meta.cursor}`, undefined, meta.token);
+        if (!packReply(remote)) badReply();
         let wiped = false;
         if (meta.epoch != null && remote.epoch !== meta.epoch) {
-          // Progress was reset on another device: start over here too.
+          // Progress was reset on another device. Pull the fresh pack before wiping, so a bad body still changes nothing.
+          remote = await call("GET", `/v1/packs/${PACK}?since=0`, undefined, meta.token);
+          if (!packReply(remote)) badReply();
           opts.resetProgress(); wiped = true;
           meta.others = {}; meta.ownSeq = 0; meta.cursor = 0; meta.pushed = null;
           base = C.mergeStates([]);
-          remote = await call("GET", `/v1/packs/${PACK}?since=0`, undefined, meta.token);
         }
         // 2. This device's share: the live state minus what the others had contributed. Measured here, after the
         //    pull and with no await before the merge, so answers given during the request are part of it.
@@ -156,6 +164,7 @@
             meta.ownSeq = e.data.seq || 0;                                                                // another tab of this device wrote first
             r = await call("PUT", `/v1/packs/${PACK}/replicas/${meta.device.id}`, { epoch: meta.epoch, base: meta.ownSeq, doc: own }, meta.token);
           }
+          if (!r || !Number.isInteger(r.seq) || r.seq < 0) badReply();
           meta.ownSeq = r.seq; meta.pushed = doc;
         }
         meta.lastSync = now(); meta.lastError = null;

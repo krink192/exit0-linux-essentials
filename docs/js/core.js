@@ -2393,6 +2393,14 @@
     s.study = Object.assign(fresh.study, s.study); s.cmd = Object.assign(fresh.cmd, s.cmd);
     return Object.assign(st, p, { v: 3, settings: Object.assign(fresh, s), current: cleanSession(st.current) });
   }
+  /** Progress another tab wrote to storage. `raw` is untrusted, so it goes through migrate.
+   *  This tab's session (`local.current`, including null) stays; every other field is the saved document.
+   *  There is no merge. Two saves in the same millisecond can still drop one of them. */
+  function adoptStored(local, raw) {
+    const next = migrate(raw);
+    next.current = local ? local.current : null;
+    return next;
+  }
 
   return { LEVELS, levelStats, levelMix, EXAM_SECONDS, TARGET, BOX_DAYS, MASTERY_DAYS, rng, shuffle, norm, dayKey, dayNum, indexBank, topicOf, answered, isCorrect, multiPick, multiStatus, shortPicks, shortPickLine, runLab, labShell,
            scheduleQuestion, reviewGapCap, questionDue, dueIds, reviewForecast, buildReview, clampReview, reviewDoneToday, newIds, dailyReview, REVIEW_SIZE_MIN, REVIEW_SIZE_MAX,
@@ -2405,7 +2413,7 @@
            coldDayCredit, coldDaysOf, noteColdDay, masteryLevel, examDayNum, calibration,
            familyOf, familyLead, rotateVariant, factCount, factsSeen, isCold, checkTyped, TYPED_NEAR, EXAM_TYPED_MIN, missTyped, missChoice, closestAccepted,
            navStates, navCounts, navFilter, navNext, splitExplanation,
-           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, studyDays, scoreHistory, noteEstimate, weekKey, freshState, migrate,
+           recordResult, rebuildEvidence, isReadinessExam, readiness, PASS_PCT, passPrediction, passEvidence, coldOutcome, COLD_DAYS, betaBinomial, parseDate, examPlan, examIcs, cardQueue, requeueMiss, reviewCard, deckStats, addActivity, streak, studyDays, scoreHistory, noteEstimate, weekKey, freshState, migrate, adoptStored,
            extraSudo, relatedQuestions, relatedCards, mentionsCmd, cmdNamesOf: cmdNames, fillDrill: fill, drillValues, instantiateDrill, cmdDue, recordDrill, firstCommand, commandMastery, pickSkills, buildCmdSession, cmdTaskOk,
            clampGoal, GOAL_MIN, GOAL_MAX, cleanDoc, exportDoc, cleanSession, importState,
            LOCAL_SETTINGS, syncedSettings, stampSettings, mergeStates, ownPart, applyMerged, hasProgress, looksCopied };

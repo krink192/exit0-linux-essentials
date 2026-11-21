@@ -369,10 +369,11 @@
         const h = { delim, strip, quoted, body: null }; pendingHere.push(h); toks.push({ t: "op", v: "<<", here: h }); continue;
       }
       const three = src.slice(i, i + 4);
-      const ops = ["2>&1", "&>>", "2>>", "&>", "2>", ">>", "&&", "||", ";;", ">", "<", "|", ";", "&"];
+      const ops = ["1>&2", "2>&1", ">&2", "1>>", "&>>", "2>>", "&>", "1>", "2>", ">>", "&&", "||", ";;", ">", "<", "|", ";", "&"];
       const op = ops.find(o => three.startsWith(o));
       if (op) {
-        if ((op === "2>" || op === "2>>" || op === "2>&1") && word) { add(c, "n"); i++; continue; }
+        // A digit glued to the previous word stays in the word: hi1>f is the argument "hi1", not fd 1.
+        if (word && (op === "1>" || op === "1>>" || op === "1>&2" || op === "2>" || op === "2>>" || op === "2>&1")) { add(c, "n"); i++; continue; }
         flush(); toks.push({ t: "op", v: op }); i += op.length; continue;
       }
       add(c, "n"); i++;
@@ -382,13 +383,20 @@
     return toks;
   }
   function matchParen(src, start) {
+    const k = closeParen(src, start);
+    if (k < 0) throw new Incomplete("unexpected EOF while looking for matching `)'", 2);
+    return k;
+  }
+  function closeParen(src, start) {
     let depth = 0;
     for (let k = start; k < src.length; k++) { if (src[k] === "(") depth++; else if (src[k] === ")") { depth--; if (!depth) return k; } }
-    throw new Incomplete("unexpected EOF while looking for matching `)'", 2);
+    return -1;
   }
 
   // ================================================================ parser
   const KEYWORDS = new Set(["if", "then", "elif", "else", "fi", "for", "in", "do", "done", "while", "until"]);
+  const REDIR_OPS = new Set(["<", "<<", ">", ">>", "1>", "1>>", "2>", "2>>", "&>", "&>>", "2>&1", ">&2", "1>&2"]);
+  const DUP_OPS = new Set(["2>&1", ">&2", "1>&2"]);
   const wordText = w => w.parts.map(p => p.s).join("");
   const isKw = (tok, k) => tok && tok.t === "w" && tok.parts.length === 1 && tok.parts[0].q === "n" && tok.parts[0].s === k;
   function parse(toks) {
@@ -424,18 +432,24 @@
         skipNl(); if (isKw(peek(), "in")) { i++; words = []; while (peek() && peek().t === "w") words.push(toks[i++]); }
         skipSep(); expect("do"); const body = list(["done"]); expect("done"); return withRedirs({ type: "for", name: wordText(v), words, body }); }
       if (isKw(t, "while") || isKw(t, "until")) { const until = isKw(t, "until"); i++; const cond = list(["do"]); expect("do"); const body = list(["done"]); expect("done"); return withRedirs({ type: "while", cond, body, until }); }
-      if (t.t === "op" && t.v !== "<" && t.v !== "<<" && t.v !== ">" && t.v !== ">>" && t.v !== "2>" && t.v !== "2>>" && t.v !== "&>" && t.v !== "&>>" && t.v !== "2>&1") throw new ShellError("syntax error near unexpected token `" + t.v + "'", 2);
+      if (t.t === "op" && !REDIR_OPS.has(t.v)) throw new ShellError("syntax error near unexpected token `" + t.v + "'", 2);
       if (t.t === "w" && KEYWORDS.has(wordText(t)) && t.parts[0].q === "n" && !["in"].includes(wordText(t))) throw new ShellError("syntax error near unexpected token `" + wordText(t) + "'", 2);
       const words = [], redirs = [], assigns = [];
-      while (peek() && (peek().t === "w" || (peek().t === "op" && /^(<|<<|>|>>|2>|2>>|&>|&>>|2>&1)$/.test(peek().v)))) {
+      while (peek() && (peek().t === "w" || (peek().t === "op" && REDIR_OPS.has(peek().v)))) {
         const k = toks[i++];
-        if (k.t === "op") { if (k.v === "2>&1") { redirs.push({ op: "2>&1" }); continue; } if (k.v === "<<") { redirs.push({ op: "<<", here: k.here }); continue; } const target = toks[i++]; if (!target || target.t !== "w") throw new ShellError("syntax error near unexpected token `newline'", 2); redirs.push({ op: k.v, target }); continue; }
+        if (k.t === "op") { pushRedir(redirs, k); continue; }
         if (!words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(wordText(k)) && k.parts[0].q === "n") { assigns.push(k); continue; }
         words.push(k);
       }
       return { type: "simple", words, redirs, assigns };
     }
-    function withRedirs(c) { c.redirs = []; while (peek() && peek().t === "op" && /^(<|<<|>|>>|2>|2>>|&>|&>>|2>&1)$/.test(peek().v)) { const k = toks[i++]; if (k.v === "2>&1") c.redirs.push({ op: "2>&1" }); else if (k.v === "<<") c.redirs.push({ op: "<<", here: k.here }); else c.redirs.push({ op: k.v, target: toks[i++] }); } return c; }
+    function pushRedir(redirs, k) {
+      if (DUP_OPS.has(k.v)) { redirs.push({ op: k.v }); return; }
+      if (k.v === "<<") { redirs.push({ op: "<<", here: k.here }); return; }
+      const target = toks[i++]; if (!target || target.t !== "w") throw new ShellError("syntax error near unexpected token `newline'", 2);
+      redirs.push({ op: k.v, target });
+    }
+    function withRedirs(c) { c.redirs = []; while (peek() && peek().t === "op" && REDIR_OPS.has(peek().v)) pushRedir(c.redirs, toks[i++]); return c; }
     function skipNl() { while (peek() && peek().t === "nl") i++; }
     function expect(k) { skipSep(); if (!peek()) throw new Incomplete("syntax error: unexpected end of file", 2); if (!isKw(peek(), k)) throw new ShellError("syntax error: expected `" + k + "'", 2); i++; }
     const tree = list(null);
@@ -447,7 +461,10 @@
   function expandVars(m, s, ctx) {
     let out = "";
     for (let i = 0; i < s.length;) {
-      if (s.startsWith("$((", i)) { const j = s.indexOf("))", i + 3); if (j > 0) { out += String(arith(m, s.slice(i + 3, j))); i = j + 2; continue; } }
+      if (s.startsWith("$((", i)) {
+        const end = closeParen(s, i + 1);
+        if (end > 1 && s[end - 1] === ")") { out += String(arith(m, expandVars(m, s.slice(i + 3, end - 1), ctx))); i = end + 1; continue; }
+      }
       if (s.startsWith("$(", i)) { const j = matchParen(s, i + 1); out += runCapture(m, s.slice(i + 2, j), ctx).replace(/\n+$/, ""); i = j + 1; continue; }
       out += s[i++];
     }
@@ -467,11 +484,149 @@
       return m.env[name] != null ? m.env[name] : "";
     }).replace(/\u0001/g, "$");
   }
-  function arith(m, e) {
-    const expr = e.replace(/\$?([A-Za-z_][A-Za-z0-9_]*)/g, (_, n) => String(parseInt(m.env[n], 10) || 0));
-    if (!/^[\d\s+\-*/%()]*$/.test(expr)) throw new ShellError("syntax error in expression", 1);
-    // eslint-disable-next-line no-new-func
-    return Math.trunc(Function("return (" + (expr.trim() || "0") + ")")());
+  // Integer $(( )). No Function and no eval: the page CSP is script-src 'self', which blocks both.
+  function arith(m, expr) { return arithEval(m, expr, []); }
+  function arithEval(m, expr, stack) {
+    const s = String(expr);
+    let i = 0;
+    let lastPrimary = 0;
+    const lead = s.match(/^[ \t\n]*/)[0].length;
+    const fail = (msg, pos, cut) => {
+      const shown = cut ? s.slice(lead, cut) : s.slice(lead);
+      const token = cut ? s.slice(pos, cut) : s.slice(pos);
+      const err = new ShellError(shown + ": " + msg + ' (error token is "' + token + '")', 1);
+      err.fatal = true;
+      throw err;
+    };
+    const skip = () => { while (i < s.length && (s[i] === " " || s[i] === "\t" || s[i] === "\n")) i++; };
+    const badNum = (start, end) => fail("value too great for base", start, end);
+    function readNumber() {
+      const start = i;
+      if (s.startsWith("0x", i) || s.startsWith("0X", i)) {
+        i += 2;
+        while (i < s.length && /[0-9a-fA-F]/.test(s[i])) i++;
+        if (i < s.length && /[0-9A-Za-z_]/.test(s[i])) { while (i < s.length && /[0-9A-Za-z_]/.test(s[i])) i++; badNum(start, i); }
+        const hex = s.slice(start + 2, i);
+        return hex ? parseInt(hex, 16) : 0;
+      }
+      if (s[i] === "0") {
+        while (i < s.length && /[0-9]/.test(s[i])) i++;
+        if (i < s.length && /[A-Za-z_]/.test(s[i])) { while (i < s.length && /[0-9A-Za-z_]/.test(s[i])) i++; badNum(start, i); }
+        const lex = s.slice(start, i);
+        if (/[89]/.test(lex)) badNum(start, i);
+        return parseInt(lex, 8);
+      }
+      while (i < s.length && /[0-9]/.test(s[i])) i++;
+      if (i < s.length && /[A-Za-z_]/.test(s[i])) { while (i < s.length && /[0-9A-Za-z_]/.test(s[i])) i++; badNum(start, i); }
+      return parseInt(s.slice(start, i), 10);
+    }
+    function lookup(name, pos) {
+      if (stack.includes(name)) fail("expression recursion level exceeded", pos);
+      const raw = m.env[name];
+      if (raw == null || String(raw).trim() === "") return 0;
+      return arithEval(m, String(raw), stack.concat(name));
+    }
+    function primary() {
+      skip();
+      lastPrimary = i;
+      if (i >= s.length) fail("syntax error: operand expected", i);
+      if (s[i] === "(") {
+        i++;
+        const v = eq();
+        skip();
+        if (s[i] !== ")") fail("syntax error: operand expected", i);
+        i++;
+        return v;
+      }
+      if (/[0-9]/.test(s[i])) return readNumber();
+      if (/[A-Za-z_]/.test(s[i])) {
+        const pos = i;
+        while (i < s.length && /[A-Za-z0-9_]/.test(s[i])) i++;
+        return lookup(s.slice(pos, i), pos);
+      }
+      fail("syntax error: operand expected", i);
+    }
+    function unary() {
+      skip();
+      if (s[i] === "+" || s[i] === "-") { const op = s[i++]; const v = unary(); return op === "-" ? -v : v; }
+      return primary();
+    }
+    function pow() {
+      const base = unary();
+      skip();
+      if (s[i] === "*" && s[i + 1] === "*") {
+        i += 2;
+        const exp = pow();
+        if (exp < 0) fail("exponent less than 0", lastPrimary);
+        let r = 1, b = base, e = exp;
+        while (e > 0) { if (e % 2) r *= b; e = Math.floor(e / 2); if (e) b *= b; }
+        return r;
+      }
+      return base;
+    }
+    function mul() {
+      let v = pow();
+      for (;;) {
+        skip();
+        const c = s[i];
+        const op = c === "*" && s[i + 1] !== "*" ? "*" : c === "/" || c === "%" ? c : "";
+        if (!op) break;
+        i++;
+        skip();
+        const rhs = i;
+        const r = pow();
+        if ((op === "/" || op === "%") && r === 0) fail("division by 0", rhs);
+        v = op === "*" ? v * r : op === "/" ? Math.trunc(v / r) : v % r;
+      }
+      return v;
+    }
+    function add() {
+      let v = mul();
+      for (;;) {
+        skip();
+        if (s[i] !== "+" && s[i] !== "-") break;
+        const op = s[i++];
+        const r = mul();
+        v = op === "+" ? v + r : v - r;
+      }
+      return v;
+    }
+    function rel() {
+      let v = add();
+      for (;;) {
+        skip();
+        let op = "";
+        if (s.startsWith("<=", i)) op = "<=";
+        else if (s.startsWith(">=", i)) op = ">=";
+        else if (s[i] === "<" || s[i] === ">") op = s[i];
+        else break;
+        i += op.length;
+        const r = add();
+        const ok = op === "<" ? v < r : op === ">" ? v > r : op === "<=" ? v <= r : v >= r;
+        v = ok ? 1 : 0;
+      }
+      return v;
+    }
+    function eq() {
+      let v = rel();
+      for (;;) {
+        skip();
+        let op = "";
+        if (s.startsWith("==", i)) op = "==";
+        else if (s.startsWith("!=", i)) op = "!=";
+        else break;
+        i += 2;
+        const r = rel();
+        v = (op === "==" ? v === r : v !== r) ? 1 : 0;
+      }
+      return v;
+    }
+    skip();
+    if (i >= s.length) return 0;
+    const v = eq();
+    skip();
+    if (i < s.length) fail("syntax error in expression", i);
+    return v;
   }
   /** Expand one word into zero or more argv strings (variables, $(), ~, word splitting, globs). */
   function expandWord(m, w, ctx, noGlob) {
@@ -703,11 +858,12 @@
     const fileT = (path, append) => { const key = path; if (!files[key]) { files[key] = { kind: "file", path, append, buf: "" }; prepareTarget(m, files[key]); } return files[key]; };
     for (const r of redirs) {
       if (r.op === "2>&1") { fd2 = fd1; continue; }
+      if (r.op === ">&2" || r.op === "1>&2") { fd1 = fd2; continue; }
       if (r.op === "<<") { inData = r.here.quoted ? r.here.body : expandVars(m, r.here.body.replace(/\\\$/g, "\u0001"), ctx); continue; }
       const target = expandWord(m, r.target, ctx, true)[0];
       if (r.op === "<") { inData = readFile(m, target, "bash"); continue; }
       const append = r.op.endsWith(">>");
-      if (r.op === ">" || r.op === ">>") fd1 = fileT(target, append);
+      if (r.op === ">" || r.op === ">>" || r.op === "1>" || r.op === "1>>") fd1 = fileT(target, append);
       else if (r.op === "2>" || r.op === "2>>") fd2 = fileT(target, append);
       else if (r.op === "&>" || r.op === "&>>") { fd1 = fileT(target, append); fd2 = fd1; }
     }
@@ -747,7 +903,7 @@
     const envBefore = {};
     const argv = [];
     try { for (const w0 of c.words) for (const w of braceWords(w0)) argv.push(...expandWord(m, w, ctx)); }
-    catch (e) { if (e instanceof ShellError) { ctx.out += "bash: " + e.message + "\n"; return e.code; } throw e; }
+    catch (e) { if (e instanceof ShellError) { if (e.fatal) throw e; ctx.out += "bash: " + e.message + "\n"; return e.code; } throw e; }
     const assigns = c.assigns.map(a => { const t = wordText({ parts: [a.parts[0]] }); const eq = t.indexOf("="); const name = t.slice(0, eq);
       const val0 = t.slice(eq + 1).replace(/(^|:)~(?=\/|:|$)/g, (_, pre) => pre + m.env.HOME);      // Bash expands ~ after = and : in assignments
       const rest = { parts: [{ s: val0, q: "n" }].concat(a.parts.slice(1)) }; return [name, expandWord(m, rest, ctx, true).join(" ")]; });
@@ -755,7 +911,7 @@
     assigns.forEach(([k, v]) => { envBefore[k] = m.env[k]; m.env[k] = v; });
     let io;
     try { io = makeIO(m, ctx, c.redirs, io0.stdin); }
-    catch (e) { if (e instanceof ShellError) { ctx.out += (e.message.startsWith("bash") ? "" : "bash: ") + e.message + "\n"; return 1; } throw e; }
+    catch (e) { if (e instanceof ShellError) { if (e.fatal) throw e; ctx.out += (e.message.startsWith("bash") ? "" : "bash: ") + e.message + "\n"; return 1; } throw e; }
     let code;
     try { code = dispatch(m, argv, io, ctx); }
     finally { io.flush(); assigns.forEach(([k]) => { if (envBefore[k] === undefined) delete m.env[k]; else m.env[k] = envBefore[k]; }); }
@@ -763,7 +919,7 @@
   }
   function runCompound(m, c, ctx, io0) {
     let io;
-    try { io = makeIO(m, ctx, c.redirs || [], io0.stdin); } catch (e) { if (e instanceof ShellError) { ctx.out += "bash: " + e.message + "\n"; return 1; } throw e; }
+    try { io = makeIO(m, ctx, c.redirs || [], io0.stdin); } catch (e) { if (e instanceof ShellError) { if (e.fatal) throw e; ctx.out += "bash: " + e.message + "\n"; return 1; } throw e; }
     const sub = { out: "", interactive: false, capture: ctx.capture, err: "", tty: io.tty };
     let code = 0, guard = 0;
     const run = l => runList(m, l, sub, { stdin: io.stdin });
@@ -1058,7 +1214,7 @@
       m.stack.push({ kind: "sub", uid: m.uid, cwd: m.cwd, env: Object.assign({}, m.env), exported: new Set(m.exported), pid: m.pid });
       m.procs.push(proc(pid, m.pid, us.name, "pts/0", "S", "bash", "bash", 8600, 5100)); procDir(m, m.procs[m.procs.length - 1]);
       m.pid = pid; m.env = Object.fromEntries(Object.entries(m.env).filter(([k]) => m.exported.has(k))); m.env.SHLVL = String((+m.env.SHLVL || 1) + 1); return 0; } if (args[0] === "-c") { const sub = { out: "", interactive: false }; const saved = { env: Object.assign({}, m.env), cwd: m.cwd };
-      m.env = Object.fromEntries(Object.entries(m.env).filter(([k]) => m.exported.has(k))); try { runList(m, parse(lex(args[1] || "")), sub, { stdin: io.stdin }); } catch (e) { if (!(e instanceof ExitSignal)) throw e; } m.env = saved.env; m.cwd = saved.cwd; io.out(sub.out); return m.last; }
+      m.env = Object.fromEntries(Object.entries(m.env).filter(([k]) => m.exported.has(k))); try { runList(m, parse(lex(args[1] || "")), sub, { stdin: io.stdin }); } catch (e) { if (e instanceof ShellError && e.fatal) { sub.out += "bash: " + e.message + "\n"; m.last = e.code; } else if (!(e instanceof ExitSignal)) throw e; } m.env = saved.env; m.cwd = saved.cwd; io.out(sub.out); return m.last; }
     return runScript(m, args[0], args.slice(1), io, false); };
   CMDS.sh = CMDS.bash;
   function runScript(m, path, args, io, direct, inPlace) {

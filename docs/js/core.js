@@ -2316,7 +2316,12 @@
                 settingsTs: v => mapOf(v, numOr(undefined)),
                 marks: v => mapOf(v, m => isObj(m) ? Object.assign({ on: false, note: "", at: 0 }, shape(m, { on: flag, note: text(1000), at: count })) : undefined) };
   /** Progress in the shape sync and export use ({ tests, qstats, cards, cmdstats, days, badges, labs, settings, ... }), made safe. */
-  function cleanDoc(d) { return isObj(d) ? shape(d, DOC) : {}; }
+  function cleanDoc(d) {
+    if (!isObj(d)) return {};
+    const out = shape(d, DOC);
+    if (d.app === "le010") out.app = "le010";   // export codes carry this marker, and a second clean leaves it in place
+    return out;
+  }
   /** Export payload for another device: every cleanDoc field, so a new state field can't be left out of the code. */
   function exportDoc(state) {
     const raw = {};
@@ -2369,13 +2374,17 @@
     st.settings.review = clampReview(st.settings.review);
     st.cmdstats = st.cmdstats || {};
     if (!had.objMode) st.settings.study.objMode = had.objs && had.objs.length ? "pick" : "all";
-    if (st.settings.study.levels.length !== 1) st.settings.study.levels = [];   // one level, or all
+    if (!Array.isArray(st.settings.study.levels) || st.settings.study.levels.length !== 1) st.settings.study.levels = [];   // one level, or all
     delete st.settings.timed; delete st.settings.reveal;    // Exam mode is always timed with answers hidden
     if (!raw && legacy) {
       if (legacy.qstats) st.qstats = legacy.qstats;
       if (Array.isArray(legacy.history)) {
-        st.tests = legacy.history.map(h => ({ id: "t" + h.date, date: h.date, mode: h.mode === "random" || h.mode === "form" ? "test" : h.mode,
-          label: h.mode === "random" || h.mode === "form" ? "Practice test" : h.label, score: h.score, total: h.total, pct: h.pct, secs: h.secs }));
+        st.tests = [];
+        for (const h of legacy.history) {
+          if (!h || typeof h !== "object" || Array.isArray(h)) continue;   // skip a row that isn't a history record; the other rows still load
+          st.tests.push({ id: "t" + h.date, date: h.date, mode: h.mode === "random" || h.mode === "form" ? "test" : h.mode,
+            label: h.mode === "random" || h.mode === "form" ? "Practice test" : h.label, score: h.score, total: h.total, pct: h.pct, secs: h.secs });
+        }
       }
     }
     // everything read from storage is rebuilt with the types the app expects (see "data from outside the app")

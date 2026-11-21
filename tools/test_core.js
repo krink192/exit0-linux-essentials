@@ -253,6 +253,41 @@ t("a null study level still opens and keeps the rest of saved progress", () => {
   assert.deepStrictEqual(kept, base, "clean progress is unchanged by migrate");
   assertShape(opened, "null levels"); assertStable(opened, "null levels"); bootState(opened, "null levels");
 });
+t("adoptStored keeps this tab's session and takes the other tab's save", () => {
+  const local = usedState();
+  const mine = local.current;
+  mine.rung = 4; // lives only in this tab's memory; cleaning the session would drop it
+  const incoming = usedState();
+  incoming.settings.theme = "light";
+  incoming.settings.scheme = "github";
+  incoming.settings.goal = 0;
+  incoming.settings.study.levels = null;
+  incoming.cards = { "card-other": { seen: 3, right: 2, last: true }, "<img>": { seen: 9, right: 9, last: false } };
+  incoming.tests = [];
+  incoming.qstats = {};
+  incoming.badges = {};
+  incoming.current = { mode: "test", label: "Other tab", qids: ["nope-not-mine"], start: 99, cur: 0, answers: {}, optOrder: {} };
+  const raw = JSON.parse(JSON.stringify(incoming));
+  const next = C.adoptStored(local, raw);
+  assert.strictEqual(next.current, mine, "this tab's session object stays");
+  assert.strictEqual(next.current.rung, 4, "the session is not run through cleanSession");
+  assert.notStrictEqual(next.current.qids[0], "nope-not-mine");
+  assert.strictEqual(next.settings.theme, "light");
+  assert.strictEqual(next.settings.scheme, "github");
+  assert.strictEqual(next.settings.goal, 1, "incoming state goes through migrate");
+  assert.deepStrictEqual(next.settings.study.levels, [], "a null study level is repaired on the way in");
+  assert.deepStrictEqual(next.cards["card-other"], { seen: 3, right: 2, last: true });
+  assert.strictEqual(next.cards["<img>"], undefined, "a hostile card id is dropped");
+  assert.deepStrictEqual(next.tests, []);
+  assert.deepStrictEqual(next.qstats, {});
+  assert.deepStrictEqual(next.badges, {});
+  const idle = usedState();
+  idle.current = null;
+  const adopted = C.adoptStored(idle, raw);
+  assert.strictEqual(adopted.current, null, "another tab's session is not started in this one");
+  assert.strictEqual(adopted.settings.theme, "light");
+  assert.deepStrictEqual(adopted.cards["card-other"], { seen: 3, right: 2, last: true });
+});
 t("any damaged field falls back and saved progress still opens", () => {
   const base = usedState();
   const paths = jsonPaths(base, [], []);

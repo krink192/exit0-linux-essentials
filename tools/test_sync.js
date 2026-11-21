@@ -559,5 +559,44 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     assert.deepStrictEqual(fresh, { needsChoice: true, copied: false });
   });
 
+  // Cancel on the combine-or-replace question is Sign out, but this device never finished linking.
+  // Its answers are not derived from the account, so the next sign-in must ask again.
+  await t("a device that signs out at the combine-or-replace question still gets the choice next time", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    a.answer(Q.slice(0, 8), true, T0);
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    b.answer(Q.slice(0, 5), true, T0 + 5000);
+    const first = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(first, { needsChoice: true, copied: false });
+    const before = totals(b.st);
+    await b.sync.signOut();
+    const again = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(again, { needsChoice: true, copied: false });
+    assert.deepStrictEqual(totals(b.st), before, "cancelling leaves this device's answers untouched");
+  });
+
+  // A finished link is remembered. Opening the choice on another account, then cancelling, must not replace it.
+  await t("signing out of another account's combine question keeps the account this device already finished", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B"), c = device(srv, "C");
+    a.answer(Q.slice(0, 8), true, T0);
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signOut();
+    assert.deepStrictEqual(savedPrev(b), { url: URL0, username: "jacob" });
+    srv.users.sam = "correct horse battery";
+    c.answer(Q.slice(20, 24), false, T0 + 9000);
+    await c.sync.signIn(URL0, "sam", "correct horse battery");
+    const choice = await b.sync.signIn(URL0, "sam", "correct horse battery");
+    // The fake server keeps every account's replicas in one pack, so this device's old copy is in that pack.
+    assert.deepStrictEqual(choice, { needsChoice: true, copied: true });
+    const before = totals(b.st);
+    await b.sync.signOut();
+    assert.deepStrictEqual(savedPrev(b), { url: URL0, username: "jacob" });
+    const back = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(back, { linked: true });
+    assert.deepStrictEqual(totals(b.st), before);
+    assert.strictEqual(totals(b.st).seen, 8);
+  });
+
   console.log(`\n${n} sync tests passed`);
 })().catch(e => { console.error(e); process.exit(1); });

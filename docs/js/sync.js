@@ -33,8 +33,9 @@
     }
     function blank() { return { url: "", username: "", token: null, device: null, epoch: null, cursor: 0, ownSeq: 0, others: {},
                                 settingsSnap: null, settingsTs: {}, pushed: null, lastSync: null, lastError: null, pending: null, prev: null }; }
-    // The account this device last signed in to. Kept across Sign out and a revoked token so the next sign-in
-    // can continue that account instead of treating this browser as a new device.
+    // The account this device last finished linking. Kept across Sign out and a revoked token so the next
+    // sign-in can continue that account. A combine-or-replace question left unanswered does not count:
+    // this device's progress is not derived from that account's replicas.
     function cleanPrev(p) {
       if (!p || typeof p !== "object" || Array.isArray(p)) return null;
       const url = typeof p.url === "string" ? p.url.trim().replace(/\/+$/, "") : "";
@@ -42,7 +43,10 @@
       if (!/^https?:\/\//.test(url) || !username) return null;
       return { url, username };
     }
+    // Finished means a token, no choice waiting, and an epoch. Call this before those are cleared.
+    // Sign out or a 401 while a choice is pending must not set or overwrite prev.
     function rememberPrev() {
+      if (!meta.token || meta.pending || meta.epoch == null) return;
       const p = cleanPrev({ url: meta.url, username: meta.username });
       if (p) meta.prev = p;
     }
@@ -74,8 +78,9 @@
     /**
      * Sign in and link this device. Returns { linked: true } or { needsChoice: true, copied } when both this device
      * and the account already have progress; the app then calls choose("merge" | "cloud").
-     * Signing back into the same server and username does not ask. The old replica stays on the server under its
-     * old device id, and only progress made while signed out is uploaded.
+     * Signing back into the same server and username does not ask when this device had finished linking.
+     * Leaving the combine question without choosing does not: the next sign-in asks again. The old replica
+     * stays on the server under its old device id, and only progress made while signed out is uploaded.
      */
     async function signIn(url, username, password, { signup } = {}) {
       url = String(url || "").trim().replace(/\/+$/, "");
@@ -86,7 +91,6 @@
       const r = await call("POST", signup ? "/v1/signup" : "/v1/login", { username, password, device: opts.deviceName || "Device" });
       Object.assign(meta, { token: r.token, device: r.device, username: r.user.username });
       const remote = await call("GET", `/v1/packs/${PACK}?since=0`, undefined, meta.token);
-      meta.prev = null;
       meta.epoch = remote.epoch;
       const st = opts.getState();
       // Settings already on the account win over this device's on first link (time 0 loses to any real change).
@@ -98,6 +102,7 @@
       // so the next push is only the progress made while signed out. The login above minted a new device id.
       const returning = !signup && prev && prev.url === url && prev.username === username && r.user && r.user.username === username;
       if (returning) {
+        meta.prev = null;
         for (const rep of remote.replicas) {
           if (!rep || rep.device == null || rep.device === meta.device.id) continue;
           meta.others[rep.device] = C.cleanDoc(rep.doc);
@@ -109,10 +114,12 @@
         return { linked: true };
       }
       if (remote.replicas.length && C.hasProgress(st)) {
+        // Not finished yet, so prev stays the last finished account (or empty).
         meta.pending = { copied: C.looksCopied(st, remoteView) };
         persist();
         return { needsChoice: true, copied: meta.pending.copied };
       }
+      meta.prev = null;
       persist();
       await syncNow();
       return { linked: true };
@@ -121,14 +128,16 @@
     async function choose(how) {
       if (!meta.pending) return;
       if (how === "cloud") opts.resetProgress();
-      meta.pending = null; meta.others = {}; meta.cursor = 0; meta.ownSeq = 0;
+      meta.pending = null; meta.prev = null; meta.others = {}; meta.cursor = 0; meta.ownSeq = 0;
       persist();
       await syncNow();
     }
     async function signOut() {
       const token = meta.token;
-      meta = freshMeta(meta);
       rememberPrev();
+      const prev = meta.prev;
+      meta = freshMeta(meta);
+      meta.prev = prev;
       persist();
       if (token) { try { await call("POST", "/v1/logout", undefined, token); } catch (e) { /* signed out locally anyway */ } }
     }
@@ -208,8 +217,8 @@
       } catch (e) {
         meta.lastError = e.message;
         if (e.status === 401) {
-          meta.token = null;
           rememberPrev();
+          meta.token = null;
           meta.lastError = "Signed out. Sign in again to keep syncing.";
         }
         persist();

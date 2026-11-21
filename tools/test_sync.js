@@ -15,12 +15,18 @@ const t = async (name, fn) => { await fn(); n++; console.log("ok -", name); };
 
 // ------------------------------------------------------------- fake server (protocol v1, one user)
 function fakeServer() {
-  const S = { users: { jacob: "correct horse battery" }, tokens: {}, replicas: {}, seq: 0, epoch: 1, up: true, nextDev: 1 };
+  const S = { users: { jacob: "correct horse battery" }, tokens: {}, replicas: {}, seq: 0, epoch: 1, up: true, nextDev: 1, next: null };
   const json = (status, body) => ({ ok: status < 300, status, json: async () => body });
   S.fetch = async (url, { method, headers, body }) => {
     if (!S.up) throw new TypeError("fetch failed");
     const p = new URL(url).pathname + new URL(url).search, b = body ? JSON.parse(body) : {};
     const auth = (headers.Authorization || "").replace("Bearer ", ""), dev = S.tokens[auth];
+    // One-shot (or selective) override. Return { status, body } to replace this response, or null to handle it
+    // normally and leave S.next in place. A pull test sets it directly; a PUT test arms it from S.during.
+    if (S.next) {
+      const over = S.next(method, p, b, dev);
+      if (over) return json(over.status, over.body);
+    }
     let m;
     if (p === "/v1/health") return json(200, { ok: true, app: "exit0-sync", protocol: 1, signup: false });
     if (p === "/v1/login") {
@@ -354,6 +360,122 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     const srv = fakeServer(), a = device(srv, "A");
     await assert.rejects(a.sync.signIn(URL0, "jacob", "nope"), /Wrong username or password/);
     assert.strictEqual(a.sync.linked, false);
+  });
+
+  const UNEXPECTED = "Unexpected reply from the sync server";
+  // Sign in two devices, answer on A only, then let the next pull (or the PUT armed from S.during) misbehave.
+  async function linked() {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    a.answer(Q.slice(0, 4), true, T0 + 8000);
+    return { srv, a, b, before: progressOf(a.st) };
+  }
+  function kept(a, before, err) {
+    assert.strictEqual(totals(a.st).seen, 4, "a bad reply reset local progress");
+    assert.strictEqual(progressOf(a.st), before);
+    assert.strictEqual(err && err.message, UNEXPECTED);
+    assert.strictEqual(a.sync.info.lastError, UNEXPECTED);
+  }
+
+  async function badPull(name, body) {
+    await t("a pull reply of " + name + " leaves progress in place and reports an unexpected reply", async () => {
+      const { srv, a, b, before } = await linked();
+      srv.next = () => { srv.next = null; return { status: 200, body }; };
+      let err = null;
+      try { await a.sync.syncNow(); } catch (e) { err = e; }
+      kept(a, before, err);
+      await a.sync.syncNow(); await b.sync.syncNow();
+      assert.strictEqual(progressOf(a.st), progressOf(b.st));
+      assert.strictEqual(totals(b.st).seen, 4);
+      assert.strictEqual(a.sync.info.lastError, null);
+    });
+  }
+  await badPull("{}", {});
+  await badPull('a string epoch', { epoch: "1", seq: 1, replicas: [] });
+  await badPull("no replicas", { epoch: 1, seq: 1 });
+  await badPull("no seq", { epoch: 1, replicas: [] });
+
+  async function badPut(name, body) {
+    await t("a PUT reply of " + name + " leaves progress in place and is not treated as saved", async () => {
+      const { srv, a, b, before } = await linked();
+      srv.during = () => {
+        srv.next = (method) => {
+          if (method !== "PUT") return null;
+          srv.next = null;
+          return { status: 200, body };
+        };
+      };
+      let err = null;
+      try { await a.sync.syncNow(); } catch (e) { err = e; }
+      kept(a, before, err);
+      srv.next = null;
+      await a.sync.syncNow(); await b.sync.syncNow();
+      assert.strictEqual(progressOf(a.st), progressOf(b.st));
+      assert.strictEqual(totals(b.st).seen, 4);
+      assert.strictEqual(a.sync.info.lastError, null);
+    });
+  }
+  await badPut("no seq", {});
+  await badPut("a string seq", { epoch: 1, seq: "1" });
+
+  // Another tab of this device writes between the pull and the push: the first PUT is stale.
+  function bumpOnPut(srv, times) {
+    let hits = 0;
+    srv.during = () => {
+      srv.next = (method, p, body, dev) => {
+        if (method !== "PUT") return null;
+        hits++;
+        const seq = ++srv.seq;
+        srv.replicas[dev] = { seq, doc: srv.replicas[dev].doc };
+        if (hits >= times) srv.next = null;
+        return { status: 409, body: { error: "stale", seq } };
+      };
+    };
+  }
+  await t("one 409 after this device's seq changes is retried once and both devices converge", async () => {
+    const srv = fakeServer();
+    let puts = 0;
+    const inner = srv.fetch;
+    srv.fetch = async (url, opts) => { if (opts.method === "PUT") puts++; return inner(url, opts); };
+    const a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    a.answer(Q.slice(0, 3), true, T0 + 9000);
+    puts = 0;
+    bumpOnPut(srv, 1);
+    await a.sync.syncNow();
+    assert.strictEqual(puts, 2, "the stale push is sent once more");
+    await b.sync.syncNow();
+    assert.strictEqual(progressOf(a.st), progressOf(b.st));
+    assert.strictEqual(totals(b.st).seen, 3);
+    assert.strictEqual(a.sync.info.lastError, null);
+  });
+
+  await t("a second 409 surfaces an error and local progress is kept", async () => {
+    const srv = fakeServer();
+    let puts = 0;
+    const inner = srv.fetch;
+    srv.fetch = async (url, opts) => { if (opts.method === "PUT") puts++; return inner(url, opts); };
+    const a = device(srv, "A"), b = device(srv, "B");
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    a.answer(Q.slice(0, 3), true, T0 + 9000);
+    const before = progressOf(a.st);
+    puts = 0;
+    bumpOnPut(srv, 2);
+    let err = null;
+    try { await a.sync.syncNow(); } catch (e) { err = e; }
+    assert.strictEqual(puts, 2, "a second 409 is not retried");
+    assert.strictEqual(err && err.message, "stale");
+    assert.strictEqual(a.sync.info.lastError, "stale");
+    assert.strictEqual(progressOf(a.st), before);
+    assert.strictEqual(totals(a.st).seen, 3);
+    srv.next = null;
+    await a.sync.syncNow(); await b.sync.syncNow();
+    assert.strictEqual(progressOf(a.st), progressOf(b.st));
+    assert.strictEqual(totals(b.st).seen, 3);
+    assert.strictEqual(a.sync.info.lastError, null);
   });
 
   console.log(`\n${n} sync tests passed`);

@@ -108,6 +108,214 @@ t("progress from storage, an export code or a sync server is rebuilt with safe t
   const raw = C.freshState(); C.applyMerged(raw, JSON.parse(JSON.stringify(bad)));                       // even an unclean view is cleaned on the way in
   noMarkup(raw.qstats); noMarkup(raw.labs); assert.strictEqual(raw.settings.goal, 1); assert.deepStrictEqual(raw.cards, {});
 });
+// A learner's saved progress, built the way the app builds it, with every stored field filled in.
+function usedState() {
+  const st = C.freshState(), now = 1.7e12;
+  const study = C.buildStudy(bank, {}, { count: 8 }, { seed: 9, now });
+  study.qids.forEach((id, n) => {
+    const q = bank.byId[id];
+    study.answers[id] = q.type === "fill" ? q.accept[0] : n % 2 ? q.answer : [0];
+    if (n === 0) study.conf[id] = true;
+  });
+  study.flags[study.qids[0]] = true; study.hints[study.qids[1]] = 1;
+  C.recordResult(st, bank, study, C.grade(bank, study, now), now);
+  const exam = C.buildTest(bank, st.qstats, { seed: 2, form: "C", now: now + 864e5 });
+  exam.qids = exam.qids.slice(0, 4);
+  const order = {};
+  exam.qids.forEach(id => {
+    if (exam.optOrder[id]) order[id] = exam.optOrder[id];
+    const q = bank.byId[id]; exam.answers[id] = q.type === "fill" ? q.accept[0] : q.answer;
+  });
+  exam.optOrder = order;
+  C.recordResult(st, bank, exam, C.grade(bank, exam, now + 864e5), now + 864e5);
+  st.tests[1].rung = 2; st.tests[1].dontKnow = [st.tests[1].qids[0]];
+  const qid = st.tests[0].qids[0];
+  Object.assign(st.qstats[qid], { cw: 1, cdays: [10, 11], cdrop: [9] });
+  C.reviewCard(st.cards, cards[0].id, true, C.dayNum(now), now);
+  C.recordDrill(st, "echo-var", false, now);
+  st.labs["2.1.1-a"] = { done: [0, 2], completedAt: 5 };
+  st.lx.split = { done: [1], completedAt: 8 };
+  st.badges.ready = now;
+  C.setMark(st, qid, { on: true, note: "remember this" }, now);
+  Object.assign(st.settings, { examDate: "2027-01-20", goal: 12, theme: "dark", scheme: "flexoki", remindAt: "08:30", deck: "commands",
+    review: { on: true, size: 15, fresh: 3 },
+    study: { objMode: "pick", objs: ["1.1", "2.1"], levels: [2], source: "missed", count: 10 },
+    cmd: { source: "pick", cmds: ["ls"], count: 8, mode: "recall" } });
+  C.noteEstimate(st, { chance: 0.42, mean: 28, total: 40 }, now);
+  st.current = C.buildStudy(bank, {}, { count: 4 }, { seed: 3, now });
+  const cur = st.current.qids[0], cq = bank.byId[cur];
+  st.current.answers[cur] = cq.type === "fill" ? cq.accept[0] : [0];
+  st.current.checked[cur] = true; st.current.dontKnow[cur] = false;
+  return JSON.parse(JSON.stringify(st));
+}
+const BAD_VALUES = [null, true, 0, -1, 1e308, "", "<img src=x>", [], {}];
+function jsonPaths(v, prefix, out) {
+  out.push(prefix);
+  if (v && typeof v === "object") for (const k of Object.keys(v)) jsonPaths(v[k], prefix.concat(k), out);
+  return out;
+}
+function putPath(base, p, val) {
+  if (!p.length) return val;
+  const copy = JSON.parse(JSON.stringify(base));
+  let cur = copy;
+  for (let i = 0; i < p.length - 1; i++) cur = cur[p[i]];
+  cur[p[p.length - 1]] = val;
+  return copy;
+}
+const badAt = (p, val) => (p.length ? p.join(".") : "(root)") + " = " + JSON.stringify(val);
+function firstDiff(a, b, p) {
+  if (a === b) return "";
+  if (typeof a !== "object" || typeof b !== "object" || !a || !b || Array.isArray(a) !== Array.isArray(b))
+    return p + ": " + JSON.stringify(a) + " !== " + JSON.stringify(b);
+  if (Array.isArray(a)) {
+    if (a.length !== b.length) return p + " length " + a.length + " !== " + b.length;
+    for (let i = 0; i < a.length; i++) { const d = firstDiff(a[i], b[i], p + "[" + i + "]"); if (d) return d; }
+    return "";
+  }
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (!Object.prototype.hasOwnProperty.call(a, k)) return p + "." + k + " missing after clean";
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return p + "." + k + " extra after clean";
+    const d = firstDiff(a[k], b[k], p + "." + k); if (d) return d;
+  }
+  return "";
+}
+function assertShape(st, label) {
+  assert.ok(st && typeof st === "object" && !Array.isArray(st), label);
+  assert.strictEqual(st.v, 3, label);
+  assert.ok(Array.isArray(st.tests), label);
+  for (const k of ["qstats", "cards", "cmdstats", "days", "badges", "labs", "lx", "marks", "estWeeks"])
+    assert.ok(st[k] && typeof st[k] === "object" && !Array.isArray(st[k]), label + " " + k);
+  const s = st.settings;
+  assert.ok(s && typeof s === "object" && !Array.isArray(s), label);
+  assert.ok(s.theme === "system" || s.theme === "light" || s.theme === "dark", label + " theme " + JSON.stringify(s.theme));
+  assert.ok(["green", "github", "flexoki", "catppuccin", "tokyo", "dracula"].includes(s.scheme), label + " scheme " + JSON.stringify(s.scheme));
+  assert.ok(Number.isInteger(s.goal) && s.goal >= C.GOAL_MIN && s.goal <= C.GOAL_MAX, label + " goal " + JSON.stringify(s.goal));
+  assert.strictEqual(typeof s.review.on, "boolean", label + " review " + JSON.stringify(s.review));
+  assert.ok(Number.isInteger(s.review.size) && s.review.size >= C.REVIEW_SIZE_MIN && s.review.size <= C.REVIEW_SIZE_MAX, label + " review " + JSON.stringify(s.review));
+  assert.ok(Number.isInteger(s.review.fresh) && s.review.fresh >= 0 && s.review.fresh <= s.review.size, label + " review " + JSON.stringify(s.review));
+  assert.ok(s.examDate === null || /^\d{4}-\d{2}-\d{2}$/.test(s.examDate), label + " examDate " + JSON.stringify(s.examDate));
+  assert.strictEqual(typeof s.remindAt, "string", label + " remindAt " + JSON.stringify(s.remindAt));
+  assert.ok(s.deck == null || s.deck === "concepts" || s.deck === "commands", label + " deck " + JSON.stringify(s.deck));
+  assert.ok(s.study && (s.study.objMode === "all" || s.study.objMode === "weak" || s.study.objMode === "pick"), label + " study " + JSON.stringify(s.study));
+  assert.ok(Array.isArray(s.study.objs) && Array.isArray(s.study.levels), label + " study " + JSON.stringify(s.study));
+  assert.ok(s.study.levels.every(n => n === 1 || n === 2 || n === 3), label + " levels " + JSON.stringify(s.study.levels));
+  assert.ok(["mix", "unseen", "missed", "marked", "unsure"].includes(s.study.source), label + " source " + JSON.stringify(s.study.source));
+  assert.ok(Number.isInteger(s.study.count) && s.study.count >= 0 && s.study.count <= 400, label + " count " + JSON.stringify(s.study.count));
+  assert.ok(s.cmd && ["recommended", "due", "new", "pick"].includes(s.cmd.source), label + " cmd " + JSON.stringify(s.cmd));
+  assert.ok(["guided", "recall", "timed"].includes(s.cmd.mode), label + " cmd " + JSON.stringify(s.cmd));
+  assert.ok(Array.isArray(s.cmd.cmds) && Number.isInteger(s.cmd.count) && s.cmd.count >= 1 && s.cmd.count <= 50, label + " cmd " + JSON.stringify(s.cmd));
+  assert.ok(st.current === null || (st.current && Array.isArray(st.current.qids) && st.current.qids.length > 0), label);
+}
+// What boot does with the state after migrate, without a try/catch around migrate itself.
+function bootState(st, label) {
+  try {
+    st.current = C.repairSession(bank, st.current);
+    C.rebuildEvidence(bank, st);
+    C.migrateLabs(st, []);
+    C.awardBadges(st, bank, cards, 1.7e12, 0);
+    C.xpInfo(st);
+    C.streak(st.days, st.settings.goal);
+  } catch (e) { assert.fail(label + " boot: " + e.message); }
+}
+function assertStable(r, label) {
+  const exp = C.exportDoc(r), diff = firstDiff(C.cleanDoc(exp), exp, "export");
+  assert.strictEqual(diff, "", label + " " + diff);
+}
+function assertMerge(doc, label) {
+  let view;
+  try { view = C.mergeStates([C.cleanDoc(doc)]); }
+  catch (e) { assert.fail(label + " mergeStates: " + e.message); }
+  assert.ok(Array.isArray(view.tests), label);
+  for (const k of ["qstats", "cards", "cmdstats", "days", "badges", "labs", "lx", "marks", "estWeeks", "settings", "settingsTs"])
+    assert.ok(view[k] && typeof view[k] === "object" && !Array.isArray(view[k]), label + " " + k);
+  assertStable(view, label + " merge");
+}
+function assertImport(doc, label) {
+  const env = doc && typeof doc === "object" && !Array.isArray(doc) ? Object.assign({ app: "le010", v: 3 }, doc) : doc;
+  let r;
+  try { r = C.importState(C.freshState(), env); }
+  catch (e) { assert.fail(label + " importState: " + e.message); }
+  const envelope = !!(env && typeof env === "object" && !Array.isArray(env) && env.app === "le010" && Array.isArray(env.tests));
+  if (!envelope) { assert.strictEqual(r, null, label); return; }
+  assert.ok(r, label + " importState returned null");
+  assertShape(r, label + " import"); assertStable(r, label + " import"); bootState(r, label + " import");
+}
+t("a null study level still opens and keeps the rest of saved progress", () => {
+  const base = usedState();
+  const damaged = JSON.parse(JSON.stringify(base));
+  damaged.settings.study.levels = null;
+  const opened = C.migrate(damaged);
+  const kept = C.migrate(JSON.parse(JSON.stringify(base)));
+  assert.deepStrictEqual(kept.settings.study.levels, [2], "one saved level stays");
+  const expect = JSON.parse(JSON.stringify(kept));
+  expect.settings.study.levels = [];
+  assert.deepStrictEqual(opened, expect);
+  assert.deepStrictEqual(kept, base, "clean progress is unchanged by migrate");
+  assertShape(opened, "null levels"); assertStable(opened, "null levels"); bootState(opened, "null levels");
+});
+t("adoptStored keeps this tab's session and takes the other tab's save", () => {
+  const local = usedState();
+  const mine = local.current;
+  mine.rung = 4; // lives only in this tab's memory; cleaning the session would drop it
+  const incoming = usedState();
+  incoming.settings.theme = "light";
+  incoming.settings.scheme = "github";
+  incoming.settings.goal = 0;
+  incoming.settings.study.levels = null;
+  incoming.cards = { "card-other": { seen: 3, right: 2, last: true }, "<img>": { seen: 9, right: 9, last: false } };
+  incoming.tests = [];
+  incoming.qstats = {};
+  incoming.badges = {};
+  incoming.current = { mode: "test", label: "Other tab", qids: ["nope-not-mine"], start: 99, cur: 0, answers: {}, optOrder: {} };
+  const raw = JSON.parse(JSON.stringify(incoming));
+  const next = C.adoptStored(local, raw);
+  assert.strictEqual(next.current, mine, "this tab's session object stays");
+  assert.strictEqual(next.current.rung, 4, "the session is not run through cleanSession");
+  assert.notStrictEqual(next.current.qids[0], "nope-not-mine");
+  assert.strictEqual(next.settings.theme, "light");
+  assert.strictEqual(next.settings.scheme, "github");
+  assert.strictEqual(next.settings.goal, 1, "incoming state goes through migrate");
+  assert.deepStrictEqual(next.settings.study.levels, [], "a null study level is repaired on the way in");
+  assert.deepStrictEqual(next.cards["card-other"], { seen: 3, right: 2, last: true });
+  assert.strictEqual(next.cards["<img>"], undefined, "a hostile card id is dropped");
+  assert.deepStrictEqual(next.tests, []);
+  assert.deepStrictEqual(next.qstats, {});
+  assert.deepStrictEqual(next.badges, {});
+  const idle = usedState();
+  idle.current = null;
+  const adopted = C.adoptStored(idle, raw);
+  assert.strictEqual(adopted.current, null, "another tab's session is not started in this one");
+  assert.strictEqual(adopted.settings.theme, "light");
+  assert.deepStrictEqual(adopted.cards["card-other"], { seen: 3, right: 2, last: true });
+});
+t("any damaged field falls back and saved progress still opens", () => {
+  const base = usedState();
+  const paths = jsonPaths(base, [], []);
+  assert.ok(paths.length > 50, "expected a full saved state, got " + paths.length + " paths");
+  const legacyGood = { mode: "random", label: "Random exam", date: 1, score: 30, total: 40, pct: 75, secs: 100 };
+  let legacy;
+  try { legacy = C.migrate(null, { history: [null], qstats: { "1.1-01": { seen: 1, right: 1, last: true } } }); }
+  catch (e) { assert.fail("legacy null history: " + e.message); }
+  assert.deepStrictEqual(legacy.tests, []); assertShape(legacy, "legacy null"); assertStable(legacy, "legacy null");
+  const mixed = C.migrate(null, { history: [null, legacyGood].concat(BAD_VALUES), qstats: { "1.1-01": { seen: 1, right: 1, last: true } } });
+  assert.strictEqual(mixed.tests.find(t => t.date === 1).label, "Practice test");
+  assert.strictEqual(mixed.qstats["1.1-01"].seen, 1);
+  assertShape(mixed, "legacy mixed"); assertStable(mixed, "legacy mixed"); bootState(mixed, "legacy mixed");
+  for (const bad of BAD_VALUES) {
+    let st;
+    try { st = C.migrate(null, { history: bad, qstats: bad }); }
+    catch (e) { assert.fail("legacy " + JSON.stringify(bad) + ": " + e.message); }
+    assertShape(st, "legacy " + JSON.stringify(bad)); assertStable(st, "legacy " + JSON.stringify(bad));
+  }
+  for (const p of paths) for (const bad of BAD_VALUES) {
+    const doc = putPath(base, p, bad), label = badAt(p, bad);
+    let opened;
+    try { opened = C.migrate(JSON.parse(JSON.stringify(doc))); }
+    catch (e) { assert.fail(label + " migrate: " + e.message); }
+    assertShape(opened, label); assertStable(opened, label); bootState(opened, label);
+    assertImport(doc, label); assertMerge(doc, label);
+  }
+});
 t("answer keys grade correctly; wrong answers fail; fill-in trims spaces, keeps case", () => {
   for (const q of bank.questions) {
     if (q.type === "fill") { q.accept.forEach(a => assert(C.isCorrect(q, "  " + a + " "), q.id)); assert(!C.isCorrect(q, "zzz")); }

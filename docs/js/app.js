@@ -247,6 +247,18 @@
   let timerId = null, lastRec = null, reviewFilter = "wrong", showGrid = false, confirming = false, finishing = false, discardOpen = false, navKind = "all", warned5 = null;
   let deck = st.settings.deck || "concepts", cardTopic = "all", cardSize = 20, browse = false, query = "";
   let cs = null;            // active flashcard session
+  // Another tab of this app writes the same key. Take that save, and keep only the session this tab has open.
+  // The storage event does not fire in the tab that wrote, so this cannot loop. Don't save here: writing back
+  // would overwrite the other tab's session.
+  window.addEventListener("storage", e => {
+    if (!e || e.key !== KEY || e.newValue == null) return;
+    let raw;
+    try { raw = JSON.parse(e.newValue); } catch (err) { return; }
+    st = C.adoptStored(st, raw);
+    deck = st.settings.deck || deck;
+    applyTheme();
+    rerenderIfIdle();
+  });
   const SP = () => st.settings.study;   // Study builder choices, remembered between visits
   let exportOpen = false, resetOpen = false;
 

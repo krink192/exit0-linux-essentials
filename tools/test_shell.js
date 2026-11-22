@@ -78,6 +78,17 @@ const CASES = [
   `mkdir -p work/q3/misc; touch work/top.txt work/q3/misc/x.txt; du work/; du -sh work/`,
   `mkdir -p src/sub; echo hi > src/sub/a; mkdir dest; cp -r src/ dest/; ls -R dest`,
   `mkdir -p gone/sub; echo z > gone/sub/a; rm -r gone/; ls`,
+  // fd 1 redirects, and integer arithmetic (Bash, not JavaScript)
+  `echo hi 1> f; cat f`, `echo a > f; echo b 1>> f; cat f`, `echo x 2> e 1> f; cat f`,
+  `echo b >&2`, `echo err 1>&2 | wc -l`, `echo b>&2`, `echo hi1>f; cat f`,
+  `echo $(( 1 / 3 * 3 ))`, `echo $(( 10 / 0 )); echo $?`, `echo $(( 0x10 ))`, `echo $(( 7 / 2 ))`,
+  `echo $(( (2+3)*4 )) $(( -7 / 2 )) $(( -7 % 2 )) $(( 5 % 2 )) $(( 2 ** 3 )) $(( 2 ** 3 ** 2 ))`,
+  `echo $(( 2 < 3 )) $(( 2 > 3 )) $(( 2 <= 2 )) $(( 3 >= 4 )) $(( 2 == 2 )) $(( 2 != 3 ))`,
+  `echo $(( 010 )) $(( 0X10 ))`, `echo $(( 5 % 0 )); echo after`, `echo $(( 08 )); echo after`,
+  `echo $((2**-1)); echo after`, `echo $((1+2*3**2))`,
+  `n=4; echo $((n-1)) $(( $n + 1 ))`, `n=010; echo $((n))`, `n=0x10; echo $((n+1))`,
+  `n='1+2'; echo $((n))`, `a=4; n='a+1'; echo $((n))`,
+  `n=3; while [ $n -gt 0 ]; do echo -n "$n "; n=$((n-1)); done; echo liftoff`,
 ];
 
 function both(script) {
@@ -373,5 +384,18 @@ console.log(`labs: ${window.LE_LESSONS.length} lessons, ${window.LE_LABS.length}
   assert.ok(runUpTo(bin, 3, "ls -ld /bin").check(bin.tasks[3].check), "ls -ld /bin");
   const ln = labOf("5.4.1-c");
   assert.ok(runUpTo(ln, 4, "ln -s /var/log/ ~/logs\nls ~/logs/").check(ln.tasks[4].check), "ln -s /var/log/");
+}
+// CSP blocks eval, and Node will not, so the shipped scripts are checked directly.
+// (Lives here, not in test_core.js, so a parallel job can keep that file.)
+{
+  const dir = path.join(__dirname, "../docs/js");
+  const bad = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (!name.endsWith(".js")) continue;
+    const src = fs.readFileSync(path.join(dir, name), "utf8");
+    if (/\bFunction\s*\(|\beval\s*\(/.test(src)) bad.push(name);
+  }
+  if (bad.length) { fail++; console.log("FAIL static: Function( or eval( in " + bad.join(", ")); }
+  else console.log("static: no Function( or eval( in docs/js");
 }
 process.exit(fail ? 1 : 0);

@@ -8,7 +8,7 @@ global.window = {};
 require(path.join(__dirname, "../docs/data/bank.js"));
 require(path.join(__dirname, "../docs/data/cards.js"));
 const C = require(path.join(__dirname, "../docs/js/core.js"));
-const { createSync } = require(path.join(__dirname, "../docs/js/sync.js"));
+const { createSync, META_KEY } = require(path.join(__dirname, "../docs/js/sync.js"));
 const bank = C.indexBank(window.LE_BANK), cards = window.LE_CARDS;
 let n = 0;
 const t = async (name, fn) => { await fn(); n++; console.log("ok -", name); };
@@ -62,7 +62,7 @@ function fakeServer() {
 function device(server, name) {
   const mem = {};
   const storage = { getItem: k => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); } };
-  const d = { st: C.freshState(), changes: 0 };
+  const d = { st: C.freshState(), changes: 0, mem };
   d.sync = createSync({ core: C, fetch: server.fetch, storage, deviceName: name,
     getState: () => d.st,
     resetProgress: () => { const keep = d.st.settings; d.st = C.freshState(); d.st.settings = keep; },
@@ -476,6 +476,126 @@ const T0 = Date.UTC(2026, 9, 1, 18);
     assert.strictEqual(progressOf(a.st), progressOf(b.st));
     assert.strictEqual(totals(b.st).seen, 3);
     assert.strictEqual(a.sync.info.lastError, null);
+  });
+
+  // A studied 5, synced, then 3 more while signed out. Signing back into the same account must keep 8
+  // on every device and upload only those 3: the old replica stays, and this browser gets a new device id.
+  const savedPrev = d => JSON.parse(d.mem[META_KEY]).prev;
+  const seenIn = doc => Object.values((doc && doc.qstats) || {}).reduce((a, s) => a + (s.seen || 0), 0);
+  async function studyThenLeave(leave) {
+    const srv = fakeServer(), A = device(srv, "A"), B = device(srv, "B");
+    await A.sync.signIn(URL0, "jacob", "correct horse battery");
+    A.answer(Q.slice(0, 5), true, T0); await A.sync.syncNow();
+    await B.sync.signIn(URL0, "jacob", "correct horse battery"); await B.sync.syncNow();
+    const oldId = A.sync.info.device.id, oldDoc = srv.replicas[oldId].doc;
+    await leave(srv, A);
+    const prev = savedPrev(A);
+    A.answer(Q.slice(5, 8), true, T0 + 86400000);
+    A.st.settings.goal = 40;
+    return { srv, A, B, oldId, oldDoc, prev };
+  }
+  async function sameAccountKeepsBoth(label, leave) {
+    await t(label, async () => {
+      const { srv, A, B, oldId, oldDoc, prev } = await studyThenLeave(leave);
+      const before = totals(A.st);
+      const r = await A.sync.signIn(URL0, "jacob", "correct horse battery");
+      assert.deepStrictEqual(r, { linked: true });
+      assert.deepStrictEqual(prev, { url: URL0, username: "jacob" });
+      assert.strictEqual(A.sync.pending, null);
+      await B.sync.syncNow();
+      await A.sync.syncNow(); await B.sync.syncNow();
+      assert.deepStrictEqual(totals(A.st), before);
+      assert.deepStrictEqual(totals(B.st), before);
+      assert.strictEqual(progressOf(A.st), progressOf(B.st));
+      assert.strictEqual(A.st.settings.goal, 40);
+      assert.strictEqual(B.st.settings.goal, 40);
+      assert.notStrictEqual(A.sync.info.device.id, oldId);
+      assert.strictEqual(srv.replicas[oldId].doc, oldDoc, "the old replica stays as it was");
+      assert.strictEqual(seenIn(JSON.parse(srv.replicas[A.sync.info.device.id].doc)), 3, "only the answers made while signed out are uploaded");
+    });
+  }
+  await sameAccountKeepsBoth("a revoked token: signing back into the same account keeps the answers made while signed out", async (srv, A) => {
+    for (const k in srv.tokens) if (srv.tokens[k] === A.sync.info.device.id) delete srv.tokens[k];
+    await A.sync.syncNow();
+  });
+  await sameAccountKeepsBoth("Sign out: signing back into the same account keeps the answers made while signed out", async (srv, A) => {
+    await A.sync.signOut();
+  });
+
+  await t("a failed sign-in to another server still relinks to the original account", async () => {
+    const { A, B } = await studyThenLeave(async (s, d) => { await d.sync.signOut(); });
+    await assert.rejects(A.sync.signIn("https://other.example", "jacob", "nope"), /Wrong username or password/);
+    const r = await A.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(r, { linked: true });
+    await B.sync.syncNow();
+    assert.strictEqual(totals(A.st).seen, 8);
+    assert.strictEqual(totals(B.st).seen, 8);
+  });
+
+  await t("a different account still asks how to combine progress", async () => {
+    const { srv, A } = await studyThenLeave(async (s, d) => { await d.sync.signOut(); });
+    srv.users.sam = "correct horse battery";
+    const other = await A.sync.signIn(URL0, "sam", "correct horse battery");
+    assert.deepStrictEqual(other, { needsChoice: true, copied: true });
+    assert.strictEqual(totals(A.st).seen, 8, "the choice is still waiting, so nothing was merged or wiped");
+  });
+
+  await t("answers another device made while this one was signed out show up on sign-in", async () => {
+    const { A, B } = await studyThenLeave(async (s, d) => { await d.sync.signOut(); });
+    B.answer(Q.slice(30, 32), false, T0 + 2 * 86400000); await B.sync.syncNow();
+    const r = await A.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(r, { linked: true });
+    await B.sync.syncNow();
+    assert.strictEqual(totals(A.st).seen, 10);
+    assert.strictEqual(totals(B.st).seen, 10);
+    assert.strictEqual(progressOf(A.st), progressOf(B.st));
+  });
+
+  await t("a device that was never linked still asks how to combine progress", async () => {
+    const { srv } = await studyThenLeave(async () => {});   // A stays signed in; C has no previous account
+    const elsewhere = device(srv, "C");
+    elsewhere.answer(Q.slice(20, 24), false, T0 + 5000);
+    const fresh = await elsewhere.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(fresh, { needsChoice: true, copied: false });
+  });
+
+  // Cancel on the combine-or-replace question is Sign out, but this device never finished linking.
+  // Its answers are not derived from the account, so the next sign-in must ask again.
+  await t("a device that signs out at the combine-or-replace question still gets the choice next time", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B");
+    a.answer(Q.slice(0, 8), true, T0);
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    b.answer(Q.slice(0, 5), true, T0 + 5000);
+    const first = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(first, { needsChoice: true, copied: false });
+    const before = totals(b.st);
+    await b.sync.signOut();
+    const again = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(again, { needsChoice: true, copied: false });
+    assert.deepStrictEqual(totals(b.st), before, "cancelling leaves this device's answers untouched");
+  });
+
+  // A finished link is remembered. Opening the choice on another account, then cancelling, must not replace it.
+  await t("signing out of another account's combine question keeps the account this device already finished", async () => {
+    const srv = fakeServer(), a = device(srv, "A"), b = device(srv, "B"), c = device(srv, "C");
+    a.answer(Q.slice(0, 8), true, T0);
+    await a.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    await b.sync.signOut();
+    assert.deepStrictEqual(savedPrev(b), { url: URL0, username: "jacob" });
+    srv.users.sam = "correct horse battery";
+    c.answer(Q.slice(20, 24), false, T0 + 9000);
+    await c.sync.signIn(URL0, "sam", "correct horse battery");
+    const choice = await b.sync.signIn(URL0, "sam", "correct horse battery");
+    // The fake server keeps every account's replicas in one pack, so this device's old copy is in that pack.
+    assert.deepStrictEqual(choice, { needsChoice: true, copied: true });
+    const before = totals(b.st);
+    await b.sync.signOut();
+    assert.deepStrictEqual(savedPrev(b), { url: URL0, username: "jacob" });
+    const back = await b.sync.signIn(URL0, "jacob", "correct horse battery");
+    assert.deepStrictEqual(back, { linked: true });
+    assert.deepStrictEqual(totals(b.st), before);
+    assert.strictEqual(totals(b.st).seen, 8);
   });
 
   console.log(`\n${n} sync tests passed`);
